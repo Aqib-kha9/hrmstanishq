@@ -280,7 +280,7 @@ function OnboardingForm() {
             try {
                 const [co, of] = await Promise.all([
                     apiGet<CompanyItem[]>("/companies"),
-                    apiGet<OfficeItem[]>("/offices", { limit: 1000 }),
+                    apiGet<OfficeItem[]>("/offices", { limit: 100 }),
                 ]);
                 if (!cancelled) {
                     setCompanies(co);

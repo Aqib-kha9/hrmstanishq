@@ -101,7 +101,7 @@ export default function AttendancePage() {
     useEffect(() => {
         Promise.all([
             apiGet<{ id: number; name: string }[]>("/companies"),
-            apiGet<{ id: number; name: string }[]>("/offices", { limit: 1000 }),
+            apiGet<{ id: number; name: string }[]>("/offices", { limit: 100 }),
             apiGet<string[]>("/leave/departments"),
         ])
             .then(([compRes, offRes, deptRes]) => {

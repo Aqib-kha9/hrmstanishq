@@ -98,7 +98,7 @@ export default function EmployeesPage() {
             try {
                 const [compData, offData] = await Promise.all([
                     apiGet<{ id: number; name: string }[]>("/companies"),
-                    apiGet<{ id: number; name: string }[]>("/offices", { limit: 1000 }),
+                    apiGet<{ id: number; name: string }[]>("/offices", { limit: 100 }),
                 ]);
                 setCompanies(compData || []);
                 setOffices(offData || []);

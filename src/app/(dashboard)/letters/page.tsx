@@ -185,7 +185,7 @@ export default function LettersPage() {
       const compData = await apiGet<any>("/companies");
       setCompanies(Array.isArray(compData) ? compData : (compData?.data || compData?.rows || []));
       
-      const offData = await apiGet<any>("/offices", { limit: 1000 });
+      const offData = await apiGet<any>("/offices", { limit: 100 });
       setOffices(Array.isArray(offData) ? offData : (offData?.data || offData?.rows || []));
     } catch {
       // Non-critical
