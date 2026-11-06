@@ -29,6 +29,8 @@ export interface User {
   name: string;
   email: string;
   role: string;
+  role_id?: number;
+  permissions?: string[];
   branch?: string;
   department?: string;
 }
@@ -50,13 +52,13 @@ export interface AuthContextType extends AuthState {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: map backend role (lowercase) to frontend role (UPPER_SNAKE)
+// Helper: map backend role to frontend role (UPPER_SNAKE)
 // ---------------------------------------------------------------------------
 
 const ROLE_MAP: Record<string, string> = {
   super_admin: "SUPER_ADMIN",
   admin: "ADMIN",
-  hr: "ADMIN", // HR is treated as ADMIN in the frontend
+  hr: "HR",
   manager: "MANAGER",
   employee: "EMPLOYEE",
 };
@@ -64,7 +66,8 @@ const ROLE_MAP: Record<string, string> = {
 function mapRole(backendRole: string | undefined | null): string {
   if (!backendRole) return "EMPLOYEE";
   const lower = backendRole.toLowerCase();
-  return ROLE_MAP[lower] || "EMPLOYEE";
+  if (ROLE_MAP[lower]) return ROLE_MAP[lower];
+  return backendRole.toUpperCase().replace(/\s+/g, "_");
 }
 
 // ---------------------------------------------------------------------------
@@ -102,6 +105,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           name: string;
           email: string;
           role: string;
+          role_id?: number;
+          permissions?: string[];
           branch?: string;
           department?: string;
         }>("/auth/me");
@@ -111,6 +116,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           name: userData.name,
           email: userData.email,
           role: mapRole(userData.role),
+          role_id: userData.role_id,
+          permissions: userData.permissions || [],
           branch: userData.branch,
           department: userData.department,
         };
@@ -158,11 +165,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Build user from login response (uses employee or top-level fields)
     const userFromLogin = employee || json.data;
+    const permissions = json.data?.permissions || userFromLogin?.permissions || [];
     const mappedUser: User = {
       id: userFromLogin.id,
       name: userFromLogin.name,
       email: userFromLogin.email,
       role: mapRole(userFromLogin.role),
+      role_id: userFromLogin.role_id,
+      permissions,
       branch: userFromLogin.branch || userFromLogin.office_id,
       department: userFromLogin.department,
     };
@@ -203,6 +213,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         name: string;
         email: string;
         role: string;
+        role_id?: number;
+        permissions?: string[];
         branch?: string;
         department?: string;
       }>("/auth/me");
@@ -212,6 +224,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         name: userData.name,
         email: userData.email,
         role: mapRole(userData.role),
+        role_id: userData.role_id,
+        permissions: userData.permissions || [],
         branch: userData.branch,
         department: userData.department,
       };

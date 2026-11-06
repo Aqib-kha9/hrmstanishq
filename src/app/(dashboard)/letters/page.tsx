@@ -340,7 +340,8 @@ export default function LettersPage() {
           title: TYPE_LABEL_MAP[selectedTemplate?.type || ""] || previewData?.template?.name || selectedTemplate.name,
           type: selectedTemplate.type,
           content: content,
-          fullHtml: fullHtml
+          fullHtml: fullHtml,
+          signatory_id: selectedSignatory ? parseInt(selectedSignatory, 10) : undefined,
         }),
       });
 
@@ -403,6 +404,7 @@ export default function LettersPage() {
         type: selectedTemplate.type,
         content: content,
         fullHtml: fullHtml,
+        signatory_id: selectedSignatory ? parseInt(selectedSignatory, 10) : undefined,
       });
       setIssueSuccess("Letter sent successfully via email!");
       await fetchLetters();

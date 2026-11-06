@@ -32,6 +32,7 @@ import {
     Zap,
     Map as MapIcon,
     Globe,
+    ChevronLeft,
     ChevronRight,
     Plus,
     FileSpreadsheet,
@@ -208,32 +209,68 @@ export default function AttendancePage() {
         URL.revokeObjectURL(url);
     };
 
-    // Dynamic Calendar State
+    // Dynamic Calendar & Cycle State (Req 6.1, 6.2)
+    const [cycleType, setCycleType] = useState<"payroll" | "calendar">("payroll");
     const [currentDate] = useState(new Date());
     const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth());
     const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
 
-    // Helper to get dates in cycle (26th of previous month to 25th of current month)
-    const getDatesInCycle = (month: number, year: number) => {
-        const dates: Date[] = [];
-        let prevMonthYear = year;
-        let prevMonth = month - 1;
-        if (prevMonth < 0) {
-            prevMonth = 11;
-            prevMonthYear = year - 1;
+    // Synchronized scrollbar refs & state (Req 7)
+    const tableContainerRef = useRef<HTMLDivElement>(null);
+    const topScrollRef = useRef<HTMLDivElement>(null);
+    const [scrollWidth, setScrollWidth] = useState(0);
+    const isSyncingScroll = useRef(false);
+
+    const handleTopScroll = () => {
+        if (isSyncingScroll.current) return;
+        isSyncingScroll.current = true;
+        if (tableContainerRef.current && topScrollRef.current) {
+            tableContainerRef.current.scrollLeft = topScrollRef.current.scrollLeft;
         }
+        requestAnimationFrame(() => { isSyncingScroll.current = false; });
+    };
 
-        const start = new Date(prevMonthYear, prevMonth, 26);
-        const end = new Date(year, month, 25);
+    const handleTableScroll = () => {
+        if (isSyncingScroll.current) return;
+        isSyncingScroll.current = true;
+        if (topScrollRef.current && tableContainerRef.current) {
+            topScrollRef.current.scrollLeft = tableContainerRef.current.scrollLeft;
+        }
+        requestAnimationFrame(() => { isSyncingScroll.current = false; });
+    };
 
-        const current = new Date(start);
-        while (current <= end) {
-            dates.push(new Date(current));
-            current.setDate(current.getDate() + 1);
+    const scrollTable = (offset: number) => {
+        if (tableContainerRef.current) {
+            tableContainerRef.current.scrollBy({ left: offset, behavior: 'smooth' });
+        }
+    };
+
+    // Helper to get dates dynamically based on cycle (calendar: 1st-end, payroll: 26th-25th)
+    const getDatesInCycle = (month: number, year: number, cycle: "payroll" | "calendar") => {
+        const dates: Date[] = [];
+        if (cycle === "calendar") {
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            for (let d = 1; d <= daysInMonth; d++) {
+                dates.push(new Date(year, month, d));
+            }
+        } else {
+            let prevMonthYear = year;
+            let prevMonth = month - 1;
+            if (prevMonth < 0) {
+                prevMonth = 11;
+                prevMonthYear = year - 1;
+            }
+            const start = new Date(prevMonthYear, prevMonth, 26);
+            const end = new Date(year, month, 25);
+            const current = new Date(start);
+            while (current <= end) {
+                dates.push(new Date(current));
+                current.setDate(current.getDate() + 1);
+            }
         }
         return dates;
     };
-    const cycleDates = getDatesInCycle(selectedMonth, selectedYear);
+    const cycleDates = getDatesInCycle(selectedMonth, selectedYear, cycleType);
     const daysInSelectedMonth = cycleDates.length;
     const formatCycleRange = () => {
         if (!cycleDates || cycleDates.length === 0) return "";
@@ -260,12 +297,13 @@ export default function AttendancePage() {
         setIsMapOpen(true);
     };
 
-    // Manual Attendance State
+    // Manual Attendance State (Req 5.1, 5.2)
     const [isManualEntryOpen, setIsManualEntryOpen] = useState(false);
     const [manualEmpId, setManualEmpId] = useState("");
     const [manualDate, setManualDate] = useState("");
     const [manualStatus, setManualStatus] = useState("Present");
     const [manualReason, setManualReason] = useState("");
+    const [manualIsOutdoor, setManualIsOutdoor] = useState(false);
     const [manualSubmitting, setManualSubmitting] = useState(false);
 
     // Tour Management State
@@ -511,6 +549,7 @@ export default function AttendancePage() {
             const data: any = await apiGet("/attendance/admin/monthly-all", {
                 month: selectedMonth + 1,
                 year: selectedYear,
+                cycle: cycleType,
                 company_id: selectedCompanyId || undefined,
                 office_id: selectedOfficeId || undefined,
                 search: monthlyDebouncedSearch || undefined,
@@ -523,13 +562,20 @@ export default function AttendancePage() {
         } finally {
             setMonthlyLoading(false);
         }
-    }, [selectedMonth, selectedYear, selectedCompanyId, selectedOfficeId, monthlyDebouncedSearch, selectedDepartment]);
+    }, [selectedMonth, selectedYear, cycleType, selectedCompanyId, selectedOfficeId, monthlyDebouncedSearch, selectedDepartment]);
+
+    // Update scroll width when rows or dates change
+    useEffect(() => {
+        if (tableContainerRef.current) {
+            setScrollWidth(tableContainerRef.current.scrollWidth);
+        }
+    }, [monthlyRows, cycleDates, activeTab]);
 
     // Load data on tab switch
     useEffect(() => { if (activeTab === "live") fetchLiveAttendance(); }, [activeTab, fetchLiveAttendance]);
     useEffect(() => { if (activeTab === "history") { setHistoryPage(1); fetchHistory(1); } }, [activeTab]);
     useEffect(() => { if (activeTab === "history") { setHistoryPage(1); fetchHistory(1); } }, [historyFrom, historyTo, selectedCompanyId, selectedOfficeId, historyDebouncedSearch, selectedDepartment]);
-    useEffect(() => { if (activeTab === "monthly") fetchMonthly(); }, [activeTab, selectedMonth, selectedYear, fetchMonthly]);
+    useEffect(() => { if (activeTab === "monthly") fetchMonthly(); }, [activeTab, selectedMonth, selectedYear, cycleType, fetchMonthly]);
 
     // Manual entry submit
     const handleManualSubmit = async () => {
@@ -541,12 +587,14 @@ export default function AttendancePage() {
                 date: manualDate,
                 status: manualStatus,
                 reason: manualReason,
+                is_outdoor: manualIsOutdoor,
             });
             setIsManualEntryOpen(false);
             setManualEmpId("");
             setManualDate("");
             setManualStatus("Present");
             setManualReason("");
+            setManualIsOutdoor(false);
             if (activeTab === "live") fetchLiveAttendance();
             if (activeTab === "history") fetchHistory();
             if (activeTab === "monthly") fetchMonthly();
@@ -1271,21 +1319,81 @@ export default function AttendancePage() {
                 )}
 
                 {activeTab === "monthly" && (
-                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 mx-2">
+                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 mx-2">
+                        {/* Monthly Attendance Summary Metrics Cards (Req 6.4, 8) */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                            <Card className="bg-slate-900 text-white rounded-2xl p-4 shadow-sm border-none">
+                                <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Total Staff</p>
+                                <h4 className="text-2xl font-black italic tracking-tighter mt-1">{monthlyRows.length}</h4>
+                                <span className="text-[8px] text-slate-400 font-bold uppercase">In View</span>
+                            </Card>
+                            <Card className="bg-blue-50/80 rounded-2xl p-4 shadow-sm border-none">
+                                <p className="text-[8px] font-black uppercase tracking-widest text-blue-600">Cycle Muster Days</p>
+                                <h4 className="text-2xl font-black italic tracking-tighter text-blue-950 mt-1">{daysInSelectedMonth}</h4>
+                                <span className="text-[8px] text-blue-500 font-bold uppercase">{cycleType === "payroll" ? "26th - 25th" : "1st - Month End"}</span>
+                            </Card>
+                            <Card className="bg-emerald-50/80 rounded-2xl p-4 shadow-sm border-none">
+                                <p className="text-[8px] font-black uppercase tracking-widest text-emerald-600">Total Present Days</p>
+                                <h4 className="text-2xl font-black italic tracking-tighter text-emerald-950 mt-1">
+                                    {monthlyRows.reduce((sum, r) => sum + (r.present || 0), 0)}
+                                </h4>
+                                <span className="text-[8px] text-emerald-600 font-bold uppercase">Recorded Staff Days</span>
+                            </Card>
+                            <Card className="bg-indigo-50/80 rounded-2xl p-4 shadow-sm border-none">
+                                <p className="text-[8px] font-black uppercase tracking-widest text-indigo-600">Total Payable Days</p>
+                                <h4 className="text-2xl font-black italic tracking-tighter text-indigo-950 mt-1">
+                                    {monthlyRows.reduce((sum, r) => sum + ((r.present || 0) + (r.woff || 0) + (r.leave || 0) + (r.holiday || 0) + (r.tour || 0)), 0)}
+                                </h4>
+                                <span className="text-[8px] text-indigo-600 font-bold uppercase">Present + WO + H + L</span>
+                            </Card>
+                            <Card className="bg-rose-50/80 rounded-2xl p-4 shadow-sm border-none">
+                                <p className="text-[8px] font-black uppercase tracking-widest text-rose-600">Total LWP / Absent</p>
+                                <h4 className="text-2xl font-black italic tracking-tighter text-rose-950 mt-1">
+                                    {monthlyRows.reduce((sum, r) => sum + (r.absent || 0), 0)}
+                                </h4>
+                                <span className="text-[8px] text-rose-600 font-bold uppercase">Loss of Pay Days</span>
+                            </Card>
+                        </div>
+
                         <Card className="border-none shadow-sm rounded-[2.5rem] bg-white overflow-hidden">
                             <CardHeader className="p-8 pb-6 border-b border-slate-50 flex flex-col xl:flex-row xl:items-start xl:justify-between gap-6">
                                 <div>
-                                    <div className="flex items-center gap-3">
-                                        <CardTitle className="text-xl font-black italic uppercase text-slate-900 tracking-tighter">Monthly Attendance</CardTitle>
+                                    <div className="flex flex-wrap items-center gap-3">
+                                        <CardTitle className="text-xl font-black italic uppercase text-slate-900 tracking-tighter">Monthly Attendance Grid</CardTitle>
                                         <MonthYearPicker
                                             month={selectedMonth}
                                             year={selectedYear}
                                             onChange={(m, y) => { setSelectedMonth(m); setSelectedYear(y); }}
                                         />
+                                        {/* Cycle Switcher (Req 6.2) */}
+                                        <div className="flex bg-slate-100 p-1 rounded-2xl ml-2">
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                onClick={() => setCycleType("payroll")}
+                                                className={cn(
+                                                    "h-8 px-4 rounded-xl font-black text-[9px] uppercase tracking-wider transition-all",
+                                                    cycleType === "payroll" ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-900"
+                                                )}
+                                            >
+                                                Payroll Cycle (26th - 25th)
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                onClick={() => setCycleType("calendar")}
+                                                className={cn(
+                                                    "h-8 px-4 rounded-xl font-black text-[9px] uppercase tracking-wider transition-all",
+                                                    cycleType === "calendar" ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-900"
+                                                )}
+                                            >
+                                                Calendar Month (1st - End)
+                                            </Button>
+                                        </div>
                                     </div>
                                     <CardDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2 leading-relaxed">
-                                        {formatCycleRange()} <br />
-                                        <span className="text-emerald-500">Payable Days</span> = Present + Paid Leave + Weekly Off + Holiday
+                                        {formatCycleRange()} • Dynamic {daysInSelectedMonth}-day grid ({cycleType === "payroll" ? "26th prev month to 25th" : "1st to month-end"}). <br />
+                                        <span className="text-emerald-500 font-bold">Payable Days</span> = Present + Paid Leave + Weekly Off + Holiday + Tour
                                     </CardDescription>
                                     {/* Monthly Filters */}
                                     <div className="flex flex-wrap items-center gap-3 mt-4">
@@ -1363,7 +1471,7 @@ export default function AttendancePage() {
                                         </Button>
                                     </div>
                                 </div>
-                                <div className="flex flex-col items-end gap-4">
+                                <div className="flex flex-col items-end gap-3">
                                     <div className="flex items-center gap-4 bg-slate-50 py-2 px-4 rounded-xl border border-slate-100">
                                         <div className="flex items-center gap-2"><div className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div><span className="text-[8px] font-black uppercase tracking-widest text-slate-500">Present</span></div>
                                         <div className="flex items-center gap-2"><div className="h-2 w-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]"></div><span className="text-[8px] font-black uppercase tracking-widest text-slate-500">Absent/LWP</span></div>
@@ -1371,43 +1479,84 @@ export default function AttendancePage() {
                                         <div className="flex items-center gap-2"><div className="h-2 w-2 rounded-full bg-slate-300"></div><span className="text-[8px] font-black uppercase tracking-widest text-slate-500">WOff</span></div>
                                         <div className="flex items-center gap-2"><div className="h-2 w-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"></div><span className="text-[8px] font-black uppercase tracking-widest text-slate-500">Holiday</span></div>
                                     </div>
+                                    {/* Fast Navigation Scroll Arrows (Req 7) */}
+                                    <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
+                                        <span className="text-[8px] font-black uppercase text-slate-400">Scroll Grid:</span>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => scrollTable(-280)}
+                                            className="h-7 w-7 p-0 rounded-lg border-slate-200 hover:bg-slate-200"
+                                            title="Scroll Left (Prev Week)"
+                                        >
+                                            <ChevronLeft className="h-3.5 w-3.5 text-slate-700" />
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => scrollTable(280)}
+                                            className="h-7 w-7 p-0 rounded-lg border-slate-200 hover:bg-slate-200"
+                                            title="Scroll Right (Next Week)"
+                                        >
+                                            <ChevronRight className="h-3.5 w-3.5 text-slate-700" />
+                                        </Button>
+                                    </div>
                                 </div>
                             </CardHeader>
-                            <CardContent className="p-0 overflow-x-auto pb-4">
+
+                            {/* Synchronized Top Horizontal Scrollbar (Req 7 - no need to scroll to bottom) */}
+                            <div
+                                ref={topScrollRef}
+                                onScroll={handleTopScroll}
+                                className="overflow-x-auto border-b border-slate-100 bg-slate-50/70 scrollbar-thin"
+                                style={{ height: '14px' }}
+                            >
+                                <div style={{ width: scrollWidth || '100%', height: '1px' }} />
+                            </div>
+
+                            <CardContent
+                                ref={tableContainerRef}
+                                onScroll={handleTableScroll}
+                                className="p-0 overflow-x-auto pb-4"
+                            >
                                 <Table className="w-max min-w-full">
                                     <TableHeader>
                                         <tr className="bg-white border-b border-slate-100">
                                             <th className="text-left py-4 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest sticky left-0 bg-white z-20 w-56 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.05)] border-r border-slate-50">
                                                 Employee Details
                                             </th>
-                                            <th className="text-center py-4 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest min-w-[70px] border-r border-slate-50">
-                                                <div className="flex flex-col items-center gap-1">
-                                                    <span className="text-slate-600">Company</span>
-                                                </div>
+                                            <th className="text-center py-4 px-3 text-[9px] font-black text-slate-400 uppercase tracking-widest min-w-[70px] border-r border-slate-50">
+                                                Company
                                             </th>
-                                            <th className="text-center py-4 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest min-w-[90px] bg-emerald-50/30 border-r border-slate-50">
-                                                <div className="flex flex-col items-center gap-1">
-                                                    <span className="text-emerald-600">Payable</span>
-                                                </div>
+                                            <th className="text-center py-4 px-3 text-[9px] font-black text-blue-600 uppercase tracking-widest min-w-[65px] bg-blue-50/20 border-r border-slate-50">
+                                                Muster
                                             </th>
-                                            <th className="text-center py-4 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest min-w-[90px] bg-rose-50/30 border-r border-slate-50">
-                                                <div className="flex flex-col items-center gap-1">
-                                                    <span className="text-rose-600">LWP</span>
-                                                </div>
+                                            <th className="text-center py-4 px-3 text-[9px] font-black text-emerald-600 uppercase tracking-widest min-w-[65px] bg-emerald-50/20 border-r border-slate-50">
+                                                Present
                                             </th>
+                                            <th className="text-center py-4 px-3 text-[9px] font-black text-emerald-700 uppercase tracking-widest min-w-[70px] bg-emerald-50/40 border-r border-slate-50">
+                                                Payable
+                                            </th>
+                                            <th className="text-center py-4 px-3 text-[9px] font-black text-rose-600 uppercase tracking-widest min-w-[65px] bg-rose-50/30 border-r border-slate-50">
+                                                LWP
+                                            </th>
+                                            {/* Dynamic Day Columns with '01 Wed' format (Req 6.1, 6.3) */}
                                             {cycleDates.map((dateObj, i) => {
                                                 const isToday =
                                                     dateObj.getDate() === currentDate.getDate() &&
                                                     dateObj.getMonth() === currentDate.getMonth() &&
                                                     dateObj.getFullYear() === currentDate.getFullYear();
+                                                const isWeekend = dateObj.getDay() === 0;
 
                                                 return (
-                                                    <th key={i} className={cn("text-center py-4 px-1 min-w-[32px] transition-all", isToday ? "bg-indigo-50 border-b-2 border-b-indigo-500" : "")}>
+                                                    <th key={i} className={cn("text-center py-3 px-1 min-w-[34px] transition-all", isToday ? "bg-indigo-50 border-b-2 border-b-indigo-500" : isWeekend ? "bg-slate-50/60" : "")}>
                                                         <div className="flex flex-col items-center gap-0.5">
-                                                            <span className={cn("text-[9px] font-black", isToday ? "text-indigo-700" : "text-slate-900")}>
+                                                            <span className={cn("text-[9px] font-black", isToday ? "text-indigo-700" : isWeekend ? "text-slate-400" : "text-slate-900")}>
                                                                 {String(dateObj.getDate()).padStart(2, '0')}
                                                             </span>
-                                                            <span className={cn("text-[6px] font-bold uppercase", isToday ? "text-indigo-500" : "text-slate-400")}>
+                                                            <span className={cn("text-[6px] font-bold uppercase", isToday ? "text-indigo-500" : isWeekend ? "text-rose-400" : "text-slate-400")}>
                                                                 {dayNames[dateObj.getDay()]}
                                                             </span>
                                                         </div>
@@ -1418,12 +1567,12 @@ export default function AttendancePage() {
                                     </TableHeader>
                                     <TableBody>
                                         {monthlyLoading ? (
-                                            <tr><td colSpan={daysInSelectedMonth + 5} className="py-20 text-center"><p className="text-[10px] font-bold text-slate-400 animate-pulse">Loading monthly data...</p></td></tr>
+                                            <tr><td colSpan={daysInSelectedMonth + 6} className="py-20 text-center"><p className="text-[10px] font-bold text-slate-400 animate-pulse">Loading monthly data...</p></td></tr>
                                         ) : monthlyRows.length === 0 ? (
-                                            <tr><td colSpan={daysInSelectedMonth + 5} className="py-20 text-center"><p className="text-[10px] font-bold text-slate-400">No monthly attendance records found</p></td></tr>
+                                            <tr><td colSpan={daysInSelectedMonth + 6} className="py-20 text-center"><p className="text-[10px] font-bold text-slate-400">No monthly attendance records found</p></td></tr>
                                         ) : monthlyRows.map((emp, idx) => {
-                                            const payable = emp.present + emp.woff + emp.leave + emp.holiday + (emp.tour || 0);
-                                            const dailyRate = Math.round(emp.salary / daysInSelectedMonth);
+                                            const payable = (emp.present ?? 0) + (emp.woff ?? 0) + (emp.leave ?? 0) + (emp.holiday ?? 0) + (emp.tour ?? 0);
+                                            const dailyRate = Math.round((emp.salary || 0) / daysInSelectedMonth);
                                             return (
                                                 <tr key={emp.employee_id || idx} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors group">
                                                     <td className="py-3 px-6 sticky left-0 bg-white group-hover:bg-slate-50/50 transition-colors z-10 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.05)] border-r border-slate-50">
@@ -1437,31 +1586,39 @@ export default function AttendancePage() {
                                                             </div>
                                                         </div>
                                                     </td>
-                                                    <td className="py-3 px-4 text-center border-r border-slate-50 bg-white">
+                                                    <td className="py-3 px-3 text-center border-r border-slate-50 bg-white">
                                                         <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest">{emp.company}</span>
                                                     </td>
-                                                    {/* Payable Days - column */}
-                                                    <td className="py-3 px-4 text-center border-r border-slate-50 bg-emerald-50/10">
+                                                    {/* Muster Days (Req 6.4, 8) */}
+                                                    <td className="py-3 px-3 text-center border-r border-slate-50 bg-blue-50/10">
+                                                        <span className="text-[10px] font-black text-slate-700">{emp.muster_days ?? daysInSelectedMonth}</span>
+                                                    </td>
+                                                    {/* Present Days */}
+                                                    <td className="py-3 px-3 text-center border-r border-slate-50 bg-emerald-50/10">
+                                                        <span className="text-[10px] font-black text-emerald-700">{emp.present ?? 0}</span>
+                                                    </td>
+                                                    {/* Payable Days */}
+                                                    <td className="py-3 px-3 text-center border-r border-slate-50 bg-emerald-50/20">
                                                         <div className="flex flex-col items-center justify-center gap-0.5 cursor-help" title={`Employee: ${emp.name}\nFixed Gross: ₹${(emp.salary || 0).toLocaleString('en-IN')}\n\nPayable Days Breakdown:\n• Present: ${emp.present ?? 0}\n• Weekly Off: ${emp.woff ?? 0}\n• Holiday: ${emp.holiday ?? 0}\n• Paid Leave: ${emp.leave ?? 0}\n• Tour (Paid): ${emp.tour ?? 0}\n────────────────\nPayable Days: ${payable}\nPer-Day Rate: ₹${dailyRate.toLocaleString('en-IN')}\nEstimated Payout: ₹${(payable * dailyRate).toLocaleString('en-IN')}`}>
-                                                            <Badge className="bg-emerald-500 text-white font-black text-[10px] h-6 px-3 rounded-md shadow-sm hover:bg-emerald-600">{payable}</Badge>
+                                                            <Badge className="bg-emerald-500 text-white font-black text-[10px] h-6 px-2.5 rounded-md shadow-sm hover:bg-emerald-600">{payable}</Badge>
                                                         </div>
                                                     </td>
-                                                    {/* LWP/Absent - column */}
-                                                    <td className="py-3 px-4 text-center border-r border-slate-50 bg-rose-50/10">
+                                                    {/* LWP / Absent Days */}
+                                                    <td className="py-3 px-3 text-center border-r border-slate-50 bg-rose-50/10">
                                                         <div className="cursor-help" title={`Employee: ${emp.name}\nFixed Gross: ₹${(emp.salary || 0).toLocaleString('en-IN')}\nPer-Day Rate: ₹${dailyRate.toLocaleString('en-IN')}\n────────────────\nAbsent/LWP Days: ${emp.absent ?? 0}\nSalary Deduction: ₹${((emp.absent || 0) * dailyRate).toLocaleString('en-IN')}\nNet Payable Days: ${payable} - ${emp.absent ?? 0} = ${Math.max(0, payable - (emp.absent || 0))}\nEstimated Net: ₹${(Math.max(0, payable - (emp.absent || 0)) * dailyRate).toLocaleString('en-IN')}`}>
-                                                            <Badge className={cn("font-black text-[10px] h-6 px-3 rounded-md shadow-sm", emp.absent > 0 ? "bg-rose-500 text-white hover:bg-rose-600" : "bg-slate-100 text-slate-400 hover:bg-slate-200")}>{emp.absent ?? 0}</Badge>
+                                                            <Badge className={cn("font-black text-[10px] h-6 px-2.5 rounded-md shadow-sm", (emp.absent || 0) > 0 ? "bg-rose-500 text-white hover:bg-rose-600" : "bg-slate-100 text-slate-400 hover:bg-slate-200")}>{emp.absent ?? 0}</Badge>
                                                         </div>
                                                     </td>
                                                     {/* Day cells */}
                                                     {cycleDates.map((dateObj, dayIdx) => {
-                                                        const status = emp.grid[dayIdx] || '-';
+                                                        const status = (emp.grid && emp.grid[dayIdx]) ? emp.grid[dayIdx] : '-';
                                                         const isToday =
                                                             dateObj.getDate() === currentDate.getDate() &&
                                                             dateObj.getMonth() === currentDate.getMonth() &&
                                                             dateObj.getFullYear() === currentDate.getFullYear();
 
                                                         const earnedForDay = status === 'A' || status === '-' ? 0 : dailyRate;
-                                                        const tooltipLines = `₹${earnedForDay.toLocaleString('en-IN')}`;
+                                                        const tooltipLines = `${dateObj.toLocaleDateString('en-GB')}: ${status === 'P' ? 'Present' : status === 'A' ? 'Absent/LWP' : status === 'W' ? 'Weekly Off' : status === 'H' ? 'Holiday' : status === 'T' ? 'Tour' : status === 'L' ? 'Leave' : 'No Data'} (₹${earnedForDay.toLocaleString('en-IN')})`;
 
                                                         return (
                                                             <td key={dayIdx} className={cn("py-3 px-1 text-center transition-all", isToday ? "bg-indigo-50/30" : "")}>
@@ -1507,12 +1664,12 @@ export default function AttendancePage() {
                             </div>
                             <DialogTitle className="text-2xl font-black italic uppercase tracking-tighter text-white">Manual Override</DialogTitle>
                             <DialogDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">
-                                Admin Privileged Action
+                                Admin Privileged Action & Authorized Marking
                             </DialogDescription>
                         </div>
                     </div>
 
-                    <div className="p-8 space-y-6">
+                    <div className="p-8 space-y-5">
                         <div className="space-y-2">
                             <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Employee ID</Label>
                             <Input
@@ -1545,13 +1702,31 @@ export default function AttendancePage() {
                                 </select>
                             </div>
                         </div>
+
+                        {/* Outdoor / Field Duty Geofence Bypass Option (Req 5.1) */}
+                        <div className="flex items-center gap-3 p-3.5 rounded-xl bg-slate-50 border border-slate-100 cursor-pointer" onClick={() => setManualIsOutdoor(!manualIsOutdoor)}>
+                            <input
+                                type="checkbox"
+                                id="manualIsOutdoor"
+                                checked={manualIsOutdoor}
+                                onChange={(e) => setManualIsOutdoor(e.target.checked)}
+                                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            />
+                            <div className="flex flex-col cursor-pointer">
+                                <label htmlFor="manualIsOutdoor" className="text-[10px] font-black uppercase tracking-wider text-slate-900 cursor-pointer">
+                                    Outdoor / Field Duty Punch
+                                </label>
+                                <span className="text-[8px] font-bold text-slate-400">Bypasses office geofence verification</span>
+                            </div>
+                        </div>
+
                         <div className="space-y-2">
                             <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Authorized Reason & Log</Label>
                             <textarea
-                                placeholder="Provide detailed reason for manual entry..."
+                                placeholder="Provide detailed reason for manual entry or outdoor duty..."
                                 value={manualReason}
                                 onChange={(e) => setManualReason(e.target.value)}
-                                className="w-full h-24 p-4 rounded-xl bg-slate-50 border-none font-bold text-xs resize-none outline-none focus:ring-2 ring-indigo-100"
+                                className="w-full h-20 p-4 rounded-xl bg-slate-50 border-none font-bold text-xs resize-none outline-none focus:ring-2 ring-indigo-100"
                             />
                         </div>
                     </div>

@@ -128,21 +128,72 @@ export function GlobalRulesSheet({
 
                                 <div className="flex items-center gap-2 mb-2 pt-4 border-t border-slate-100">
                                     <div className="h-1.5 w-1.5 rounded-full bg-rose-500" />
-                                    <span className="text-[9px] font-black text-slate-900 uppercase tracking-widest">Attendance Compliance</span>
+                                    <span className="text-[9px] font-black text-slate-900 uppercase tracking-widest">Attendance & Manual Payroll Control (Req 4.1, 4.2)</span>
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2 col-span-2">
-                                        <div className="flex justify-between items-center ml-1">
-                                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Loss of Pay (Absent Days)</Label>
-                                            <Badge className="bg-blue-50 text-blue-600 border-none font-bold text-[7px] uppercase tracking-widest px-1.5 h-3.5">Live Sync</Badge>
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <div className="flex justify-between items-center ml-1">
+                                                <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Loss of Pay (Absent Days)</Label>
+                                                <Badge className="bg-blue-50 text-blue-600 border-none font-bold text-[7px] uppercase tracking-widest px-1.5 h-3.5">Live Sync</Badge>
+                                            </div>
+                                            <Input
+                                                type="number"
+                                                disabled
+                                                value={selectedEmployee.absentDays}
+                                                className="h-10 rounded-xl bg-blue-50/30 border-blue-100/50 font-bold text-[10px] text-blue-700 cursor-not-allowed"
+                                            />
+                                            <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest ml-1">Live recorded absent days</p>
                                         </div>
+
+                                        <div className="space-y-2">
+                                            <div className="flex justify-between items-center ml-1">
+                                                <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Payable Days Override (Req 4.1)</Label>
+                                                <Badge className="bg-indigo-50 text-indigo-600 border-none font-bold text-[7px] uppercase tracking-widest px-1.5 h-3.5">Direct</Badge>
+                                            </div>
+                                            <Input
+                                                type="number"
+                                                placeholder="Override days (e.g. 28)"
+                                                value={selectedEmployee.manualPayableDays ?? selectedEmployee.manual_payable_days ?? ""}
+                                                onChange={(e) => handleSalaryUpdate(selectedEmployee.id, 'manualPayableDays', e.target.value === "" ? null : parseFloat(e.target.value))}
+                                                className="h-10 rounded-xl bg-slate-50 border-slate-100 font-bold text-[10px] focus:bg-white transition-all"
+                                            />
+                                            <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest ml-1">Direct manual override</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Leave Adjustment Controls (Req 4.2) */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Deduct This Month (Days)</Label>
+                                            <Input
+                                                type="number"
+                                                value={selectedEmployee.leaveAdjustmentDays ?? selectedEmployee.leave_adjustment_days ?? 0}
+                                                onChange={(e) => handleSalaryUpdate(selectedEmployee.id, 'leaveAdjustmentDays', parseFloat(e.target.value) || 0)}
+                                                className="h-10 rounded-xl bg-slate-50 border-slate-100 font-bold text-[10px] focus:bg-white transition-all"
+                                            />
+                                            <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest ml-1">e.g. Deduct 2 days now</p>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Carry Forward To Next (Days)</Label>
+                                            <Input
+                                                type="number"
+                                                value={selectedEmployee.leaveCarryForwardDays ?? selectedEmployee.leave_carry_forward_days ?? 0}
+                                                onChange={(e) => handleSalaryUpdate(selectedEmployee.id, 'leaveCarryForwardDays', parseFloat(e.target.value) || 0)}
+                                                className="h-10 rounded-xl bg-slate-50 border-slate-100 font-bold text-[10px] focus:bg-white transition-all"
+                                            />
+                                            <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest ml-1">e.g. Carry 2 days forward</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Admin Calculation Notes / Audit Reason</Label>
                                         <Input
-                                            type="number"
-                                            disabled
-                                            value={selectedEmployee.absentDays}
-                                            className="h-12 rounded-xl bg-blue-50/30 border-blue-100/50 font-bold text-[11px] text-blue-700 cursor-not-allowed"
+                                            placeholder="Reason for manual adjustment..."
+                                            value={selectedEmployee.adminNotes ?? selectedEmployee.admin_notes ?? ""}
+                                            onChange={(e) => handleSalaryUpdate(selectedEmployee.id, 'adminNotes', e.target.value)}
+                                            className="h-10 rounded-xl bg-slate-50 border-slate-100 font-bold text-[10px] focus:bg-white transition-all"
                                         />
-                                        <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest ml-1">Auto-calculated based on daily attendance records</p>
                                     </div>
                                 </div>
                             </div>

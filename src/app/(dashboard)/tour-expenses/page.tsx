@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { useRole } from "@/context/RoleContext";
 import { useAuth } from "@/context/AuthContext";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { apiGet, apiPost, apiPut } from "@/lib/api-client";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -474,6 +475,7 @@ export default function TourExpensesPage() {
   const pendingCount = stats.pendingCount;
 
   return (
+    <ProtectedRoute module="TOUR_EXPENSES" action="READ">
     <div className="space-y-8 pb-20">
 
       {/* ── Header ── */}
@@ -1127,5 +1129,6 @@ export default function TourExpensesPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </ProtectedRoute>
   );
 }

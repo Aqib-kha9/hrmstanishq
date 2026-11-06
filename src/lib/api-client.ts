@@ -128,6 +128,30 @@ function processQueue(error: unknown, token: string | null) {
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError<ApiError>) => {
+    // Extract real backend error message so error.message never falls back to generic status code
+    const resData = error.response?.data as any;
+    if (resData?.message) {
+      error.message = resData.message;
+    } else if (resData?.error) {
+      error.message = resData.error;
+    } else if (Array.isArray(resData?.errors) && resData.errors.length > 0) {
+      error.message = resData.errors
+        .map((e: any) => (typeof e === "string" ? e : e.message || `${e.field}: ${e.message}`))
+        .join(", ");
+    } else if (error.response?.status === 409) {
+      error.message = "An employee or record with this information already exists.";
+    } else if (error.response?.status === 404) {
+      error.message = "The requested resource was not found.";
+    } else if (error.response?.status === 403) {
+      error.message = "You do not have permission to perform this action.";
+    } else if (error.response?.status === 400) {
+      error.message = "Invalid request. Please check the entered information.";
+    } else if (error.code === "ECONNABORTED") {
+      error.message = "Request timed out. Please try again.";
+    } else if (!error.response) {
+      error.message = "Unable to connect to the server. Please check your network connection.";
+    }
+
     const originalRequest = error.config as InternalAxiosRequestConfig & {
       _retry?: boolean;
     };
@@ -237,6 +261,27 @@ export async function apiGetPaginated<T>(url: string, params?: Record<string, un
     data: res.data.data,
     pagination: (res.data as unknown as { pagination: PaginatedData<T>["pagination"] }).pagination,
   };
+}
+
+/**
+ * Helper to safely extract a user-friendly error message from any caught error.
+ */
+export function getApiErrorMessage(err: unknown, fallback = "Operation failed. Please try again."): string {
+  if (!err) return fallback;
+  if (typeof err === "string") return err;
+  const anyErr = err as any;
+  if (anyErr.response?.data?.message) return anyErr.response.data.message;
+  if (anyErr.response?.data?.error) return anyErr.response.data.error;
+  if (Array.isArray(anyErr.response?.data?.errors) && anyErr.response.data.errors.length > 0) {
+    return anyErr.response.data.errors
+      .map((e: any) => (typeof e === "string" ? e : e.message || `${e.field}: ${e.message}`))
+      .join(", ");
+  }
+  if (anyErr.message && !anyErr.message.includes("status code")) return anyErr.message;
+  if (anyErr.response?.status === 409) return "An employee or record with this information already exists.";
+  if (anyErr.response?.status === 404) return "The requested resource was not found.";
+  if (anyErr.response?.status === 403) return "You do not have permission to perform this action.";
+  return fallback;
 }
 
 export default apiClient;

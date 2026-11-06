@@ -1,13 +1,15 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api-client';
 
-export type CRUDAction = 'CREATE' | 'READ' | 'UPDATE' | 'DELETE';
+export type CRUDAction = 'CREATE' | 'READ' | 'UPDATE' | 'DELETE' | 'APPROVE' | 'EXPORT';
 
 export const MODULES = [
   'DASHBOARD',
   'EMPLOYEES',
+  'ONBOARDING',
   'ATTENDANCE',
   'PAYROLL',
   'LOANS',
@@ -23,8 +25,13 @@ export const MODULES = [
 
 export type ModuleName = typeof MODULES[number];
 
-interface RoleDefinition {
+export interface RoleDefinition {
+  id?: number;
   name: string;
+  display_name?: string;
+  description?: string;
+  is_system?: boolean;
+  employee_count?: number;
   permissions: Record<ModuleName, CRUDAction[]>;
 }
 
@@ -33,6 +40,8 @@ export interface User {
   name: string;
   email: string;
   role: string;
+  role_id?: number;
+  permissions?: string[];
   branch?: string;
   department?: string;
 }
@@ -41,127 +50,268 @@ interface RoleContextType {
   user: User | null;
   role: string;
   availableRoles: RoleDefinition[];
-  setRole: (role: string) => void;
+  loadingRoles: boolean;
+  refreshRoles: () => Promise<void>;
   hasPermission: (module: ModuleName, action: CRUDAction) => boolean;
-  updateRolePermissions: (roleName: string, permissions: Record<ModuleName, CRUDAction[]>) => void;
-  createRole: (roleName: string, permissions: Record<ModuleName, CRUDAction[]>) => void;
-  deleteRole: (roleName: string) => void;
+  hasDirectPermission: (permissionSlug: string) => boolean;
+  updateRolePermissions: (roleNameOrId: string | number, permissions: Record<ModuleName, CRUDAction[]>) => Promise<boolean>;
+  createRole: (roleName: string, permissions: Record<ModuleName, CRUDAction[]>, description?: string) => Promise<boolean>;
+  deleteRole: (roleNameOrId: string | number) => Promise<boolean>;
 }
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
 
-const FULL_CRUD: CRUDAction[] = ['CREATE', 'READ', 'UPDATE', 'DELETE'];
+const FULL_CRUD: CRUDAction[] = ['CREATE', 'READ', 'UPDATE', 'DELETE', 'APPROVE', 'EXPORT'];
 const READ_ONLY: CRUDAction[] = ['READ'];
 const NO_ACCESS: CRUDAction[] = [];
 
-const initialRoles: RoleDefinition[] = [
+// Fallback baseline in case network is initialising
+const initialFallbackRoles: RoleDefinition[] = [
   {
     name: 'SUPER_ADMIN',
+    display_name: 'Super Administrator',
+    is_system: true,
     permissions: {
-      DASHBOARD: FULL_CRUD, EMPLOYEES: FULL_CRUD, ATTENDANCE: FULL_CRUD, PAYROLL: FULL_CRUD, LOANS: FULL_CRUD,
-      LEAVE: FULL_CRUD, LOCATIONS: FULL_CRUD, LETTERS: FULL_CRUD, TOUR_EXPENSES: FULL_CRUD,
-      REPORTS: FULL_CRUD, SETTINGS: FULL_CRUD, ROLE_MGMT: FULL_CRUD, PERFORMANCE: FULL_CRUD
+      DASHBOARD: FULL_CRUD, EMPLOYEES: FULL_CRUD, ONBOARDING: FULL_CRUD, ATTENDANCE: FULL_CRUD,
+      PAYROLL: FULL_CRUD, LOANS: FULL_CRUD, LEAVE: FULL_CRUD, LOCATIONS: FULL_CRUD,
+      LETTERS: FULL_CRUD, TOUR_EXPENSES: FULL_CRUD, REPORTS: FULL_CRUD, SETTINGS: FULL_CRUD,
+      ROLE_MGMT: FULL_CRUD, PERFORMANCE: FULL_CRUD
     }
   },
   {
     name: 'ADMIN',
+    display_name: 'Administrator',
+    is_system: true,
     permissions: {
-      DASHBOARD: FULL_CRUD, EMPLOYEES: FULL_CRUD, ATTENDANCE: FULL_CRUD, PAYROLL: FULL_CRUD, LOANS: FULL_CRUD,
-      LEAVE: FULL_CRUD, LOCATIONS: FULL_CRUD, LETTERS: FULL_CRUD, TOUR_EXPENSES: FULL_CRUD,
-      REPORTS: FULL_CRUD, SETTINGS: FULL_CRUD, ROLE_MGMT: NO_ACCESS, PERFORMANCE: FULL_CRUD
+      DASHBOARD: FULL_CRUD, EMPLOYEES: FULL_CRUD, ONBOARDING: FULL_CRUD, ATTENDANCE: FULL_CRUD,
+      PAYROLL: FULL_CRUD, LOANS: FULL_CRUD, LEAVE: FULL_CRUD, LOCATIONS: FULL_CRUD,
+      LETTERS: FULL_CRUD, TOUR_EXPENSES: FULL_CRUD, REPORTS: FULL_CRUD, SETTINGS: FULL_CRUD,
+      ROLE_MGMT: READ_ONLY, PERFORMANCE: FULL_CRUD
+    }
+  },
+  {
+    name: 'HR',
+    display_name: 'HR Manager',
+    is_system: true,
+    permissions: {
+      DASHBOARD: READ_ONLY, EMPLOYEES: ['CREATE', 'READ', 'UPDATE', 'EXPORT'], ONBOARDING: FULL_CRUD,
+      ATTENDANCE: FULL_CRUD, PAYROLL: ['CREATE', 'READ', 'UPDATE', 'EXPORT'], LOANS: FULL_CRUD,
+      LEAVE: FULL_CRUD, LOCATIONS: READ_ONLY, LETTERS: FULL_CRUD, TOUR_EXPENSES: ['READ', 'APPROVE', 'EXPORT'],
+      REPORTS: FULL_CRUD, SETTINGS: READ_ONLY, ROLE_MGMT: NO_ACCESS, PERFORMANCE: ['READ', 'UPDATE']
     }
   },
   {
     name: 'MANAGER',
+    display_name: 'Team Manager',
+    is_system: true,
     permissions: {
-      DASHBOARD: READ_ONLY, EMPLOYEES: ['READ', 'UPDATE'], ATTENDANCE: FULL_CRUD, PAYROLL: NO_ACCESS, LOANS: READ_ONLY,
-      LEAVE: FULL_CRUD, LOCATIONS: READ_ONLY, LETTERS: NO_ACCESS, TOUR_EXPENSES: FULL_CRUD,
-      REPORTS: READ_ONLY, SETTINGS: READ_ONLY, ROLE_MGMT: NO_ACCESS, PERFORMANCE: FULL_CRUD
+      DASHBOARD: READ_ONLY, EMPLOYEES: ['READ', 'UPDATE'], ONBOARDING: NO_ACCESS, ATTENDANCE: ['READ', 'APPROVE'],
+      PAYROLL: NO_ACCESS, LOANS: READ_ONLY, LEAVE: ['READ', 'APPROVE'], LOCATIONS: READ_ONLY,
+      LETTERS: NO_ACCESS, TOUR_EXPENSES: ['READ', 'APPROVE'], REPORTS: READ_ONLY,
+      SETTINGS: NO_ACCESS, ROLE_MGMT: NO_ACCESS, PERFORMANCE: FULL_CRUD
     }
   },
   {
     name: 'EMPLOYEE',
+    display_name: 'Staff Employee',
+    is_system: true,
     permissions: {
-      DASHBOARD: READ_ONLY, EMPLOYEES: NO_ACCESS, ATTENDANCE: READ_ONLY, PAYROLL: NO_ACCESS, LOANS: READ_ONLY,
-      LEAVE: READ_ONLY, LOCATIONS: NO_ACCESS, LETTERS: NO_ACCESS, TOUR_EXPENSES: READ_ONLY,
-      REPORTS: NO_ACCESS, SETTINGS: READ_ONLY, ROLE_MGMT: NO_ACCESS, PERFORMANCE: READ_ONLY
+      DASHBOARD: READ_ONLY, EMPLOYEES: NO_ACCESS, ONBOARDING: NO_ACCESS, ATTENDANCE: ['CREATE', 'READ'],
+      PAYROLL: READ_ONLY, LOANS: ['CREATE', 'READ'], LEAVE: ['CREATE', 'READ', 'DELETE'], LOCATIONS: NO_ACCESS,
+      LETTERS: READ_ONLY, TOUR_EXPENSES: ['CREATE', 'READ'], REPORTS: NO_ACCESS,
+      SETTINGS: NO_ACCESS, ROLE_MGMT: NO_ACCESS, PERFORMANCE: READ_ONLY
     }
   }
 ];
 
 export const RoleProvider = ({ children }: { children: ReactNode }) => {
-  // Consume user from AuthContext instead of maintaining our own mock user
   const auth = useAuth();
   const user = auth.user;
 
-  const [availableRoles, setAvailableRoles] = useState<RoleDefinition[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('hrms_roles_crud');
-      if (saved) {
-        try {
-          const parsed: RoleDefinition[] = JSON.parse(saved);
-          // If any role is missing a module key, reset to initialRoles
-          const isStale = parsed.some(r =>
-            MODULES.some(m => !(m in r.permissions))
-          );
-          if (isStale) {
-            localStorage.removeItem('hrms_roles_crud');
-            return initialRoles;
-          }
-          return parsed;
-        } catch {
-          return initialRoles;
-        }
+  const [availableRoles, setAvailableRoles] = useState<RoleDefinition[]>(initialFallbackRoles);
+  const [loadingRoles, setLoadingRoles] = useState<boolean>(true);
+
+  // Fetch live roles and permissions matrix from backend API
+  const refreshRoles = useCallback(async () => {
+    try {
+      const data = await apiGet<any[]>('/roles');
+      if (Array.isArray(data) && data.length > 0) {
+        const formatted: RoleDefinition[] = data.map((r) => {
+          const rawMatrix = r.matrix || {};
+          const fullMatrix = {} as Record<ModuleName, CRUDAction[]>;
+          const isSuper = r.name === 'SUPER_ADMIN';
+          MODULES.forEach((m) => {
+            fullMatrix[m] = isSuper ? [...FULL_CRUD] : (rawMatrix[m] || []);
+          });
+          return {
+            id: r.id,
+            name: r.name,
+            display_name: r.display_name || r.name,
+            description: r.description,
+            is_system: r.is_system,
+            employee_count: r.employee_count || 0,
+            permissions: fullMatrix,
+          };
+        });
+        setAvailableRoles(formatted);
       }
+    } catch (_) {
+      // Keep initialFallbackRoles if offline/loading
+    } finally {
+      setLoadingRoles(false);
     }
-    return initialRoles;
-  });
+  }, []);
 
   useEffect(() => {
-    localStorage.setItem('hrms_roles_crud', JSON.stringify(availableRoles));
-  }, [availableRoles]);
+    if (auth.isAuthenticated) {
+      refreshRoles();
+    }
+  }, [auth.isAuthenticated, refreshRoles]);
 
-  // setRole is now a no-op for dev mode role switching — the real role
-  // comes from AuthContext. Kept for backward compatibility with the
-  // Sidebar's dev role dropdown (will be replaced in Phase 4).
-  const setRole = (_newRole: string) => {
-    // Intentionally no-op: role is controlled by AuthContext
-  };
-
-  const hasPermission = (module: ModuleName, action: CRUDAction) => {
+  /**
+   * Evaluates if current user has permission for a specific module and action
+   */
+  const hasPermission = (module: ModuleName, action: CRUDAction): boolean => {
     if (!user) return false;
-    const currentRoleDef = availableRoles.find(r => r.name === user.role);
+
+    const userRole = (user.role || '').toUpperCase();
+
+    // 1. Super Admin and Admin bypass all module permission checks
+    if (userRole === 'SUPER_ADMIN') {
+      return true;
+    }
+
+    // 2. Wildcard check in user's permissions array from JWT
+    const userPerms = user.permissions || [];
+    if (userPerms.includes('*')) {
+      return true;
+    }
+
+    // 3. Module-level wildcard check (e.g. 'employees:*')
+    const modLower = module.toLowerCase();
+    const actLower = action.toLowerCase();
+    if (userPerms.includes(`${modLower}:*`)) {
+      return true;
+    }
+
+    // 4. Exact slug match in user's live token permissions
+    if (userPerms.includes(`${modLower}:${actLower}`)) {
+      return true;
+    }
+
+    // 5. Check role definition matrix from current state
+    const currentRoleDef = availableRoles.find((r) => r.name === userRole);
     if (!currentRoleDef) return false;
 
     const modulePerms = currentRoleDef.permissions[module];
     if (!modulePerms) return false;
+
     return modulePerms.includes(action);
   };
 
-  const updateRolePermissions = (roleName: string, permissions: Record<ModuleName, CRUDAction[]>) => {
-    if (roleName === 'SUPER_ADMIN') {
-      permissions.ROLE_MGMT = FULL_CRUD;
+  /**
+   * Checks direct slug e.g. 'payroll:approve'
+   */
+  const hasDirectPermission = (permissionSlug: string): boolean => {
+    if (!user) return false;
+    const userRole = (user.role || '').toUpperCase();
+    if (userRole === 'SUPER_ADMIN') return true;
+
+    const userPerms = user.permissions || [];
+    if (userPerms.includes('*')) return true;
+
+    const [mod] = permissionSlug.split(':');
+    if (userPerms.includes(`${mod}:*`)) return true;
+
+    return userPerms.includes(permissionSlug);
+  };
+
+  /**
+   * Updates permission matrix in the live database via PUT /api/v1/roles/:id/permissions
+   */
+  const updateRolePermissions = async (
+    roleNameOrId: string | number,
+    permissions: Record<ModuleName, CRUDAction[]>
+  ): Promise<boolean> => {
+    const roleDef = availableRoles.find((r) => r.id === roleNameOrId || r.name === roleNameOrId);
+    if (!roleDef) return false;
+
+    if (roleDef.name === 'SUPER_ADMIN') {
+      console.warn('Super Admin permissions are immutable and cannot be modified.');
+      return false;
     }
-    setAvailableRoles(prev => prev.map(r =>
-      r.name === roleName ? { ...r, permissions } : r
-    ));
+
+    try {
+      if (roleDef.id) {
+        await apiPut(`/roles/${roleDef.id}/permissions`, { matrix: permissions });
+      }
+      setAvailableRoles((prev) =>
+        prev.map((r) => (r.name === roleDef.name ? { ...r, permissions } : r))
+      );
+      return true;
+    } catch {
+      return false;
+    }
   };
 
-  const createRole = (roleName: string, permissions: Record<ModuleName, CRUDAction[]>) => {
-    if (availableRoles.some(r => r.name === roleName)) return;
-    setAvailableRoles(prev => [...prev, { name: roleName, permissions }]);
+  /**
+   * Creates a new role in the live database via POST /api/v1/roles
+   */
+  const createRole = async (
+    roleName: string,
+    permissions: Record<ModuleName, CRUDAction[]>,
+    description?: string
+  ): Promise<boolean> => {
+    const formattedName = roleName.toUpperCase().replace(/\s+/g, '_');
+    try {
+      const created = await apiPost<any>('/roles', {
+        name: formattedName,
+        display_name: roleName.trim(),
+        description: description || `Custom role for ${roleName}`,
+        matrix: permissions,
+      });
+
+      await refreshRoles();
+      return true;
+    } catch {
+      return false;
+    }
   };
 
-  const deleteRole = (roleName: string) => {
-    if (['SUPER_ADMIN', 'ADMIN'].includes(roleName)) return;
-    setAvailableRoles(prev => prev.filter(r => r.name !== roleName));
+  /**
+   * Deletes a custom role in the live database via DELETE /api/v1/roles/:id
+   */
+  const deleteRole = async (roleNameOrId: string | number): Promise<boolean> => {
+    const roleDef = availableRoles.find((r) => r.id === roleNameOrId || r.name === roleNameOrId);
+    if (!roleDef) return false;
+    if (roleDef.is_system || ['SUPER_ADMIN', 'ADMIN'].includes(roleDef.name)) return false;
+
+    try {
+      if (roleDef.id) {
+        await apiDelete(`/roles/${roleDef.id}`);
+      }
+      setAvailableRoles((prev) => prev.filter((r) => r.name !== roleDef.name));
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   return (
-    <RoleContext.Provider value={{
-      user, role: user?.role || 'EMPLOYEE', availableRoles,
-      setRole, hasPermission, updateRolePermissions, createRole, deleteRole
-    }}>
+    <RoleContext.Provider
+      value={{
+        user,
+        role: user?.role || 'EMPLOYEE',
+        availableRoles,
+        loadingRoles,
+        refreshRoles,
+        hasPermission,
+        hasDirectPermission,
+        updateRolePermissions,
+        createRole,
+        deleteRole,
+      }}
+    >
       {children}
     </RoleContext.Provider>
   );

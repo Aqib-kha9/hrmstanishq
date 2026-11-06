@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/context/ThemeContext";
 import { apiGet, apiPut } from "@/lib/api-client";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import {
     Select,
     SelectContent,
@@ -114,6 +115,7 @@ export default function SettingsPage() {
     };
 
     return (
+        <ProtectedRoute module="SETTINGS" action="READ">
         <div className="space-y-10 max-w-6xl mx-auto pb-20">
             {/* Header */}
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between px-2">
@@ -613,6 +615,7 @@ export default function SettingsPage() {
                 </TabsContent>
             </Tabs>
         </div>
+        </ProtectedRoute>
     );
 }
 

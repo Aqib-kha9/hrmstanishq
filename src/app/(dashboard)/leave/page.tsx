@@ -62,12 +62,23 @@ import { useAuth } from "@/context/AuthContext";
 interface LeaveBalance {
     id: number;
     employee_id: number;
-    available: number;
-    used: number;
-    admin_granted: number;
-    lapsed: number;
-    last_accrual_month: string;
-    consecutive_no_usage_months: number;
+    year?: number;
+    cl_allocated?: number;
+    cl_used?: number;
+    cl_balance?: number;
+    el_allocated?: number;
+    el_carried_forward?: number;
+    el_used?: number;
+    el_balance?: number;
+    total_entitled?: number;
+    total_balance?: number;
+    total_used?: number;
+    available?: number;
+    used?: number;
+    admin_granted?: number;
+    lapsed?: number;
+    last_accrual_month?: string;
+    consecutive_no_usage_months?: number;
 }
 
 export default function LeavePage() {
@@ -85,12 +96,20 @@ export default function LeavePage() {
     const [selectedLog, setSelectedLog] = useState<any>(null);
     const [pendingStatus, setPendingStatus] = useState("");
     const [adminRemarks, setAdminRemarks] = useState("");
+    const [payrollTreatment, setPayrollTreatment] = useState<"paid" | "unpaid" | "adjusted_balance" | "carry_forward_next">("paid");
     const [loading, setLoading] = useState(false);
+
+    // Leave History Drawer State (Req 9.3)
+    const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
+    const [historyEmployee, setHistoryEmployee] = useState<any>(null);
+    const [employeeHistoryRecords, setEmployeeHistoryRecords] = useState<any[]>([]);
+    const [loadingHistory, setLoadingHistory] = useState(false);
 
     const [balance, setBalance] = useState<LeaveBalance | null>(null);
     const [logs, setLogs] = useState<any[]>([]);
 
-    // New application form state
+    // New application form state (Req 9.1: CL / EL)
+    const [applyLeaveType, setApplyLeaveType] = useState<"cl" | "el">("cl");
     const [applyDays, setApplyDays] = useState(1);
     const [applyFrom, setApplyFrom] = useState("");
     const [applyTo, setApplyTo] = useState("");
@@ -108,6 +127,22 @@ export default function LeavePage() {
     const [grantReason, setGrantReason] = useState("");
     const [grantSubmitting, setGrantSubmitting] = useState(false);
     const [grantErrors, setGrantErrors] = useState<{ employeeId?: string; count?: string; reason?: string }>({});
+
+    const fetchEmployeeHistory = async (emp: any) => {
+        setHistoryEmployee(emp);
+        setHistoryDrawerOpen(true);
+        setLoadingHistory(true);
+        try {
+            const empId = emp.employee_id || emp.id;
+            const data: any = await apiGet(`/leave/history/${empId}`);
+            setEmployeeHistoryRecords(Array.isArray(data) ? data : (data.rows || data.history || []));
+        } catch (err) {
+            console.error("Failed to fetch employee leave history:", err);
+            setEmployeeHistoryRecords([]);
+        } finally {
+            setLoadingHistory(false);
+        }
+    };
 
     const todayStr = new Date().toISOString().split('T')[0];
 
@@ -132,7 +167,7 @@ export default function LeavePage() {
         else if (applyTo < todayStr) errors.to_date = 'End date cannot be in the past';
         else if (applyTo < applyFrom) errors.to_date = 'End date must be after start date';
         if (!applyDays || applyDays < 1) errors.days = 'Duration must be at least 1 day';
-        else if (balance && selectedEmployeeId === "" && applyDays > balance.available) errors.days = `Insufficient balance (${balance.available} available)`;
+        else if (balance && selectedEmployeeId === "" && applyDays > (balance.available ?? balance.total_balance ?? 0)) errors.days = `Insufficient balance (${balance.available ?? balance.total_balance ?? 0} available)`;
         if (!applyReason || applyReason.trim().length < 10) errors.reason = 'Reason must be at least 10 characters';
         else if (applyReason.length > 500) errors.reason = 'Reason must be under 500 characters';
         setFormErrors(errors);
@@ -229,11 +264,13 @@ export default function LeavePage() {
                 const emp = r.employee || {};
                 return {
                     id: r.id,
+                    employee_id: r.employee_id,
                     personnel: emp.name || "You",
                     branch: emp.department || "—",
                     appliedOn: r.created_at ? new Date(r.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—",
                     range: r.from_date && r.to_date ? `${new Date(r.from_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })} - ${new Date(r.to_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : "—",
-                    type: "EL",
+                    type: (r.leave_type || "EL").toUpperCase(),
+                    payrollTreatment: r.payroll_treatment,
                     status: r.status ? r.status.charAt(0).toUpperCase() + r.status.slice(1) : "Pending",
                     color: r.status === "approved" ? "emerald" : r.status === "rejected" ? "rose" : r.status === "cancelled" ? "slate" : "amber",
                     duration: r.duration || 1,
@@ -261,6 +298,7 @@ export default function LeavePage() {
         setPendingStatus(status);
         setIsActionDialogOpen(true);
         setAdminRemarks("");
+        setPayrollTreatment("paid");
     };
 
     const confirmAction = async () => {
@@ -270,6 +308,7 @@ export default function LeavePage() {
             await apiPatch(`/leave/approve/${selectedLog.id}`, {
                 action,
                 remarks: adminRemarks || undefined,
+                payroll_treatment: pendingStatus === "Approved" ? payrollTreatment : undefined,
             });
             setIsActionDialogOpen(false);
             fetchRequests();
@@ -285,7 +324,7 @@ export default function LeavePage() {
         setApplySubmitting(true);
         try {
             const payload: any = {
-                leave_type: "el",
+                leave_type: applyLeaveType,
                 from_date: applyFrom,
                 to_date: applyTo,
                 duration: applyDays,
@@ -548,10 +587,15 @@ export default function LeavePage() {
                                             )}
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div className="space-y-2">
-                                                    <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Leave Type</Label>
-                                                    <div className="h-12 rounded-xl bg-slate-50 border border-slate-100 flex items-center px-4 font-bold text-[11px] text-slate-700">
-                                                        Earned Leave (EL)
-                                                    </div>
+                                                    <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Leave Type (Req 9.1)</Label>
+                                                    <select
+                                                        value={applyLeaveType}
+                                                        onChange={(e: any) => setApplyLeaveType(e.target.value)}
+                                                        className="h-12 w-full rounded-xl bg-slate-50 border border-slate-100 px-4 font-bold text-[11px] text-slate-700 outline-none cursor-pointer"
+                                                    >
+                                                        <option value="cl">Casual Leave (CL) — 12 / yr (No Carryover)</option>
+                                                        <option value="el">Earned Leave (EL) — 12 / yr (Carryover Permitted)</option>
+                                                    </select>
                                                 </div>
                                                 <div className="space-y-2">
                                                     <div className="flex items-center justify-between">
@@ -648,25 +692,63 @@ export default function LeavePage() {
                     </div>
                 </div>
 
-                {/* Leave Balance Card */}
+                {/* Annual Leave Structure Cards (Req 9.1, 9.2: 12 CL + 12 EL = 24 Total) */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 px-2">
-                    {/* Main Balance Card */}
+                    {/* Casual Leave (CL) */}
                     <Card className="bg-[#E0E7FF] border-none rounded-2xl p-6 shadow-sm flex flex-col justify-between h-36 group hover:shadow-lg transition-all">
                         <div className="flex items-center justify-between">
                             <div className="h-8 w-8 bg-white/50 rounded-lg flex items-center justify-center">
-                                <Plane className="h-4 w-4 text-indigo-600" />
+                                <CalendarDays className="h-4 w-4 text-indigo-600" />
                             </div>
-                            <Badge className="bg-white/30 text-indigo-900 border-none font-black text-[7px] uppercase tracking-widest px-2 h-5 rounded-md italic">Available</Badge>
+                            <Badge className="bg-white/30 text-indigo-900 border-none font-black text-[7px] uppercase tracking-widest px-2 h-5 rounded-md italic">No Carryover</Badge>
                         </div>
                         <div>
-                            <p className="text-[8px] font-black text-indigo-500 uppercase tracking-widest mb-0.5">Earned Leave (EL)</p>
+                            <div className="flex items-center justify-between">
+                                <p className="text-[8px] font-black text-indigo-500 uppercase tracking-widest mb-0.5">Casual Leave (CL)</p>
+                                <span className="text-[8px] font-bold text-indigo-600">{balance?.cl_allocated ?? 12} / Yr</span>
+                            </div>
                             <h3 className="text-2xl font-black text-indigo-900 italic tracking-tighter">
-                                {balance?.available ?? 0} <span className="text-[9px] uppercase font-bold text-indigo-400 not-italic ml-1">Days</span>
+                                {balance?.cl_balance ?? (balance?.available ? Math.min(12, balance.available) : 12)} <span className="text-[9px] uppercase font-bold text-indigo-400 not-italic ml-1">Days Rem.</span>
                             </h3>
                         </div>
                     </Card>
 
-                    {/* Used */}
+                    {/* Earned Leave (EL) */}
+                    <Card className="bg-[#DCFCE7] border-none rounded-2xl p-6 shadow-sm flex flex-col justify-between h-36 group hover:shadow-lg transition-all">
+                        <div className="flex items-center justify-between">
+                            <div className="h-8 w-8 bg-white/50 rounded-lg flex items-center justify-center">
+                                <Plane className="h-4 w-4 text-emerald-600" />
+                            </div>
+                            <Badge className="bg-white/30 text-emerald-900 border-none font-black text-[7px] uppercase tracking-widest px-2 h-5 rounded-md italic">Carryover Permitted</Badge>
+                        </div>
+                        <div>
+                            <div className="flex items-center justify-between">
+                                <p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest mb-0.5">Earned Leave (EL)</p>
+                                <span className="text-[8px] font-bold text-emerald-700">+{balance?.el_carried_forward ?? 0} Carried Over</span>
+                            </div>
+                            <h3 className="text-2xl font-black text-emerald-900 italic tracking-tighter">
+                                {balance?.el_balance ?? (balance?.available ? Math.max(0, balance.available - 12) : 12)} <span className="text-[9px] uppercase font-bold text-emerald-500 not-italic ml-1">Days Rem.</span>
+                            </h3>
+                        </div>
+                    </Card>
+
+                    {/* Total Annual Entitlement */}
+                    <Card className="bg-[#FEF3C7] border-none rounded-2xl p-6 shadow-sm flex flex-col justify-between h-36 group hover:shadow-lg transition-all">
+                        <div className="flex items-center justify-between">
+                            <div className="h-8 w-8 bg-white/50 rounded-lg flex items-center justify-center">
+                                <TrendingUp className="h-4 w-4 text-amber-600" />
+                            </div>
+                            <Badge className="bg-white/30 text-amber-900 border-none font-black text-[7px] uppercase tracking-widest px-2 h-5 rounded-md italic">Annual Total</Badge>
+                        </div>
+                        <div>
+                            <p className="text-[8px] font-black text-amber-600 uppercase tracking-widest mb-0.5">Total Entitled (12 CL + 12 EL)</p>
+                            <h3 className="text-2xl font-black text-amber-950 italic tracking-tighter">
+                                {balance?.total_balance ?? (balance?.available ?? 24)} <span className="text-[9px] uppercase font-bold text-amber-600 not-italic ml-1">/ {balance?.total_entitled ?? 24} Days</span>
+                            </h3>
+                        </div>
+                    </Card>
+
+                    {/* Used / Consumed */}
                     <Card className="bg-[#FEE2E2] border-none rounded-2xl p-6 shadow-sm flex flex-col justify-between h-36 group hover:shadow-lg transition-all">
                         <div className="flex items-center justify-between">
                             <div className="h-8 w-8 bg-white/50 rounded-lg flex items-center justify-center">
@@ -677,51 +759,19 @@ export default function LeavePage() {
                         <div>
                             <p className="text-[8px] font-black text-rose-500 uppercase tracking-widest mb-0.5">Total Consumed</p>
                             <h3 className="text-2xl font-black text-rose-900 italic tracking-tighter">
-                                {balance?.used ?? 0} <span className="text-[9px] uppercase font-bold text-rose-400 not-italic ml-1">Days</span>
-                            </h3>
-                        </div>
-                    </Card>
-
-                    {/* Admin Granted */}
-                    <Card className="bg-[#D1FAE5] border-none rounded-2xl p-6 shadow-sm flex flex-col justify-between h-36 group hover:shadow-lg transition-all">
-                        <div className="flex items-center justify-between">
-                            <div className="h-8 w-8 bg-white/50 rounded-lg flex items-center justify-center">
-                                <Gift className="h-4 w-4 text-emerald-600" />
-                            </div>
-                            <Badge className="bg-white/30 text-emerald-900 border-none font-black text-[7px] uppercase tracking-widest px-2 h-5 rounded-md italic">Bonus</Badge>
-                        </div>
-                        <div>
-                            <p className="text-[8px] font-black text-emerald-500 uppercase tracking-widest mb-0.5">Admin Granted</p>
-                            <h3 className="text-2xl font-black text-emerald-900 italic tracking-tighter">
-                                {balance?.admin_granted ?? 0} <span className="text-[9px] uppercase font-bold text-emerald-400 not-italic ml-1">Days</span>
-                            </h3>
-                        </div>
-                    </Card>
-
-                    {/* Lapsed */}
-                    <Card className="bg-[#FEF3C7] border-none rounded-2xl p-6 shadow-sm flex flex-col justify-between h-36 group hover:shadow-lg transition-all">
-                        <div className="flex items-center justify-between">
-                            <div className="h-8 w-8 bg-white/50 rounded-lg flex items-center justify-center">
-                                <ShieldAlert className="h-4 w-4 text-amber-600" />
-                            </div>
-                            <Badge className="bg-white/30 text-amber-900 border-none font-black text-[7px] uppercase tracking-widest px-2 h-5 rounded-md italic">Lapsed</Badge>
-                        </div>
-                        <div>
-                            <p className="text-[8px] font-black text-amber-500 uppercase tracking-widest mb-0.5">Expired</p>
-                            <h3 className="text-2xl font-black text-amber-900 italic tracking-tighter">
-                                {balance?.lapsed ?? 0} <span className="text-[9px] uppercase font-bold text-amber-400 not-italic ml-1">Days</span>
+                                {balance?.total_used ?? (balance?.used ?? 0)} <span className="text-[9px] uppercase font-bold text-rose-400 not-italic ml-1">Days</span>
                             </h3>
                         </div>
                     </Card>
                 </div>
 
-                {/* Accrual Rules Info */}
+                {/* Enterprise Leave Policy Notice (Req 9.1, 10) */}
                 <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100 mx-2">
                     <Info className="h-4 w-4 text-slate-400 mt-0.5 shrink-0" />
                     <div className="space-y-1">
-                        <p className="text-[10px] font-black text-slate-600 uppercase tracking-wide">Leave Accrual Rules</p>
+                        <p className="text-[10px] font-black text-slate-600 uppercase tracking-wide">Enterprise Annual Leave Structure (Req 9.1, 9.2)</p>
                         <p className="text-[9px] font-bold text-slate-400 uppercase leading-relaxed">
-                            +2 EL earned per month • Unused leaves carry forward up to 3 months • If unused for 3 consecutive months, accrued leaves lapse to 0 • Admin-granted leaves never expire
+                            24 Total Annual Days • 12 Casual Leaves (CL - no carryover) • 12 Earned Leaves (EL - carryover permitted) • Pending unapproved leaves do not trigger automatic salary deductions until Admin reviews & decides treatment
                         </p>
                     </div>
                 </div>
@@ -875,7 +925,7 @@ export default function LeavePage() {
                                                             <MoreVertical className="h-4 w-4 text-slate-300" />
                                                         </Button>
                                                     </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end" className="rounded-xl p-2 border-slate-100 shadow-xl w-40">
+                                                    <DropdownMenuContent align="end" className="rounded-xl p-2 border-slate-100 shadow-xl w-44">
                                                         <DropdownMenuItem
                                                             onClick={() => openActionDialog(row, 'Approved')}
                                                             className="flex items-center gap-2.5 p-2 rounded-lg cursor-pointer hover:bg-emerald-50"
@@ -889,6 +939,13 @@ export default function LeavePage() {
                                                         >
                                                             <UserX className="h-3.5 w-3.5 text-rose-600" />
                                                             <span className="text-[9px] font-bold uppercase tracking-widest text-slate-700">Reject</span>
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem
+                                                            onClick={() => fetchEmployeeHistory(row)}
+                                                            className="flex items-center gap-2.5 p-2 rounded-lg cursor-pointer hover:bg-indigo-50"
+                                                        >
+                                                            <History className="h-3.5 w-3.5 text-indigo-600" />
+                                                            <span className="text-[9px] font-bold uppercase tracking-widest text-slate-700">Leave History</span>
                                                         </DropdownMenuItem>
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
@@ -929,13 +986,31 @@ export default function LeavePage() {
                         </DialogHeader>
 
                         <div className="space-y-4 py-4">
+                            {pendingStatus === 'Approved' && (
+                                <div className="space-y-2">
+                                    <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                                        Payroll Treatment (Req 10)
+                                    </Label>
+                                    <select
+                                        value={payrollTreatment}
+                                        onChange={(e: any) => setPayrollTreatment(e.target.value)}
+                                        className="w-full h-11 px-3 rounded-xl bg-slate-50 border border-slate-100 font-bold text-[10px] uppercase outline-none focus:ring-2 ring-emerald-100 cursor-pointer"
+                                    >
+                                        <option value="paid">Paid Leave (Deduct from Annual Balance, No Salary Cut)</option>
+                                        <option value="unpaid">Loss of Pay / Unpaid (Salary Deduction in Payroll)</option>
+                                        <option value="adjusted_balance">Adjust Against Balance (Decoupled from Cut)</option>
+                                        <option value="carry_forward_next">Carry Forward Adjustment to Next Month</option>
+                                    </select>
+                                </div>
+                            )}
+
                             <div className="space-y-2">
                                 <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Admin Remarks (Optional)</Label>
                                 <textarea
                                     value={adminRemarks}
                                     onChange={(e) => setAdminRemarks(e.target.value)}
                                     placeholder="Add a reason or message for the employee..."
-                                    className="w-full min-h-[100px] p-4 rounded-xl bg-slate-50 border-slate-100 font-bold text-[11px] focus:bg-white transition-all outline-none border"
+                                    className="w-full min-h-[90px] p-4 rounded-xl bg-slate-50 border-slate-100 font-bold text-[11px] focus:bg-white transition-all outline-none border"
                                 />
                             </div>
                         </div>
@@ -960,6 +1035,76 @@ export default function LeavePage() {
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
+
+                {/* Employee Leave History Drawer (Req 9.3) */}
+                <Sheet open={historyDrawerOpen} onOpenChange={setHistoryDrawerOpen}>
+                    <SheetContent className="sm:max-w-[580px] border-none shadow-2xl p-0 overflow-y-auto">
+                        <div className="h-2 bg-indigo-500" />
+                        <div className="p-8 space-y-6">
+                            <SheetHeader className="text-left space-y-1">
+                                <div className="flex items-center gap-2">
+                                    <History className="h-5 w-5 text-indigo-600" />
+                                    <SheetTitle className="text-xl font-black italic uppercase text-slate-900 tracking-tight">
+                                        Employee Leave History
+                                    </SheetTitle>
+                                </div>
+                                <SheetDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                    Complete leave audit log for <span className="text-slate-900 font-black">{historyEmployee?.personnel}</span> ({historyEmployee?.empCode || '—'})
+                                </SheetDescription>
+                            </SheetHeader>
+
+                            {loadingHistory ? (
+                                <div className="py-20 text-center">
+                                    <Loader2 className="h-8 w-8 text-slate-300 animate-spin mx-auto mb-2" />
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Loading leave history...</p>
+                                </div>
+                            ) : employeeHistoryRecords.length === 0 ? (
+                                <div className="py-16 text-center text-slate-400">
+                                    <Activity className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                                    <p className="text-xs font-bold uppercase">No leave history records found</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    {employeeHistoryRecords.map((item: any, i: number) => (
+                                        <div key={item.id || i} className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                                            <div className="space-y-1">
+                                                <div className="flex items-center gap-2">
+                                                    <Badge className="bg-slate-900 text-white font-black text-[8px] uppercase">
+                                                        {(item.leave_type || 'EL').toUpperCase()}
+                                                    </Badge>
+                                                    <span className="text-xs font-black text-slate-800">
+                                                        {item.duration || 1} Day{item.duration > 1 ? 's' : ''}
+                                                    </span>
+                                                    <Badge className={cn(
+                                                        "text-[8px] font-black uppercase",
+                                                        item.status === 'approved' ? 'bg-emerald-100 text-emerald-800' :
+                                                        item.status === 'rejected' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
+                                                    )}>
+                                                        {item.status}
+                                                    </Badge>
+                                                </div>
+                                                <p className="text-[10px] font-bold text-slate-600">
+                                                    {new Date(item.from_date).toLocaleDateString('en-GB')} – {new Date(item.to_date).toLocaleDateString('en-GB')}
+                                                </p>
+                                                <p className="text-[9px] text-slate-400 italic">
+                                                    &ldquo;{item.reason}&rdquo;
+                                                </p>
+                                            </div>
+                                            <div className="text-right text-[8px] font-bold uppercase text-slate-400 space-y-1">
+                                                {item.payroll_treatment && (
+                                                    <div className="text-indigo-600 font-black">
+                                                        Payroll: {item.payroll_treatment.replace(/_/g, ' ')}
+                                                    </div>
+                                                )}
+                                                <div>Applied: {new Date(item.created_at).toLocaleDateString('en-GB')}</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </SheetContent>
+                </Sheet>
 
             </div>
         </ProtectedRoute>

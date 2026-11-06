@@ -413,6 +413,10 @@ export default function EmployeeProfilePage() {
                                     <p className="text-xs font-black text-slate-900 uppercase tracking-widest">{rawEmployee?.pan_number || "N/A"}</p>
                                 </div>
                                 <div className="space-y-1">
+                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Aadhaar Number</p>
+                                    <p className="text-xs font-black text-slate-900 tracking-widest">{rawEmployee?.aadhaar_number || "N/A"}</p>
+                                </div>
+                                <div className="space-y-1">
                                     <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Department</p>
                                     <p className="text-xs font-black text-slate-900 uppercase tracking-widest">{employee.dept || "N/A"}</p>
                                 </div>

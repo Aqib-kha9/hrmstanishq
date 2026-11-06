@@ -1,6 +1,6 @@
 "use client";
 import { cn } from "@/lib/utils";
-import { apiGet, apiPatch, apiPost, apiGetPaginated } from "@/lib/api-client";
+import { apiGet, apiPatch, apiPost, apiGetPaginated, getToken } from "@/lib/api-client";
 
 import { useRole } from "@/context/RoleContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -37,7 +37,9 @@ import {
     AlertCircle,
     UserCircle,
     ChevronRight,
-    ChevronLeft
+    ChevronLeft,
+    Mail,
+    Send
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -137,6 +139,61 @@ export default function PayrollPage() {
 
     const [ledger, setLedger] = useState<any[]>([]);
     const [elapsedDays, setElapsedDays] = useState<number | null>(null);
+
+    // Email dispatch state (Req 3.1)
+    const [sendingEmailId, setSendingEmailId] = useState<number | null>(null);
+    const [sendingBulkEmail, setSendingBulkEmail] = useState(false);
+
+    const handleSendEntryEmail = async (entryId: number, name: string) => {
+        setSendingEmailId(entryId);
+        try {
+            await apiPost(`/payroll/entry/${entryId}/send-email`, {});
+            alert(`Payslip email dispatched successfully to ${name}!`);
+        } catch (e: any) {
+            alert(e?.response?.data?.message || `Failed to send payslip email to ${name}`);
+        } finally {
+            setSendingEmailId(null);
+        }
+    };
+
+    const handleSendAllPayslips = async () => {
+        if (!cycleId) return;
+        if (!confirm("Are you sure you want to email payslips to all employees in this cycle?")) return;
+        setSendingBulkEmail(true);
+        try {
+            const res: any = await apiPost(`/payroll/cycle/${cycleId}/send-all-payslips`, {});
+            alert(res.message || "All payslip emails dispatched successfully!");
+        } catch (e: any) {
+            alert(e?.response?.data?.message || "Failed to dispatch all payslips");
+        } finally {
+            setSendingBulkEmail(false);
+        }
+    };
+
+    const handleDownloadPDF = async (row: any) => {
+        try {
+            const token = getToken();
+            const apiBase = process.env.NEXT_PUBLIC_API_URL || "https://api.apaarpulse.com/api/v1";
+            const res = await fetch(`${apiBase}/payroll/entry/${row.id}/pdf`, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {}
+            });
+            if (res.ok) {
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Payslip_${row.name.replace(/\s+/g, '_')}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+                return;
+            }
+        } catch (err) {
+            console.warn("Backend PDF download fallback:", err);
+        }
+        await generatePayslip(row);
+    };
 
     useEffect(() => {
         setCurrentPage(1);
@@ -434,6 +491,14 @@ export default function PayrollPage() {
         drawLabelValue("A/C No:", row.bankAccountNumber || "--", 80, currentY);
         drawLabelValue("Days Worked:", String(row.workingDays || 0), 145, currentY);
 
+        currentY += 6;
+        drawLabelValue("Muster Days:", String(row.total_muster_days ?? 30), 15, currentY);
+        drawLabelValue("Present Days:", String(row.present_days ?? (30 - (row.absentDays || 0))), 80, currentY);
+        drawLabelValue("Payable Days:", String(row.payable_days ?? (30 - (row.absentDays || 0))), 145, currentY);
+
+        currentY += 6;
+        drawLabelValue("LWP Days:", String(row.lwp_days ?? row.absentDays ?? 0), 15, currentY);
+
         currentY += 8;
 
         // ── Salary Details Table (4 Columns) ──
@@ -554,6 +619,18 @@ export default function PayrollPage() {
                             </Button>
                         </Link>
                         <Button
+                            onClick={handleSendAllPayslips}
+                            disabled={sendingBulkEmail}
+                            variant="outline"
+                            className="h-11 px-6 rounded-2xl border-2 border-slate-100 font-black uppercase text-[9px] tracking-widest text-slate-800 transition-all hover:bg-slate-50"
+                        >
+                            {sendingBulkEmail ? (
+                                <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 animate-spin text-indigo-600" /> Sending...</span>
+                            ) : (
+                                <span className="flex items-center gap-1.5"><Mail className="h-4 w-4 text-indigo-600" /> Email All Payslips</span>
+                            )}
+                        </Button>
+                        <Button
                             onClick={() => setIsSendDialogOpen(true)}
                             className="bg-[#D9F99D] text-slate-900 hover:bg-[#c8ea8a] font-black uppercase text-[9px] tracking-[0.3em] px-8 h-11 rounded-2xl  hover:translate-y-[-2px] transition-all"
                         >
@@ -640,6 +717,7 @@ export default function PayrollPage() {
                             <TableHeader>
                                 <TableRow className="border-none hover:bg-transparent">
                                     <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 pl-6">Employee Details</TableHead>
+                                    <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400">Days (Muster/Payable/LWP)</TableHead>
                                     <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400">Prorated Gross</TableHead>
                                     <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400">Deductions</TableHead>
                                     <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400">Statutory</TableHead>
@@ -683,6 +761,13 @@ export default function PayrollPage() {
                                                         <Badge className="bg-indigo-50 text-indigo-500 border-none font-black text-[7px] h-4 px-1.5 rounded uppercase tracking-widest">{row.location}</Badge>
                                                         <span className="text-[7px] font-bold text-rose-500 uppercase tracking-widest">{row.absentDays > 0 ? `${row.absentDays} LWP` : 'Full Present'}</span>
                                                     </div>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-xs font-black text-slate-900">
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className="text-[9px] font-bold text-slate-500">Muster: <strong className="text-slate-900">{row.total_muster_days ?? 30}</strong></span>
+                                                    <span className="text-[9px] font-bold text-emerald-600">Payable: <strong className="text-emerald-700">{row.payable_days ?? (30 - (row.absentDays || 0))}</strong></span>
+                                                    <span className="text-[9px] font-bold text-rose-500">LWP: <strong className="text-rose-600">{row.lwp_days ?? row.absentDays ?? 0}</strong></span>
                                                 </div>
                                             </TableCell>
                                             <TableCell className="text-xs font-black text-slate-900">
@@ -747,8 +832,8 @@ export default function PayrollPage() {
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                             </TableCell>
-                                            <TableCell className="text-left w-[120px]">
-                                                <div className="flex items-center justify-start gap-2">
+                                            <TableCell className="text-left w-[180px]">
+                                                <div className="flex items-center justify-start gap-1.5">
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
@@ -775,13 +860,27 @@ export default function PayrollPage() {
                                                         <Button
                                                             variant="outline"
                                                             size="sm"
-                                                            onClick={() => generatePayslip(row)}
+                                                            onClick={() => handleDownloadPDF(row)}
                                                             disabled={row.status !== "Paid"}
-                                                            className="h-8 rounded-lg border-slate-100 font-black uppercase text-[7px] tracking-widest px-3 hover:bg-[#D9F99D] hover:text-slate-900 hover:border-[#D9F99D] transition-all disabled:opacity-30 disabled:pointer-events-none"
+                                                            className="h-8 rounded-lg border-slate-100 font-black uppercase text-[7px] tracking-widest px-2.5 hover:bg-[#D9F99D] hover:text-slate-900 hover:border-[#D9F99D] transition-all disabled:opacity-30 disabled:pointer-events-none"
                                                         >
-                                                            <Download className="h-3 w-3 mr-1.5" /> PDF
+                                                            <Download className="h-3 w-3 mr-1" /> PDF
                                                         </Button>
                                                     </span>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => handleSendEntryEmail(row.id, row.name)}
+                                                        disabled={sendingEmailId === row.id || row.status !== "Paid"}
+                                                        title="Email Payslip to Employee"
+                                                        className="h-8 rounded-lg border-slate-100 font-black uppercase text-[7px] tracking-widest px-2 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-100 transition-all disabled:opacity-30 disabled:pointer-events-none"
+                                                    >
+                                                        {sendingEmailId === row.id ? (
+                                                            <Clock className="h-3 w-3 animate-spin text-indigo-600" />
+                                                        ) : (
+                                                            <span className="flex items-center gap-1"><Mail className="h-3 w-3 text-indigo-600" /> Mail</span>
+                                                        )}
+                                                    </Button>
                                                 </div>
                                             </TableCell>
                                             <TableCell className="text-right pr-6 w-[60px]">

@@ -67,7 +67,7 @@ import {
     DialogTrigger,
     DialogFooter,
 } from "@/components/ui/dialog";
-import { apiGet, apiPatch, apiDelete, apiPut } from "@/lib/api-client";
+import { apiGet, apiPatch, apiDelete, apiPut, apiPost } from "@/lib/api-client";
 import { toFrontendEmployee, type BackendEmployee, type FrontendEmployee } from "@/lib/transform";
 import { BulkImportModal } from "@/components/BulkImportModal";
 
@@ -75,6 +75,7 @@ export default function EmployeesPage() {
     const { hasPermission } = useRole();
     const [searchTerm, setSearchTerm] = useState("");
     const [personnel, setPersonnel] = useState<FrontendEmployee[]>([]);
+    const [recentEmployees, setRecentEmployees] = useState<any[]>([]);
     const [currentPage, setCurrentPage] = useState(1);
     const [loading, setLoading] = useState(true);
     const [companies, setCompanies] = useState<{ id: number; name: string }[]>([]);
@@ -93,21 +94,78 @@ export default function EmployeesPage() {
     // Bulk Import state
     const [importDialogOpen, setImportDialogOpen] = useState(false);
 
+    // Re-hire state (Req 23)
+    const [rehireDialogOpen, setRehireDialogOpen] = useState(false);
+    const [resignedEmployees, setResignedEmployees] = useState<any[]>([]);
+    const [rehireLoading, setRehireLoading] = useState(false);
+    const [selectedResignedId, setSelectedResignedId] = useState("");
+    const [rehireForm, setRehireForm] = useState({
+        designation: "",
+        department: "",
+        fixed_gross: "",
+        office_id: "",
+        date_of_joining: new Date().toISOString().split("T")[0],
+        notes: "",
+    });
+
     useEffect(() => {
         async function fetchLookups() {
             try {
-                const [compData, offData] = await Promise.all([
+                const [compData, offData, recentData] = await Promise.all([
                     apiGet<{ id: number; name: string }[]>("/companies"),
                     apiGet<{ id: number; name: string }[]>("/offices", { limit: 100 }),
+                    apiGet<any[]>("/employees/recently-added?limit=5").catch(() => []),
                 ]);
                 setCompanies(compData || []);
                 setOffices(offData || []);
+                setRecentEmployees(recentData || []);
             } catch (err) {
                 console.error("Failed to load lookup data:", err);
             }
         }
         fetchLookups();
     }, []);
+
+    const fetchResignedEmployees = async () => {
+        try {
+            const data = await apiGet<any[]>("/employees", { status: "resigned,inactive", limit: 100 });
+            setResignedEmployees(data || []);
+        } catch (err) {
+            console.error("Failed to fetch resigned employees:", err);
+        }
+    };
+
+    const handleOpenRehire = () => {
+        fetchResignedEmployees();
+        setSelectedResignedId("");
+        setRehireDialogOpen(true);
+    };
+
+    const executeRehire = async () => {
+        if (!selectedResignedId) {
+            alert("Please select a resigned employee to re-hire.");
+            return;
+        }
+        setRehireLoading(true);
+        try {
+            await apiPost(`/employees/${selectedResignedId}/rehire`, {
+                designation: rehireForm.designation || undefined,
+                department: rehireForm.department || undefined,
+                fixed_gross: rehireForm.fixed_gross ? Number(rehireForm.fixed_gross) : undefined,
+                office_id: rehireForm.office_id ? Number(rehireForm.office_id) : undefined,
+                date_of_joining: rehireForm.date_of_joining || undefined,
+                notes: rehireForm.notes || undefined,
+            });
+            alert("Employee re-hired successfully! Status updated to active.");
+            setRehireDialogOpen(false);
+            window.location.reload();
+        } catch (err: any) {
+            console.error("Failed to re-hire:", err);
+            alert(err?.message || "Failed to re-hire employee.");
+        } finally {
+            setRehireLoading(false);
+        }
+    };
 
     useEffect(() => {
         async function fetchEmployees() {
@@ -139,6 +197,25 @@ export default function EmployeesPage() {
     const totalPages = Math.ceil(filteredPersonnel.length / itemsPerPage);
     const startIndex = (currentPage - 1) * itemsPerPage;
     const paginatedPersonnel = filteredPersonnel.slice(startIndex, startIndex + itemsPerPage);
+
+    const updateStatus = async (emp: FrontendEmployee, newStatus: 'active' | 'inactive' | 'resigned') => {
+        try {
+            await apiPatch(`/employees/${emp.employeeId}/status`, { status: newStatus });
+            const displayMap: Record<string, string> = {
+                active: "Active",
+                inactive: "Inactive",
+                resigned: "Resigned",
+            };
+            setPersonnel(prev => prev.map(p =>
+                p.employeeId === emp.employeeId
+                    ? { ...p, status: displayMap[newStatus] || "Active" }
+                    : p
+            ));
+        } catch (err) {
+            console.error("Failed to update status:", err);
+            alert("Failed to update employee status");
+        }
+    };
 
     const toggleStatus = async (emp: FrontendEmployee) => {
         // Map frontend display status to backend status value
@@ -232,6 +309,13 @@ export default function EmployeesPage() {
                     {hasPermission('EMPLOYEES', 'CREATE') && (
                         <div className="flex items-center gap-3">
                             <Button 
+                                onClick={handleOpenRehire}
+                                variant="outline" 
+                                className="border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 font-black uppercase text-[10px] tracking-widest px-5 h-12 rounded-xl shadow-sm transition-all flex items-center gap-2"
+                            >
+                                <UserCheck className="h-4 w-4 text-amber-600" /> Re-Hire Employee
+                            </Button>
+                            <Button 
                                 onClick={() => setImportDialogOpen(true)}
                                 variant="outline" 
                                 className="border-slate-200 text-slate-600 hover:bg-slate-50 font-black uppercase text-[10px] tracking-widest px-6 h-12 rounded-xl shadow-sm transition-all flex items-center gap-2"
@@ -246,6 +330,59 @@ export default function EmployeesPage() {
                         </div>
                     )}
                 </div>
+
+                {/* Req 1.1: Recently Added Employees Section */}
+                {recentEmployees.length > 0 && (
+                    <div className="px-2">
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                                <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                                <h3 className="text-xs font-black uppercase tracking-[0.18em] text-slate-700">Recently Added Team Members</h3>
+                                <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold px-2 py-0.5">
+                                    New
+                                </Badge>
+                            </div>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Latest {recentEmployees.length} onboards</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                            {recentEmployees.map((emp) => (
+                                <Link 
+                                    href={`/employees/${emp.id}`}
+                                    key={emp.id}
+                                    className="group relative bg-white border border-slate-200/80 hover:border-slate-900 rounded-2xl p-4 transition-all duration-300 shadow-sm hover:shadow-md flex flex-col justify-between"
+                                >
+                                    <div>
+                                        <div className="flex items-start justify-between mb-3">
+                                            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-slate-900 to-slate-700 text-white font-black text-xs flex items-center justify-center shadow">
+                                                {emp.name?.slice(0, 2).toUpperCase()}
+                                            </div>
+                                            <Badge className="bg-slate-100 text-slate-700 border-none font-mono text-[9px] font-bold">
+                                                {emp.emp_code}
+                                            </Badge>
+                                        </div>
+                                        <h4 className="font-black text-sm text-slate-900 truncate group-hover:text-indigo-600 transition-colors">
+                                            {emp.name}
+                                        </h4>
+                                        <p className="text-[11px] font-bold text-slate-500 truncate mt-0.5">
+                                            {emp.designation || "Staff"}
+                                        </p>
+                                        <p className="text-[10px] text-slate-400 truncate">
+                                            {emp.department || "General"}
+                                        </p>
+                                    </div>
+                                    <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[10px]">
+                                        <span className="text-slate-400 font-medium">
+                                            {emp.date_of_joining ? new Date(emp.date_of_joining).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "Recent"}
+                                        </span>
+                                        <span className="font-bold text-slate-600 truncate max-w-[80px]">
+                                            {emp.office?.name || emp.location || "Office"}
+                                        </span>
+                                    </div>
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {/* Search & Filter Bar */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center px-2">
@@ -363,7 +500,7 @@ export default function EmployeesPage() {
                                                 <td className="py-5 px-8">
                                                     <Badge className={cn(
                                                         "font-black text-[8px] uppercase tracking-widest px-3 py-1 rounded-lg border-none",
-                                                        emp.status === 'Active' ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"
+                                                        emp.status === 'Active' ? "bg-emerald-50 text-emerald-600" : emp.status === 'Resigned' ? "bg-rose-50 text-rose-600" : "bg-amber-50 text-amber-600"
                                                     )}>
                                                         {emp.status}
                                                     </Badge>
@@ -380,15 +517,33 @@ export default function EmployeesPage() {
                                                                 <DropdownMenuItem className="font-bold text-[9px] uppercase tracking-widest p-2.5 rounded-xl cursor-pointer">View Profile</DropdownMenuItem>
                                                             </Link>
                                                             {hasPermission('EMPLOYEES', 'UPDATE') && (
-                                                                <DropdownMenuItem onClick={() => toggleStatus(emp)} className={cn("font-bold text-[9px] uppercase tracking-widest p-2.5 rounded-xl cursor-pointer", emp.status === 'Active' ? 'text-amber-600' : 'text-emerald-600')}>
-                                                                    {emp.status === 'Active' ? 'Deactivate Employee' : 'Activate Employee'}
-                                                                </DropdownMenuItem>
+                                                                emp.status === 'Active' ? (
+                                                                    <>
+                                                                        <DropdownMenuItem onClick={() => updateStatus(emp, 'inactive')} className="font-bold text-[9px] uppercase tracking-widest p-2.5 rounded-xl cursor-pointer text-amber-600">
+                                                                            Deactivate Employee
+                                                                        </DropdownMenuItem>
+        
+                                                                        <DropdownMenuItem onClick={() => updateStatus(emp, 'resigned')} className="font-bold text-[9px] uppercase tracking-widest p-2.5 rounded-xl cursor-pointer text-rose-600">
+                                                                            Mark as Resigned
+                                                                        </DropdownMenuItem>
+        
+                                                                    </>
+                                                                ) : (
+                                                                    <DropdownMenuItem onClick={() => updateStatus(emp, 'active')} className="font-bold text-[9px] uppercase tracking-widest p-2.5 rounded-xl cursor-pointer text-emerald-600">
+                                                                        Activate Employee
+                                                                    </DropdownMenuItem>
+    
+                                                                )
+
+
+
                                                             )}
                                                             {hasPermission('EMPLOYEES', 'UPDATE') && (
                                                                 <DropdownMenuItem onClick={() => handleAdminResetPassword(emp)} className="font-bold text-[9px] uppercase tracking-widest p-2.5 rounded-xl cursor-pointer text-indigo-600">
                                                                     <KeyRound className="mr-2 h-3 w-3" />
                                                                     Reset Password
                                                                 </DropdownMenuItem>
+
                                                             )}
                                                             {hasPermission('EMPLOYEES', 'DELETE') && (
                                                                 <DropdownMenuItem onClick={() => deleteEmployee(emp)} className="font-bold text-[9px] uppercase tracking-widest p-2.5 rounded-xl text-rose-500 cursor-pointer">Hard Delete (Testing)</DropdownMenuItem>
@@ -551,6 +706,146 @@ export default function EmployeesPage() {
                             </div>
                         </>
                     ) : null}
+                </DialogContent>
+            </Dialog>
+
+            {/* Re-hire Resigned Employee Modal (Req 23) */}
+            <Dialog open={rehireDialogOpen} onOpenChange={setRehireDialogOpen}>
+                <DialogContent className="sm:max-w-[500px] p-6 rounded-3xl bg-white border-none shadow-2xl">
+                    <DialogHeader className="space-y-2 text-left">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-600 mb-2">
+                            <UserCheck className="h-6 w-6 stroke-[2.5]" />
+                        </div>
+                        <DialogTitle className="text-xl font-black text-slate-900 tracking-tight">Re-Hire Former / Resigned Employee</DialogTitle>
+                        <p className="text-xs text-slate-500">
+                            Re-activate a previously resigned or inactive employee with updated role, department, salary, or branch while preserving their audit history.
+                        </p>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-3">
+                        <div>
+                            <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">
+                                Select Former Employee (Resigned / Inactive) *
+                            </Label>
+                            <select
+                                value={selectedResignedId}
+                                onChange={(e) => {
+                                    const id = e.target.value;
+                                    setSelectedResignedId(id);
+                                    const match = resignedEmployees.find(r => r.id.toString() === id);
+                                    if (match) {
+                                        setRehireForm({
+                                            designation: match.designation || "",
+                                            department: match.department || "",
+                                            fixed_gross: match.fixed_gross?.toString() || "",
+                                            office_id: match.office_id?.toString() || "",
+                                            date_of_joining: new Date().toISOString().split("T")[0],
+                                            notes: "",
+                                        });
+                                    }
+                                }}
+                                className="w-full h-12 rounded-xl bg-slate-50 border border-slate-200 px-3 text-xs font-bold text-slate-900 outline-none"
+                            >
+                                <option value="">-- Select from former / resigned employees ({resignedEmployees.length}) --</option>
+                                {resignedEmployees.map((r) => (
+                                    <option key={r.id} value={r.id}>
+                                        {r.name} ({r.emp_code}) — {r.department || r.designation || "Staff"} [{r.status ? r.status.toUpperCase() : "INACTIVE"}]
+                                    </option>
+                                ))}
+                            </select>
+                            {resignedEmployees.length === 0 && (
+                                <p className="text-[10px] text-slate-400 mt-1">No employees currently have status &apos;resigned&apos; or &apos;inactive&apos;.</p>
+                            )}
+                        </div>
+
+                        {selectedResignedId && (
+                            <>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">New Designation</Label>
+                                        <Input
+                                            value={rehireForm.designation}
+                                            onChange={(e) => setRehireForm(f => ({ ...f, designation: e.target.value }))}
+                                            className="h-10 rounded-xl bg-slate-50 font-bold text-xs"
+                                            placeholder="e.g. Senior Manager"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Department</Label>
+                                        <Input
+                                            value={rehireForm.department}
+                                            onChange={(e) => setRehireForm(f => ({ ...f, department: e.target.value }))}
+                                            className="h-10 rounded-xl bg-slate-50 font-bold text-xs"
+                                            placeholder="e.g. Operations"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Monthly Gross CTC (₹)</Label>
+                                        <Input
+                                            type="number"
+                                            value={rehireForm.fixed_gross}
+                                            onChange={(e) => setRehireForm(f => ({ ...f, fixed_gross: e.target.value }))}
+                                            className="h-10 rounded-xl bg-slate-50 font-bold text-xs"
+                                            placeholder="e.g. 50000"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Re-joining Date</Label>
+                                        <Input
+                                            type="date"
+                                            value={rehireForm.date_of_joining}
+                                            onChange={(e) => setRehireForm(f => ({ ...f, date_of_joining: e.target.value }))}
+                                            className="h-10 rounded-xl bg-slate-50 font-bold text-xs"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Assigned Office / Hub</Label>
+                                    <select
+                                        value={rehireForm.office_id}
+                                        onChange={(e) => setRehireForm(f => ({ ...f, office_id: e.target.value }))}
+                                        className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 px-3 text-xs font-bold text-slate-900 outline-none"
+                                    >
+                                        <option value="">Keep current office</option>
+                                        {offices.map((o) => (
+                                            <option key={o.id} value={o.id}>{o.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Re-Hiring Notes / Approval Reason</Label>
+                                    <Input
+                                        value={rehireForm.notes}
+                                        onChange={(e) => setRehireForm(f => ({ ...f, notes: e.target.value }))}
+                                        className="h-10 rounded-xl bg-slate-50 text-xs"
+                                        placeholder="e.g. Re-hired after approved re-application"
+                                    />
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    <DialogFooter className="mt-4 gap-2">
+                        <Button
+                            variant="outline"
+                            onClick={() => setRehireDialogOpen(false)}
+                            className="h-11 rounded-xl text-xs font-bold"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={executeRehire}
+                            disabled={rehireLoading || !selectedResignedId}
+                            className="bg-amber-600 text-white hover:bg-amber-700 font-black uppercase text-[10px] tracking-widest px-6 h-11 rounded-xl shadow-lg transition-all"
+                        >
+                            {rehireLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm Re-Hire"}
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
 

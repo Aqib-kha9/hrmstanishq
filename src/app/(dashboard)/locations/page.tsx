@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import dynamic from "next/dynamic";
 import { cn } from "@/lib/utils";
 import {
@@ -626,6 +627,7 @@ export default function LocationsPage() {
     // ── Render ────────────────────────────────────────────────
 
     return (
+        <ProtectedRoute module="LOCATIONS" action="READ">
         <div className="space-y-8 pb-20 animate-in fade-in duration-500">
             {/* ── Toast ─────────────────────────────────────── */}
             {toast && (
@@ -1633,5 +1635,6 @@ export default function LocationsPage() {
                 </DialogContent>
             </Dialog>
         </div>
+        </ProtectedRoute>
     );
 }

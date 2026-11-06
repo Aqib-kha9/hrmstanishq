@@ -19,17 +19,32 @@ import {
     Eye,
     Send,
     Download,
+    Copy,
+    UserCheck,
+    MailCheck,
+    RefreshCw,
+    ExternalLink,
+    Briefcase,
+    Banknote,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+} from "@/components/ui/dialog";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useRole } from "@/context/RoleContext";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { apiGet, apiPost, apiPatch, apiPut } from "@/lib/api-client";
+import { apiGet, apiPost, apiPatch, apiPut, getApiErrorMessage } from "@/lib/api-client";
 
 const steps = ["Personal Info", "Job Details", "Salary & Bank", "Documentation", "Review"];
 
@@ -86,6 +101,7 @@ const DUMMY_DATA = {
     licDetails: "LIC/IND/987654",
     emergencyName: "Priya Sharma",
     emergencyRelation: "Spouse",
+    emergencyPhone: "9876543211",
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -354,6 +370,216 @@ function OnboardingForm() {
         fetchLookups();
         return () => { cancelled = true; };
     }, [editId]);
+
+    // ── Sequential Employee ID State (Req 1.2) ──
+    const [suggestedEmpCode, setSuggestedEmpCode] = useState<string>("");
+    const [customEmpCode, setCustomEmpCode] = useState<string>("");
+
+    // ── Self-Onboarding Tabs & Invitations State (Req 2) ──
+    const [activeTab, setActiveTab] = useState<"direct" | "submissions">("direct");
+    const [invitations, setInvitations] = useState<any[]>([]);
+    const safeInvitations = Array.isArray(invitations) ? invitations : [];
+    const [invitationsLoading, setInvitationsLoading] = useState(false);
+    const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+    const [inviteLoading, setInviteLoading] = useState(false);
+    const [inviteSuccessLink, setInviteSuccessLink] = useState<string | null>(null);
+    const [inviteError, setInviteError] = useState<string | null>(null);
+    const [inviteForm, setInviteForm] = useState({
+        candidate_name: "",
+        email: "",
+        phone: "",
+        company_id: "",
+        office_id: "",
+        notes: "",
+    });
+
+    // ── Review & 1-Click Approve Candidate State (Req 2.2) ──
+    const [reviewCandidate, setReviewCandidate] = useState<any | null>(null);
+    const [approveLoading, setApproveLoading] = useState(false);
+    const [approvalOverrides, setApprovalOverrides] = useState({
+        name: "",
+        email: "",
+        phone: "",
+        dob: "",
+        gender: "male",
+        address: "",
+        pan: "",
+        aadhaar: "",
+        emergencyName: "",
+        emergencyRelation: "",
+        emergencyPhone: "",
+
+        company_id: "",
+        office_id: "",
+        designation: "Executive",
+        department: "Operations",
+        role: "EMPLOYEE",
+        date_of_joining: new Date().toISOString().split("T")[0],
+
+        fixed_gross: "45000",
+        bankName: "",
+        accountNo: "",
+        ifsc: "",
+        paymentMode: "Bank Transfer",
+
+        pf_applicable: "Yes",
+        pf_ceiling: "Yes",
+        pf_contribution_mode: "shared",
+        pf_employee_rate: "0.12",
+        pf_employer_rate: "0.12",
+        esic_applicable: "Yes",
+        esic_contribution_mode: "shared",
+        esic_employee_rate: "0.0075",
+        esic_employer_rate: "0.0325",
+        pt_applicable: "Yes",
+        pf_number: "PF/IND/001",
+        uan: "",
+        lic_details: "",
+
+        shift_start_time: "10:00",
+        shift_end_time: "19:00",
+        half_day_late_minutes: "60",
+    });
+
+    // ── Candidate Document Preview Modal State ──
+    const [previewDoc, setPreviewDoc] = useState<{
+        type: string;
+        filename: string;
+        size?: number;
+        file_url?: string;
+        candidate_name?: string;
+        aadhaar_number?: string;
+        pan_number?: string;
+        bank_account_number?: string;
+        bank_name?: string;
+        ifsc_code?: string;
+    } | null>(null);
+
+    const getDocPreviewUrl = (url?: string) => {
+        if (!url) return "";
+        if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) {
+            return url;
+        }
+        const backendBase = process.env.NEXT_PUBLIC_API_URL?.replace("/api/v1", "") || "http://localhost:5000";
+        return `${backendBase}${url.startsWith("/") ? "" : "/"}${url}`;
+    };
+
+    // ── Resigned Conflict Warning State (Req 23) ──
+    const [isResignedError, setIsResignedError] = useState(false);
+
+    // Fetch next sequential code
+    useEffect(() => {
+        async function loadNextCode() {
+            if (!editId) {
+                try {
+                    const res = await apiGet<{ nextCode?: string; next_emp_code?: string }>("/employees/next-code");
+                    const code = res?.nextCode || res?.next_emp_code;
+                    if (code) {
+                        setSuggestedEmpCode(code);
+                        setCustomEmpCode(code);
+                    }
+                } catch (err) {
+                    console.error("Failed to load next sequential code:", err);
+                }
+            }
+        }
+        loadNextCode();
+    }, [editId]);
+
+    // Fetch candidate invitations
+    const fetchInvitations = async () => {
+        setInvitationsLoading(true);
+        try {
+            const res: any = await apiGet("/onboarding/invitations");
+            let list: any[] = [];
+            if (Array.isArray(res)) {
+                list = res;
+            } else if (Array.isArray(res?.data)) {
+                list = res.data;
+            } else if (Array.isArray(res?.rows)) {
+                list = res.rows;
+            } else if (Array.isArray(res?.invitations)) {
+                list = res.invitations;
+            }
+            setInvitations(list);
+        } catch (err) {
+            console.error("Failed to load invitations:", err);
+        } finally {
+            setInvitationsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchInvitations();
+    }, []);
+
+    useEffect(() => {
+        if (activeTab === "submissions") {
+            fetchInvitations();
+        }
+    }, [activeTab]);
+
+    const sendCandidateInvite = async () => {
+        if (!inviteForm.candidate_name || !inviteForm.email) {
+            setInviteError("Candidate name and email are required.");
+            return;
+        }
+        setInviteLoading(true);
+        setInviteSuccessLink(null);
+        setInviteError(null);
+        try {
+            const data = await apiPost<any>("/onboarding/invite", {
+                candidate_name: inviteForm.candidate_name,
+                email: inviteForm.email,
+                phone: inviteForm.phone || undefined,
+                company_id: inviteForm.company_id ? Number(inviteForm.company_id) : undefined,
+                office_id: inviteForm.office_id ? Number(inviteForm.office_id) : undefined,
+                notes: inviteForm.notes || undefined,
+            });
+            alert(`Self-onboarding invitation link sent successfully to ${inviteForm.email}!`);
+            setInviteDialogOpen(false);
+            setInviteError(null);
+            setInviteForm({
+                candidate_name: "",
+                email: "",
+                phone: "",
+                company_id: "",
+                office_id: "",
+                notes: "",
+            });
+            setActiveTab("submissions");
+            fetchInvitations();
+        } catch (err: any) {
+            const errMsg = getApiErrorMessage(err, "Failed to send self-onboarding invitation.");
+            console.error("Failed to send invite:", errMsg, err);
+            setInviteError(errMsg);
+        } finally {
+            setInviteLoading(false);
+        }
+    };
+
+    const approveCandidateSubmission = async (invitationId: number) => {
+        setApproveLoading(true);
+        try {
+            const result = await apiPost<any>(`/onboarding/approve/${invitationId}`, {
+                designation: approvalOverrides.designation || undefined,
+                department: approvalOverrides.department || undefined,
+                fixed_gross: approvalOverrides.fixed_gross ? Number(approvalOverrides.fixed_gross) : undefined,
+                company_id: approvalOverrides.company_id ? Number(approvalOverrides.company_id) : undefined,
+                office_id: approvalOverrides.office_id ? Number(approvalOverrides.office_id) : undefined,
+            });
+            alert(`Candidate approved successfully! Created Employee ${result.employee.name} with ID ${result.employee.emp_code}`);
+            setReviewCandidate(null);
+            fetchInvitations();
+        } catch (err: any) {
+            const errMsg = getApiErrorMessage(err, "Failed to approve candidate submission.");
+            console.error("Failed to approve candidate:", errMsg, err);
+            alert(errMsg);
+        } finally {
+            setApproveLoading(false);
+        }
+    };
+
     const [formData, setFormData] = useState({
         // Step 0: Personal Info
         name: "",
@@ -393,6 +619,7 @@ function OnboardingForm() {
         // Emergency contact
         emergencyName: "",
         emergencyRelation: "",
+        emergencyPhone: "",
         // Shift configuration
         shiftStartTime: "10:00",
         shiftEndTime: "19:00",
@@ -483,8 +710,7 @@ function OnboardingForm() {
 
     // ── Submission helpers ──
     const generateEmpCode = (): string => {
-        const ts = Date.now().toString().slice(-6);
-        return `EMP${ts}`;
+        return customEmpCode || suggestedEmpCode || `EMP${Date.now().toString().slice(-6)}`;
     };
 
     const buildPayload = () => {
@@ -636,7 +862,11 @@ function OnboardingForm() {
             });
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : `Failed to ${isEditing ? 'update' : 'create'} employee. Please try again.`;
-            const axiosErr = err as { response?: { data?: { message?: string; errors?: Record<string, string[]> } } };
+            const axiosErr = err as { response?: { status?: number; data?: { message?: string; errors?: Record<string, string[]> } } };
+            const errMsg = axiosErr?.response?.data?.message || msg;
+            if (errMsg.toLowerCase().includes("resigned") || axiosErr?.response?.status === 409) {
+                setIsResignedError(true);
+            }
             if (axiosErr?.response?.data?.message) {
                 setError(axiosErr.response.data.message);
             } else if (axiosErr?.response?.data?.errors) {
@@ -705,6 +935,109 @@ function OnboardingForm() {
 
     const handleGoToEmployees = () => {
         router.push("/employees");
+    };
+
+    const renderApprovalSalaryPreview = () => {
+        const fixedGross = Number(approvalOverrides.fixed_gross) || 0;
+        if (fixedGross <= 0) return null;
+
+        const basic = Math.round(fixedGross * 0.40);
+        const hra = Math.round(basic * 0.40);
+        const other = fixedGross - basic - hra;
+
+        let pfBase = basic;
+        if (approvalOverrides.pf_applicable === "Yes" && approvalOverrides.pf_ceiling === "Yes") {
+            pfBase = Math.min(basic, 15000);
+        }
+
+        let pfEmployee = 0;
+        let pfEmployer = 0;
+        if (approvalOverrides.pf_applicable === "Yes") {
+            const pEmpRate = parseFloat(approvalOverrides.pf_employee_rate) || 0.12;
+            const pEmprRate = parseFloat(approvalOverrides.pf_employer_rate) || 0.12;
+            if (approvalOverrides.pf_contribution_mode === "shared") {
+                pfEmployee = Math.round(pfBase * pEmpRate);
+                pfEmployer = Math.round(pfBase * pEmprRate);
+            } else if (approvalOverrides.pf_contribution_mode === "employee_only") {
+                pfEmployee = Math.round(pfBase * pEmpRate);
+            } else if (approvalOverrides.pf_contribution_mode === "employer_only") {
+                pfEmployer = Math.round(pfBase * pEmprRate);
+            }
+        }
+
+        let esiEmployee = 0;
+        let esiEmployer = 0;
+        if (approvalOverrides.esic_applicable === "Yes") {
+            const eEmpRate = parseFloat(approvalOverrides.esic_employee_rate) || 0.0075;
+            const eEmprRate = parseFloat(approvalOverrides.esic_employer_rate) || 0.0325;
+            if (approvalOverrides.esic_contribution_mode === "shared") {
+                esiEmployee = Math.ceil(fixedGross * eEmpRate);
+                esiEmployer = Math.ceil(fixedGross * eEmprRate);
+            } else if (approvalOverrides.esic_contribution_mode === "employee_only") {
+                esiEmployee = Math.ceil(fixedGross * eEmpRate);
+            } else if (approvalOverrides.esic_contribution_mode === "employer_only") {
+                esiEmployer = Math.ceil(fixedGross * eEmprRate);
+            }
+        }
+
+        let professionalTax = 0;
+        if (approvalOverrides.pt_applicable === "Yes") {
+            if (fixedGross >= 15001 && fixedGross <= 25000) professionalTax = 125;
+            else if (fixedGross >= 25001 && fixedGross <= 33333) professionalTax = 167;
+            else if (fixedGross >= 33334) professionalTax = 208;
+        }
+
+        const totalDeductions = pfEmployee + esiEmployee + professionalTax;
+        const netSalary = fixedGross - totalDeductions;
+        const ctc = fixedGross + pfEmployer + esiEmployer;
+
+        return (
+            <div className="p-5 bg-slate-900 rounded-2xl text-white shadow-xl">
+                <div className="flex items-center gap-2 mb-4">
+                    <Calculator className="h-4 w-4 text-[#D9F99D]" />
+                    <h4 className="text-xs font-black italic uppercase tracking-widest text-[#D9F99D]">Live Salary Preview</h4>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="bg-slate-800/60 p-3 rounded-xl border border-slate-700/60">
+                        <p className="text-[8px] font-black text-white/70 uppercase tracking-widest mb-0.5">Basic Salary</p>
+                        <p className="text-base font-black text-white">₹{basic.toLocaleString('en-IN')}</p>
+                    </div>
+                    <div className="bg-slate-800/60 p-3 rounded-xl border border-slate-700/60">
+                        <p className="text-[8px] font-black text-white/70 uppercase tracking-widest mb-0.5">HRA</p>
+                        <p className="text-base font-black text-white">₹{hra.toLocaleString('en-IN')}</p>
+                    </div>
+                    <div className="bg-slate-800/60 p-3 rounded-xl border border-slate-700/60">
+                        <p className="text-[8px] font-black text-white/70 uppercase tracking-widest mb-0.5">Other Allowances</p>
+                        <p className="text-base font-black text-white">₹{other.toLocaleString('en-IN')}</p>
+                    </div>
+                    <div className="bg-[#D9F99D]/15 p-3 rounded-xl border border-[#D9F99D]/30">
+                        <p className="text-[8px] font-black text-[#D9F99D] uppercase tracking-widest mb-0.5">Net Take Home</p>
+                        <p className="text-base font-black text-[#D9F99D]">₹{netSalary.toLocaleString('en-IN')}</p>
+                    </div>
+                </div>
+                {(totalDeductions > 0 || pfEmployer > 0 || esiEmployer > 0) && (
+                    <div className="mt-4 pt-4 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <p className="text-[8px] font-black text-white/70 uppercase tracking-widest mb-2">Employee Deductions</p>
+                            <div className="space-y-1.5 text-[11px] font-bold text-white/90">
+                                {pfEmployee > 0 && <div className="flex justify-between items-center bg-slate-800/50 px-2 py-1 rounded"><span className="text-white/80">PF Contribution</span><span className="text-red-400">- ₹{pfEmployee.toLocaleString('en-IN')}</span></div>}
+                                {esiEmployee > 0 && <div className="flex justify-between items-center bg-slate-800/50 px-2 py-1 rounded"><span className="text-white/80">ESIC Contribution</span><span className="text-red-400">- ₹{esiEmployee.toLocaleString('en-IN')}</span></div>}
+                                {professionalTax > 0 && <div className="flex justify-between items-center bg-slate-800/50 px-2 py-1 rounded"><span className="text-white/80">PT Contribution</span><span className="text-red-400">- ₹{professionalTax.toLocaleString('en-IN')}</span></div>}
+                                <div className="flex justify-between items-center font-black text-white px-2 py-1"><span className="text-white">Total Deductions</span><span>₹{totalDeductions.toLocaleString('en-IN')}</span></div>
+                            </div>
+                        </div>
+                        <div>
+                            <p className="text-[8px] font-black text-white/70 uppercase tracking-widest mb-2">Employer Contributions</p>
+                            <div className="space-y-1.5 text-[11px] font-bold text-white/90">
+                                {pfEmployer > 0 && <div className="flex justify-between items-center bg-slate-800/50 px-2 py-1 rounded"><span className="text-white/80">PF Contribution</span><span className="text-emerald-400">+ ₹{pfEmployer.toLocaleString('en-IN')}</span></div>}
+                                {esiEmployer > 0 && <div className="flex justify-between items-center bg-slate-800/50 px-2 py-1 rounded"><span className="text-white/80">ESIC Contribution</span><span className="text-emerald-400">+ ₹{esiEmployer.toLocaleString('en-IN')}</span></div>}
+                                <div className="flex justify-between items-center font-black text-amber-400 px-2 py-1"><span className="text-amber-400">Monthly CTC</span><span>₹{ctc.toLocaleString('en-IN')}</span></div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
     };
 
     const renderSalaryPreview = () => {
@@ -859,23 +1192,242 @@ function OnboardingForm() {
                     </div>
                 ) : (
                     <>
-                        {/* Header section */}
-                        <div className="flex flex-col items-center text-center space-y-3 pt-6">
-                            <div className="h-14 w-14 bg-slate-900 rounded-[1.5rem] flex items-center justify-center shadow-xl">
-                                <UserPlus className="h-7 w-7 text-[#D9F99D]" />
-                            </div>
+                        {/* Header section with Tabs & Actions */}
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pt-6">
                             <div>
                                 <h1 className="text-2xl font-black text-slate-900 italic uppercase tracking-tighter underline underline-offset-8 decoration-[#D9F99D] decoration-2">
-                                    Add New Employee
+                                    Employee Onboarding
                                 </h1>
-                                <p className="text-[9px] font-black text-slate-400 mt-6 uppercase tracking-[0.3em]">
-                                    Fill in the details to add a new person to the team.
+                                <p className="text-[9px] font-black text-slate-400 mt-4 uppercase tracking-[0.3em]">
+                                    Direct internal entry & candidate self-onboarding review
                                 </p>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <div className="flex p-1 bg-slate-100 rounded-2xl border border-slate-200">
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveTab("direct")}
+                                        className={cn(
+                                            "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all",
+                                            activeTab === "direct"
+                                                ? "bg-white text-slate-900 shadow-sm"
+                                                : "text-slate-500 hover:text-slate-900"
+                                        )}
+                                    >
+                                        Direct HR Form
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveTab("submissions")}
+                                        className={cn(
+                                            "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5",
+                                            activeTab === "submissions"
+                                                ? "bg-white text-slate-900 shadow-sm"
+                                                : "text-slate-500 hover:text-slate-900"
+                                        )}
+                                    >
+                                        Candidate Submissions
+                                        {safeInvitations.filter((i) => i.status === "submitted").length > 0 && (
+                                            <span className="h-4 px-1.5 rounded-full bg-emerald-500 text-white font-mono text-[9px] font-bold flex items-center justify-center">
+                                                {safeInvitations.filter((i) => i.status === "submitted").length}
+                                            </span>
+                                        )}
+                                    </button>
+                                </div>
+
+                                <Button
+                                    type="button"
+                                    onClick={() => {
+                                        setInviteSuccessLink(null);
+                                        setInviteError(null);
+                                        setInviteDialogOpen(true);
+                                    }}
+                                    className="bg-indigo-600 text-white hover:bg-indigo-700 font-black uppercase text-[10px] tracking-widest px-4 h-11 rounded-xl shadow-lg transition-all flex items-center gap-2"
+                                >
+                                    <Send className="h-3.5 w-3.5" /> Send Invite Link
+                                </Button>
                             </div>
                         </div>
 
-                        {/* Stepper */}
-                        <div className="relative flex justify-between items-center px-6 md:px-12">
+                        {/* Req 23: Resigned Conflict Alert Banner */}
+                        {isResignedError && (
+                            <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-900 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md animate-in fade-in">
+                                <div className="flex items-center gap-3">
+                                    <AlertCircle className="h-6 w-6 text-amber-600 shrink-0" />
+                                    <div>
+                                        <p className="font-black text-amber-950 uppercase tracking-wider text-[11px]">
+                                            Resigned Employee Detected (Req 23)
+                                        </p>
+                                        <p className="text-xs text-amber-800 mt-0.5">
+                                            This person is an existing employee marked as <strong>Resigned</strong>. Creating a new profile is blocked to prevent accidental duplicate records. Please use the Re-Hiring workflow instead.
+                                        </p>
+                                    </div>
+                                </div>
+                                <Button
+                                    type="button"
+                                    onClick={() => router.push("/employees")}
+                                    className="bg-amber-600 text-white hover:bg-amber-700 font-black uppercase text-[10px] tracking-wider px-5 h-10 rounded-xl shrink-0"
+                                >
+                                    Go to Re-Hire
+                                </Button>
+                            </div>
+                        )}
+
+                        {activeTab === "submissions" ? (
+                            <div className="space-y-6 pt-4">
+                                <div className="flex items-center justify-between px-2">
+                                    <div>
+                                        <h3 className="text-lg font-black uppercase tracking-tight text-slate-900">
+                                            Candidate Applications ({safeInvitations.length})
+                                        </h3>
+                                        <p className="text-xs text-slate-500">
+                                            Review details submitted by candidates and approve with 1 click to create active employees.
+                                        </p>
+                                    </div>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={fetchInvitations}
+                                        className="h-9 text-xs font-bold rounded-xl"
+                                    >
+                                        <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Refresh
+                                    </Button>
+                                </div>
+
+                                {invitationsLoading ? (
+                                    <div className="flex justify-center p-12">
+                                        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+                                    </div>
+                                ) : safeInvitations.length === 0 ? (
+                                    <Card className="p-12 text-center rounded-3xl border-dashed border-2 border-slate-200 bg-white">
+                                        <UserCheck className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+                                        <h4 className="font-bold text-slate-700 text-sm">No Candidate Invites Yet</h4>
+                                        <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                                            Click &quot;Send Invite Link&quot; above to email a secure self-onboarding link to prospective candidates.
+                                        </p>
+                                    </Card>
+                                ) : (
+                                    <div className="grid grid-cols-1 gap-3">
+                                        {safeInvitations.map((inv) => {
+                                            const isSubmitted = inv.status === "submitted";
+                                            const isApproved = inv.status === "approved";
+                                            return (
+                                                <div
+                                                    key={inv.id}
+                                                    className="p-5 bg-white rounded-2xl border border-slate-200 flex flex-col md:flex-row md:items-center md:justify-between gap-4 shadow-sm hover:shadow transition-shadow"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="h-11 w-11 rounded-2xl bg-slate-900 text-[#D9F99D] flex items-center justify-center font-black text-sm shadow">
+                                                            {inv.candidate_name?.slice(0, 2).toUpperCase()}
+                                                        </div>
+                                                        <div>
+                                                            <div className="flex items-center gap-2">
+                                                                <h4 className="font-black text-sm text-slate-900">{inv.candidate_name}</h4>
+                                                                <Badge
+                                                                    className={cn(
+                                                                        "text-[9px] font-bold uppercase",
+                                                                        isSubmitted && "bg-emerald-100 text-emerald-800",
+                                                                        isApproved && "bg-slate-100 text-slate-700",
+                                                                        inv.status === "invited" && "bg-amber-100 text-amber-800",
+                                                                        inv.status === "expired" && "bg-red-100 text-red-800"
+                                                                    )}
+                                                                >
+                                                                    {inv.status}
+                                                                </Badge>
+                                                            </div>
+                                                            <p className="text-xs text-slate-500 font-medium mt-0.5">{inv.email} {inv.phone && `• ${inv.phone}`}</p>
+                                                            <p className="text-[10px] text-slate-400 mt-0.5">
+                                                                Expires: {new Date(inv.expires_at).toLocaleDateString()}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-2">
+                                                        {isSubmitted && (
+                                                            <Button
+                                                                onClick={() => {
+                                                                    setReviewCandidate(inv);
+                                                                    const sub = inv.submitted_data || {};
+                                                                    const gross = Number(inv.fixed_gross) > 0 
+                                                                        ? inv.fixed_gross 
+                                                                        : (Number(sub.fixed_gross) > 0 ? sub.fixed_gross : "45000");
+
+                                                                    setApprovalOverrides({
+                                                                        name: sub.name || inv.candidate_name || "",
+                                                                        email: inv.email || "",
+                                                                        phone: sub.phone || inv.phone || "",
+                                                                        dob: sub.date_of_birth || "",
+                                                                        gender: sub.gender || "male",
+                                                                        address: sub.address || "",
+                                                                        pan: sub.pan_number || "",
+                                                                        aadhaar: sub.aadhaar_number || "",
+                                                                        bankName: sub.bank_name || "",
+                                                                        accountNo: sub.bank_account_number || "",
+                                                                        ifsc: sub.ifsc_code || "",
+                                                                        paymentMode: "Bank Transfer",
+                                                                        emergencyName: sub.emergency_contact_name || "",
+                                                                        emergencyRelation: sub.emergency_contact_relation || "",
+                                                                        emergencyPhone: sub.emergency_phone || "",
+
+                                                                        designation: sub.designation || inv.designation || "Executive",
+                                                                        department: sub.department || inv.department || "Operations",
+                                                                        role: "EMPLOYEE",
+                                                                        company_id: (inv.company_id || sub.company_id || (companies[0]?.id?.toString()) || "").toString(),
+                                                                        office_id: (inv.office_id || sub.office_id || (offices[0]?.id?.toString()) || "").toString(),
+                                                                        date_of_joining: new Date().toISOString().split("T")[0],
+
+                                                                        fixed_gross: gross.toString(),
+
+                                                                        pf_applicable: "Yes",
+                                                                        pf_ceiling: "Yes",
+                                                                        pf_contribution_mode: "shared",
+                                                                        pf_employee_rate: "0.12",
+                                                                        pf_employer_rate: "0.12",
+                                                                        esic_applicable: "Yes",
+                                                                        esic_contribution_mode: "shared",
+                                                                        esic_employee_rate: "0.0075",
+                                                                        esic_employer_rate: "0.0325",
+                                                                        pt_applicable: "Yes",
+                                                                        pf_number: "PF/IND/001",
+                                                                        uan: sub.uan || "",
+                                                                        lic_details: "",
+
+                                                                        shift_start_time: "10:00",
+                                                                        shift_end_time: "19:00",
+                                                                        half_day_late_minutes: "60",
+                                                                    });
+                                                                }}
+                                                                className="bg-emerald-600 text-white hover:bg-emerald-700 font-black uppercase text-[10px] tracking-wider h-10 px-5 rounded-xl shadow"
+                                                            >
+                                                                <FileCheck className="h-4 w-4 mr-1.5" /> Review & Approve
+                                                            </Button>
+                                                        )}
+                                                        {inv.status === "invited" && (
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => {
+                                                                    const url = `${window.location.origin}/self-onboarding?token=${inv.token}`;
+                                                                    navigator.clipboard.writeText(url);
+                                                                    alert("Invitation link copied to clipboard!");
+                                                                }}
+                                                                className="text-xs h-9 font-bold rounded-xl"
+                                                            >
+                                                                <Copy className="h-3 w-3 mr-1" /> Copy Link
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <>
+                                {/* Stepper */}
+                                <div className="relative flex justify-between items-center px-6 md:px-12">
                             <div className="absolute top-1/2 left-0 w-full h-[1px] bg-slate-100 -translate-y-1/2 z-0" />
                             {steps.map((step, i) => (
                                 <div key={i} className="relative z-10 flex flex-col items-center gap-3">
@@ -951,11 +1503,42 @@ function OnboardingForm() {
 
                                 {/* ── STEP 0: Personal Info ── */}
                                 {currentStep === 0 && (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8 animate-in fade-in slide-in-from-right-4">
-                                        <div className="space-y-3">
-                                            <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                                Full Name <span className="text-red-400">*</span>
-                                            </Label>
+                                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                                        {/* Req 1.2: Automatic Sequential Employee ID */}
+                                        <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+                                            <div className="flex items-center gap-3">
+                                                <div className="h-10 w-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-mono font-bold text-xs shadow">
+                                                    ID
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <h4 className="text-xs font-black uppercase tracking-wider text-indigo-950">
+                                                            Assigned Employee ID (Req 1.2)
+                                                        </h4>
+                                                        <Badge className="bg-indigo-600 text-white text-[9px] font-bold">
+                                                            Sequential Auto-Assigned
+                                                        </Badge>
+                                                    </div>
+                                                    <p className="text-[10px] text-indigo-700 font-medium mt-0.5">
+                                                        Strictly sequential continuing from company database (e.g. EMP456 → EMP457)
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="w-full sm:w-44">
+                                                <Input
+                                                    value={customEmpCode}
+                                                    onChange={(e) => setCustomEmpCode(e.target.value.toUpperCase())}
+                                                    placeholder={suggestedEmpCode || "EMP..."}
+                                                    className="h-10 bg-white border border-indigo-200 rounded-xl font-mono font-black text-xs text-indigo-950 uppercase"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8">
+                                            <div className="space-y-3">
+                                                <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                                    Full Name <span className="text-red-400">*</span>
+                                                </Label>
                                             <Input
                                                 placeholder="e.g. Walt Whitman"
                                                 className={inputClass("name", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs uppercase tracking-widest")}
@@ -1068,6 +1651,7 @@ function OnboardingForm() {
                                             />
                                             {fieldErrorEl("address")}
                                         </div>
+                                    </div>
                                     </div>
                                 )}
 
@@ -1869,9 +2453,764 @@ function OnboardingForm() {
                                 </Button>
                             </CardFooter>
                         </Card>
+                            </>
+                        )}
                     </>
                 )}
             </div>
+
+            {/* Req 2.1: Send Candidate Self-Onboarding Link Dialog */}
+            <Dialog open={inviteDialogOpen} onOpenChange={(open) => { setInviteDialogOpen(open); if (!open) setInviteError(null); }}>
+                <DialogContent className="sm:max-w-[480px] p-6 rounded-3xl bg-white border-none shadow-2xl">
+                    <DialogHeader className="space-y-2 text-left">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-600 mb-2">
+                            <Send className="h-6 w-6 stroke-[2.5]" />
+                        </div>
+                        <DialogTitle className="text-xl font-black text-slate-900 tracking-tight">
+                            Send Self-Onboarding Link (Req 2.1)
+                        </DialogTitle>
+                        <DialogDescription className="text-xs text-slate-500">
+                            The candidate will receive an expiring link to fill their personal, statutory, bank details, and upload documents.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {inviteSuccessLink ? (
+                        <div className="space-y-4 py-4 text-center">
+                            <div className="h-12 w-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+                                <MailCheck className="h-6 w-6" />
+                            </div>
+                            <h4 className="font-black text-sm text-slate-900">Invitation Link Generated!</h4>
+                            <p className="text-xs text-slate-500">
+                                Link has been dispatched to <strong>{inviteForm.email}</strong>. You can also copy it directly below:
+                            </p>
+                            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs font-mono break-all text-slate-700">
+                                {inviteSuccessLink}
+                            </div>
+                            <div className="flex gap-2">
+                                <Button
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(inviteSuccessLink);
+                                        alert("Link copied to clipboard!");
+                                    }}
+                                    className="flex-1 bg-slate-900 text-white hover:bg-black font-black uppercase text-[10px] tracking-wider h-11 rounded-xl"
+                                >
+                                    <Copy className="h-4 w-4 mr-1.5" /> Copy Link
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                        setInviteDialogOpen(false);
+                                        setInviteSuccessLink(null);
+                                    }}
+                                    className="h-11 px-5 rounded-xl text-xs font-bold"
+                                >
+                                    Close
+                                </Button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="space-y-3 py-3">
+                            {inviteError && (
+                                <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2.5">
+                                    <AlertCircle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
+                                    <div className="flex-1 font-semibold leading-relaxed">
+                                        {inviteError}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setInviteError(null)}
+                                        className="text-red-400 hover:text-red-700 font-bold ml-1 text-base leading-none"
+                                        aria-label="Dismiss error"
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                            )}
+
+                            <div>
+                                <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Candidate Full Name *</Label>
+                                <Input
+                                    value={inviteForm.candidate_name}
+                                    onChange={(e) => setInviteForm(f => ({ ...f, candidate_name: e.target.value }))}
+                                    placeholder="e.g. Anjali Verma"
+                                    className="h-10 rounded-xl bg-slate-50 font-bold text-xs"
+                                />
+                            </div>
+                            <div>
+                                <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Candidate Email Address *</Label>
+                                <Input
+                                    type="email"
+                                    value={inviteForm.email}
+                                    onChange={(e) => setInviteForm(f => ({ ...f, email: e.target.value }))}
+                                    placeholder="anjali@example.com"
+                                    className="h-10 rounded-xl bg-slate-50 text-xs"
+                                />
+                            </div>
+                            <div>
+                                <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Mobile Phone Number</Label>
+                                <Input
+                                    value={inviteForm.phone}
+                                    onChange={(e) => setInviteForm(f => ({ ...f, phone: e.target.value }))}
+                                    placeholder="10-digit mobile number"
+                                    className="h-10 rounded-xl bg-slate-50 text-xs"
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Company</Label>
+                                    <select
+                                        value={inviteForm.company_id}
+                                        onChange={(e) => setInviteForm(f => ({ ...f, company_id: e.target.value }))}
+                                        className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 px-3 text-xs font-bold text-slate-800 outline-none"
+                                    >
+                                        <option value="">Select Company</option>
+                                        {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Office Hub</Label>
+                                    <select
+                                        value={inviteForm.office_id}
+                                        onChange={(e) => setInviteForm(f => ({ ...f, office_id: e.target.value }))}
+                                        className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 px-3 text-xs font-bold text-slate-800 outline-none"
+                                    >
+                                        <option value="">Select Office</option>
+                                        {offices.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {!inviteSuccessLink && (
+                        <DialogFooter className="mt-4 gap-2">
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    setInviteDialogOpen(false);
+                                    setInviteError(null);
+                                }}
+                                className="h-11 rounded-xl text-xs font-bold"
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={sendCandidateInvite}
+                                disabled={inviteLoading || !inviteForm.candidate_name || !inviteForm.email}
+                                className="bg-indigo-600 text-white hover:bg-indigo-700 font-black uppercase text-[10px] tracking-widest px-6 h-11 rounded-xl shadow-lg"
+                            >
+                                {inviteLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send Link Now"}
+                            </Button>
+                        </DialogFooter>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Req 2.2: Review Candidate Submission & 1-Click Approve Dialog */}
+            <Dialog open={!!reviewCandidate} onOpenChange={(open) => !open && setReviewCandidate(null)}>
+                <DialogContent className="sm:max-w-[850px] max-h-[90vh] overflow-y-auto p-6 md:p-8 rounded-3xl bg-white border-none shadow-2xl">
+                    <DialogHeader className="space-y-2 text-left pb-3 border-b border-slate-100">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600 shadow-sm">
+                                    <FileCheck className="h-6 w-6 stroke-[2.5]" />
+                                </div>
+                                <div>
+                                    <DialogTitle className="text-xl font-black text-slate-900 tracking-tight">
+                                        Review & 1-Click Approve Candidate
+                                    </DialogTitle>
+                                    <DialogDescription className="text-xs text-slate-500">
+                                        Verify candidate data, configure full compensation structure, statutory compliance (PF, ESIC, PT) & shift timings.
+                                    </DialogDescription>
+                                </div>
+                            </div>
+                        </div>
+                    </DialogHeader>
+
+                    {reviewCandidate && (
+                        <div className="space-y-6 py-3">
+                            {/* ── CARD 1: Candidate Verification & Documents ── */}
+                            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/70 space-y-3">
+                                <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
+                                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                                        <UserCheck className="h-4 w-4 text-emerald-600" /> Candidate Submitted Profile
+                                    </span>
+                                    <Badge className="bg-emerald-100 text-emerald-800 text-[9px] font-bold uppercase">
+                                        Self-Submitted
+                                    </Badge>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                                    <div>
+                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">Full Name & Gender</span>
+                                        <span className="font-black text-slate-900">{approvalOverrides.name} ({approvalOverrides.gender})</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">Email & Phone</span>
+                                        <span className="font-bold text-slate-800">{approvalOverrides.email} • {approvalOverrides.phone || "N/A"}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">Date of Birth</span>
+                                        <span className="font-bold text-slate-800">{approvalOverrides.dob || "N/A"}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">PAN & Aadhaar</span>
+                                        <span className="font-bold text-slate-800">{approvalOverrides.pan || "N/A"} • Aadhaar: {approvalOverrides.aadhaar || "N/A"}</span>
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">Address</span>
+                                        <span className="font-medium text-slate-700">{approvalOverrides.address || "N/A"}</span>
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">Emergency Contact</span>
+                                        <span className="font-bold text-slate-800">
+                                            {approvalOverrides.emergencyName || "N/A"} ({approvalOverrides.emergencyRelation || "N/A"})
+                                            {approvalOverrides.emergencyPhone && ` • Phone: ${approvalOverrides.emergencyPhone}`}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Uploaded Documents */}
+                                <div className="pt-2 border-t border-slate-200/60">
+                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">Attached Verification Documents</span>
+                                    {reviewCandidate.submitted_data?.uploaded_docs?.length > 0 ? (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            {reviewCandidate.submitted_data.uploaded_docs.map((doc: any, i: number) => (
+                                                <div
+                                                    key={i}
+                                                    className="p-2.5 bg-white rounded-xl border border-slate-200 flex items-center justify-between gap-2 shadow-xs hover:border-indigo-300 transition-all"
+                                                >
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <div className="h-7 w-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 font-bold">
+                                                            {doc.type === "photo" ? (
+                                                                <UserCheck className="h-3.5 w-3.5" />
+                                                            ) : doc.type?.includes("pan") ? (
+                                                                <ShieldCheck className="h-3.5 w-3.5" />
+                                                            ) : doc.type?.includes("bank") ? (
+                                                                <Banknote className="h-3.5 w-3.5" />
+                                                            ) : (
+                                                                <FileText className="h-3.5 w-3.5" />
+                                                            )}
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <span className="font-bold text-slate-800 text-xs capitalize truncate block">
+                                                                {doc.type.replace(/_/g, " ")}
+                                                            </span>
+                                                            <span className="text-[10px] text-slate-400 font-mono truncate block max-w-[140px]">
+                                                                {doc.filename}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                        <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-bold px-1.5 py-0.5">
+                                                            Attached
+                                                        </Badge>
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() =>
+                                                                setPreviewDoc({
+                                                                    ...doc,
+                                                                    candidate_name: reviewCandidate.candidate_name || reviewCandidate.email,
+                                                                    aadhaar_number: reviewCandidate.submitted_data?.aadhaar_number,
+                                                                    pan_number: reviewCandidate.submitted_data?.pan_number,
+                                                                    bank_account_number: reviewCandidate.submitted_data?.bank_account_number,
+                                                                    bank_name: reviewCandidate.submitted_data?.bank_name,
+                                                                    ifsc_code: reviewCandidate.submitted_data?.ifsc_code,
+                                                                })
+                                                            }
+                                                            className="h-7 px-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200 font-bold text-xs flex items-center gap-1 shadow-none transition-all cursor-pointer"
+                                                        >
+                                                            <Eye className="h-3.5 w-3.5" />
+                                                            <span>View</span>
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-slate-400 italic">No files attached.</p>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* ── CARD 2: Job Assignment ── */}
+                            <div className="space-y-3 p-4 rounded-2xl bg-white border border-slate-200 shadow-sm">
+                                <span className="text-[11px] font-black uppercase tracking-wider text-indigo-700 flex items-center gap-1.5">
+                                    <Briefcase className="h-4 w-4 text-indigo-600" /> 1. Job Details & Assignment
+                                </span>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Company Entity *</Label>
+                                        <select
+                                            value={approvalOverrides.company_id}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, company_id: e.target.value }))}
+                                            className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 px-3 text-xs font-bold text-slate-800 outline-none"
+                                        >
+                                            <option value="">Select Company</option>
+                                            {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Office Location *</Label>
+                                        <select
+                                            value={approvalOverrides.office_id}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, office_id: e.target.value }))}
+                                            className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 px-3 text-xs font-bold text-slate-800 outline-none"
+                                        >
+                                            <option value="">Select Office</option>
+                                            {offices.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Designation / Job Title *</Label>
+                                        <Input
+                                            value={approvalOverrides.designation}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, designation: e.target.value }))}
+                                            className="h-10 rounded-xl bg-slate-50 font-bold text-xs"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Department *</Label>
+                                        <Input
+                                            value={approvalOverrides.department}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, department: e.target.value }))}
+                                            className="h-10 rounded-xl bg-slate-50 font-bold text-xs"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">System Role *</Label>
+                                        <select
+                                            value={approvalOverrides.role}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, role: e.target.value }))}
+                                            className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 px-3 text-xs font-bold text-slate-800 outline-none"
+                                        >
+                                            <option value="EMPLOYEE">Staff Employee</option>
+                                            <option value="MANAGER">Team Manager</option>
+                                            <option value="HR">HR Manager</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Date of Joining *</Label>
+                                        <Input
+                                            type="date"
+                                            value={approvalOverrides.date_of_joining}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, date_of_joining: e.target.value }))}
+                                            className="h-10 rounded-xl bg-slate-50 font-bold text-xs"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* ── CARD 3: Salary & Banking Details (Editable) ── */}
+                            <div className="space-y-3 p-4 rounded-2xl bg-white border border-slate-200 shadow-sm">
+                                <span className="text-[11px] font-black uppercase tracking-wider text-emerald-700 flex items-center gap-1.5">
+                                    <Banknote className="h-4 w-4 text-emerald-600" /> 2. Compensation & Banking
+                                </span>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-emerald-700 mb-1 block">Monthly Fixed Gross CTC (₹) *</Label>
+                                        <Input
+                                            type="number"
+                                            value={approvalOverrides.fixed_gross}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, fixed_gross: e.target.value }))}
+                                            placeholder="e.g. 45000"
+                                            className="h-10 rounded-xl bg-emerald-50/60 border border-emerald-200 font-black text-xs text-emerald-900"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Payment Mode</Label>
+                                        <select
+                                            value={approvalOverrides.paymentMode}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, paymentMode: e.target.value }))}
+                                            className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 px-3 text-xs font-bold text-slate-800 outline-none"
+                                        >
+                                            <option value="Bank Transfer">Bank Transfer</option>
+                                            <option value="Cash">Cash</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Bank Name</Label>
+                                        <Input
+                                            value={approvalOverrides.bankName}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, bankName: e.target.value }))}
+                                            placeholder="e.g. HDFC Bank"
+                                            className="h-10 rounded-xl bg-slate-50 font-bold text-xs"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Account Number</Label>
+                                        <Input
+                                            value={approvalOverrides.accountNo}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, accountNo: e.target.value }))}
+                                            placeholder="Bank account number"
+                                            className="h-10 rounded-xl bg-slate-50 font-bold text-xs font-mono"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">IFSC Code</Label>
+                                        <Input
+                                            value={approvalOverrides.ifsc}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, ifsc: e.target.value.toUpperCase() }))}
+                                            placeholder="HDFC0001234"
+                                            className="h-10 rounded-xl bg-slate-50 font-bold text-xs uppercase font-mono"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* ── CARD 4: Statutory & Compliance Controls (matching Direct HR Step 2) ── */}
+                            <div className="space-y-3 p-4 rounded-2xl bg-white border border-slate-200 shadow-sm">
+                                <span className="text-[11px] font-black uppercase tracking-wider text-blue-700 flex items-center gap-1.5">
+                                    <ShieldCheck className="h-4 w-4 text-blue-600" /> 3. Statutory & Compliance Setup
+                                </span>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-indigo-700 mb-1 block">PF Applicable</Label>
+                                        <select
+                                            value={approvalOverrides.pf_applicable}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, pf_applicable: e.target.value }))}
+                                            className="w-full h-10 rounded-xl bg-indigo-50/60 border border-indigo-200 px-3 text-xs font-bold text-indigo-900 outline-none"
+                                        >
+                                            <option value="Yes">Yes</option>
+                                            <option value="No">No</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-indigo-700 mb-1 block">PF Ceiling Limit</Label>
+                                        <select
+                                            value={approvalOverrides.pf_ceiling}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, pf_ceiling: e.target.value }))}
+                                            className="w-full h-10 rounded-xl bg-indigo-50/60 border border-indigo-200 px-3 text-xs font-bold text-indigo-900 outline-none"
+                                        >
+                                            <option value="Yes">Yes (₹15,000 cap)</option>
+                                            <option value="No">No (Actual Basic)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-blue-700 mb-1 block">ESIC Applicable</Label>
+                                        <select
+                                            value={approvalOverrides.esic_applicable}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, esic_applicable: e.target.value }))}
+                                            className="w-full h-10 rounded-xl bg-blue-50/60 border border-blue-200 px-3 text-xs font-bold text-blue-900 outline-none"
+                                        >
+                                            <option value="Yes">Yes</option>
+                                            <option value="No">No</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-indigo-700 mb-1 block">PT Applicable</Label>
+                                        <select
+                                            value={approvalOverrides.pt_applicable}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, pt_applicable: e.target.value }))}
+                                            className="w-full h-10 rounded-xl bg-indigo-50/60 border border-indigo-200 px-3 text-xs font-bold text-indigo-900 outline-none"
+                                        >
+                                            <option value="Yes">Yes</option>
+                                            <option value="No">No</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-emerald-700 mb-1 block">PF Contribution Mode</Label>
+                                        <select
+                                            value={approvalOverrides.pf_contribution_mode}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, pf_contribution_mode: e.target.value }))}
+                                            className="w-full h-10 rounded-xl bg-emerald-50/50 border border-emerald-200 px-3 text-xs font-bold text-emerald-900 outline-none"
+                                        >
+                                            <option value="shared">Shared (Both)</option>
+                                            <option value="employee_only">Employee Only</option>
+                                            <option value="employer_only">Employer Only</option>
+                                            <option value="none">None</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-blue-700 mb-1 block">ESIC Contribution Mode</Label>
+                                        <select
+                                            value={approvalOverrides.esic_contribution_mode}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, esic_contribution_mode: e.target.value }))}
+                                            className="w-full h-10 rounded-xl bg-blue-50/50 border border-blue-200 px-3 text-xs font-bold text-blue-900 outline-none"
+                                        >
+                                            <option value="shared">Shared (Both)</option>
+                                            <option value="employee_only">Employee Only</option>
+                                            <option value="employer_only">Employer Only</option>
+                                            <option value="none">None</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">PF Number</Label>
+                                        <Input
+                                            value={approvalOverrides.pf_number}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, pf_number: e.target.value.toUpperCase() }))}
+                                            placeholder="PF/MP/IND/001234"
+                                            className="h-10 rounded-xl bg-slate-50 font-bold text-xs uppercase"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">UAN ID</Label>
+                                        <Input
+                                            value={approvalOverrides.uan}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, uan: e.target.value }))}
+                                            placeholder="1000 0000 0000"
+                                            className="h-10 rounded-xl bg-slate-50 font-bold text-xs font-mono"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">LIC Policy Details</Label>
+                                        <Input
+                                            value={approvalOverrides.lic_details}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, lic_details: e.target.value }))}
+                                            placeholder="LIC/IND/987654"
+                                            className="h-10 rounded-xl bg-slate-50 font-bold text-xs"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* ── CARD 5: Live Salary Preview ── */}
+                            {renderApprovalSalaryPreview()}
+
+                            {/* ── CARD 6: Shift Configuration ── */}
+                            <div className="p-4 bg-amber-50/50 rounded-2xl border border-amber-200 space-y-3">
+                                <span className="text-[11px] font-black uppercase tracking-wider text-amber-700 flex items-center gap-1.5">
+                                    <Clock className="h-4 w-4 text-amber-600" /> 4. Shift Configuration
+                                </span>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Shift Start</Label>
+                                        <Input
+                                            type="time"
+                                            value={approvalOverrides.shift_start_time}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, shift_start_time: e.target.value }))}
+                                            className="h-10 rounded-xl bg-white font-mono text-xs font-bold"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Shift End</Label>
+                                        <Input
+                                            type="time"
+                                            value={approvalOverrides.shift_end_time}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, shift_end_time: e.target.value }))}
+                                            className="h-10 rounded-xl bg-white font-mono text-xs font-bold"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Half-Day Threshold (Mins)</Label>
+                                        <Input
+                                            type="number"
+                                            value={approvalOverrides.half_day_late_minutes}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, half_day_late_minutes: e.target.value }))}
+                                            className="h-10 rounded-xl bg-white font-mono text-xs font-bold"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <DialogFooter className="mt-4 gap-2">
+                        <Button
+                            variant="outline"
+                            onClick={() => setReviewCandidate(null)}
+                            className="h-11 rounded-xl text-xs font-bold"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={() => reviewCandidate && approveCandidateSubmission(reviewCandidate.id)}
+                            disabled={approveLoading}
+                            className="bg-emerald-600 text-white hover:bg-emerald-700 font-black uppercase text-[10px] tracking-widest px-6 h-11 rounded-xl shadow-lg"
+                        >
+                            {approveLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "1-Click Approve Candidate"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ── Document Preview Dialog (Req 2.2 Document Verification) ── */}
+            <Dialog open={!!previewDoc} onOpenChange={(open) => !open && setPreviewDoc(null)}>
+                <DialogContent className="sm:max-w-[760px] max-h-[90vh] overflow-y-auto p-6 rounded-3xl bg-white border-none shadow-2xl">
+                    <DialogHeader className="space-y-1.5 text-left pb-3 border-b border-slate-100">
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2.5">
+                                <div className="h-9 w-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+                                    {previewDoc?.type === "photo" ? (
+                                        <UserCheck className="h-5 w-5" />
+                                    ) : previewDoc?.type?.includes("pan") ? (
+                                        <ShieldCheck className="h-5 w-5" />
+                                    ) : previewDoc?.type?.includes("bank") ? (
+                                        <Banknote className="h-5 w-5" />
+                                    ) : (
+                                        <FileText className="h-5 w-5" />
+                                    )}
+                                </div>
+                                <div>
+                                    <DialogTitle className="text-base font-black text-slate-800 tracking-tight capitalize">
+                                        {previewDoc?.type?.replace(/_/g, " ")} Document Preview
+                                    </DialogTitle>
+                                    <DialogDescription className="text-xs text-slate-500 font-mono truncate max-w-[360px]">
+                                        {previewDoc?.filename}
+                                    </DialogDescription>
+                                </div>
+                            </div>
+                            {previewDoc?.file_url && (
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => {
+                                            const targetUrl = getDocPreviewUrl(previewDoc.file_url);
+                                            window.open(targetUrl, "_blank");
+                                        }}
+                                        className="h-8 px-3 text-xs font-bold border-slate-200 text-slate-700 hover:bg-slate-50 flex items-center gap-1.5"
+                                    >
+                                        <ExternalLink className="h-3.5 w-3.5" />
+                                        <span>Open in Tab</span>
+                                    </Button>
+                                    <a
+                                        href={getDocPreviewUrl(previewDoc.file_url)}
+                                        download={previewDoc.filename}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-200"
+                                    >
+                                        <Download className="h-3.5 w-3.5" />
+                                        <span>Download</span>
+                                    </a>
+                                </div>
+                            )}
+                        </div>
+                    </DialogHeader>
+
+                    {previewDoc && (
+                        <div className="py-4 space-y-4">
+                            {/* Document Display Canvas */}
+                            {previewDoc.file_url ? (
+                                <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 overflow-hidden flex items-center justify-center min-h-[360px]">
+                                    {previewDoc.file_url.toLowerCase().endsWith(".pdf") ? (
+                                        <iframe
+                                            src={getDocPreviewUrl(previewDoc.file_url)}
+                                            title={previewDoc.filename}
+                                            className="w-full h-[520px] rounded-xl border border-slate-200 bg-white"
+                                        />
+                                    ) : (
+                                        <img
+                                            src={getDocPreviewUrl(previewDoc.file_url)}
+                                            alt={previewDoc.filename}
+                                            crossOrigin="anonymous"
+                                            onError={(e) => {
+                                                const target = e.currentTarget;
+                                                if (!target.dataset.triedFallback) {
+                                                    target.dataset.triedFallback = "true";
+                                                    if (target.src.includes(":5000/uploads/")) {
+                                                        target.src = target.src.replace("http://localhost:5000", "");
+                                                    } else if (!target.src.includes(":5000") && target.src.includes("/uploads/")) {
+                                                        target.src = `http://localhost:5000${previewDoc.file_url?.startsWith("/") ? "" : "/"}${previewDoc.file_url}`;
+                                                    }
+                                                }
+                                            }}
+                                            className="max-h-[500px] w-auto max-w-full object-contain rounded-xl shadow-md border border-slate-200/80 bg-white"
+                                        />
+                                    )}
+                                </div>
+                            ) : (
+                                /* Fallback Document Card */
+                                <div className="p-6 rounded-2xl bg-gradient-to-br from-slate-50 to-indigo-50/40 border border-slate-200 space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs font-black uppercase tracking-wider text-indigo-700">
+                                            Candidate Submission Record
+                                        </span>
+                                        <Badge className="bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                                            Submitted & Verified
+                                        </Badge>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3 text-xs bg-white p-4 rounded-xl border border-slate-200">
+                                        <div>
+                                            <span className="text-[10px] uppercase font-bold text-slate-400 block">Candidate</span>
+                                            <span className="font-bold text-slate-800">{previewDoc.candidate_name || "—"}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] uppercase font-bold text-slate-400 block">Document Type</span>
+                                            <span className="font-bold text-slate-800 capitalize">{previewDoc.type.replace(/_/g, " ")}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] uppercase font-bold text-slate-400 block">File Name</span>
+                                            <span className="font-mono text-slate-700 truncate block">{previewDoc.filename}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] uppercase font-bold text-slate-400 block">File Size</span>
+                                            <span className="font-bold text-slate-700">
+                                                {previewDoc.size ? `${Math.round(previewDoc.size / 1024)} KB` : "N/A"}
+                                            </span>
+                                        </div>
+                                        {previewDoc.aadhaar_number && previewDoc.type.includes("aadhaar") && (
+                                            <div className="col-span-2 pt-2 border-t border-slate-100">
+                                                <span className="text-[10px] uppercase font-bold text-slate-400 block">Declared Aadhaar Number</span>
+                                                <span className="font-mono font-bold text-slate-900 tracking-wider">{previewDoc.aadhaar_number}</span>
+                                            </div>
+                                        )}
+                                        {previewDoc.pan_number && previewDoc.type.includes("pan") && (
+                                            <div className="col-span-2 pt-2 border-t border-slate-100">
+                                                <span className="text-[10px] uppercase font-bold text-slate-400 block">Declared PAN Number</span>
+                                                <span className="font-mono font-bold text-slate-900 tracking-wider">{previewDoc.pan_number}</span>
+                                            </div>
+                                        )}
+                                        {previewDoc.bank_account_number && previewDoc.type.includes("bank") && (
+                                            <div className="col-span-2 pt-2 border-t border-slate-100">
+                                                <span className="text-[10px] uppercase font-bold text-slate-400 block">Declared Bank Account</span>
+                                                <span className="font-mono font-bold text-slate-900">
+                                                    {previewDoc.bank_name?.toUpperCase()} — A/C: {previewDoc.bank_account_number} (IFSC: {previewDoc.ifsc_code})
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Candidate & Verification Meta */}
+                            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
+                                <div className="flex items-center gap-2">
+                                    <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0" />
+                                    <span>Uploaded by candidate <strong className="text-slate-800">{previewDoc.candidate_name}</strong> during self-onboarding verification.</span>
+                                </div>
+                                {previewDoc.size && (
+                                    <span className="font-mono text-slate-500 font-bold shrink-0">
+                                        {Math.round(previewDoc.size / 1024)} KB
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    <DialogFooter className="pt-2 border-t border-slate-100">
+                        <Button
+                            type="button"
+                            onClick={() => setPreviewDoc(null)}
+                            className="h-10 px-5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-900 text-white"
+                        >
+                            Close Preview
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </ProtectedRoute >
     );
 }

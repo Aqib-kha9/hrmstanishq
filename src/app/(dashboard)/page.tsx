@@ -7,7 +7,6 @@ import {
   Calendar,
   Clock,
   ArrowUpRight,
-  TrendingUp,
   Building2,
   AlertCircle,
   ShieldCheck,
@@ -102,10 +101,6 @@ type AdminActivity = {
   activities: ActivityItem[];
 };
 
-const MONTH_LABELS: Record<number, string> = {
-  1: "JAN", 2: "FEB", 3: "MAR", 4: "APR", 5: "MAY", 6: "JUN",
-  7: "JUL", 8: "AUG", 9: "SEP", 10: "OCT", 11: "NOV", 12: "DEC"
-};
 
 const DEPT_COLORS: Record<string, string> = {
   "Engineering": "bg-indigo-500",
@@ -160,26 +155,12 @@ export default function DashboardPage() {
   const pendingLeaves = summary?.pending_leaves ?? 0;
   const activeLoansCount = summary?.active_loans ?? 0;
   const departmentStats = summary?.department_stats ?? [];
-  const monthlyAttendance = stats?.monthly_attendance ?? [];
   const leaveDistribution = stats?.leave_distribution ?? [];
   const loanDistribution = stats?.loan_distribution ?? [];
   const governanceRules = governance?.rules ?? [];
   const complianceChecks = compliance?.checks ?? [];
   const complianceSummary = compliance?.summary ?? { total: 0, passed: 0, warnings: 0, failed: 0 };
   const recentActivities = activity?.activities ?? [];
-
-  // Build attendance trend for bar chart (last 4 months with data)
-  const attendanceTrend = monthlyAttendance
-    .slice()
-    .sort((a, b) => a.month - b.month)
-    .slice(-4)
-    .map((m) => ({
-      month: MONTH_LABELS[m.month] || `M${m.month}`,
-      pct: m.attendance_percentage,
-      present: m.present_days,
-      absent: m.absent_days,
-      height: Math.max(20, Math.min(100, m.attendance_percentage)),
-    }));
 
   return (
     <ProtectedRoute module="DASHBOARD" action="READ">
@@ -235,57 +216,6 @@ export default function DashboardPage() {
 
           {/* Left Side: Advanced Analytical Charts */}
           <div className="xl:col-span-8 space-y-6 md:space-y-8">
-
-            {/* Chart 1: Attendance Trend (from monthly_attendance) */}
-            <Card className="border-none shadow-sm rounded-2xl bg-white overflow-hidden p-1">
-              <CardHeader className="p-6 pb-2 border-none flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle className="text-sm font-black italic text-slate-900 underline underline-offset-4 decoration-[#D9F99D] decoration-2 uppercase tracking-widest">Monthly Attendance Trend</CardTitle>
-                  <p className="text-[8px] font-black text-slate-400 mt-3 uppercase tracking-wider">Attendance percentage across recent months from real-time data.</p>
-                </div>
-                <Badge className="bg-[#D1FAE5] text-emerald-600 border-none font-black text-[7px] px-2.5 py-1 rounded-md uppercase tracking-wider flex items-center gap-1">
-                  <TrendingUp className="h-3 w-3" /> Live Data
-                </Badge>
-              </CardHeader>
-              <CardContent className="h-[260px] flex items-end justify-between p-6 gap-6 pt-10">
-                {loading ? (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Loading attendance data…</p>
-                  </div>
-                ) : attendanceTrend.length === 0 ? (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">No attendance data available yet</p>
-                  </div>
-                ) : (
-                  attendanceTrend.map((item, i) => (
-                    <div key={i} className="flex-1 flex flex-col items-center gap-3 group relative h-full justify-end">
-                      <div className="absolute -top-6 bg-slate-900 text-white font-black text-[8px] py-1 px-2.5 rounded-md shadow-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none select-none tracking-widest">
-                        {item.pct}%
-                      </div>
-
-                      <div className="w-full bg-slate-50 border border-slate-100/50 rounded-t-xl relative overflow-hidden h-[160px] flex items-end">
-                        <div
-                          className={cn(
-                            "w-full transition-all duration-700 rounded-t-lg relative",
-                            i === attendanceTrend.length - 1
-                              ? "bg-gradient-to-t from-indigo-500 to-[#D9F99D] group-hover:from-indigo-600 group-hover:to-[#D9F99D]"
-                              : "bg-slate-300 group-hover:bg-[#D9F99D]"
-                          )}
-                          style={{ height: `${item.height}%` }}
-                        >
-                          <div className="absolute top-2 left-1/2 -translate-x-1/2 text-[7px] font-black text-slate-900 uppercase tracking-widest opacity-90">
-                            {item.pct}%
-                          </div>
-                        </div>
-                      </div>
-                      <span className={cn("text-[8px] font-black uppercase tracking-wider", i === attendanceTrend.length - 1 ? "text-indigo-600" : "text-slate-400")}>
-                        {item.month} 2026
-                      </span>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
 
             {/* Department Distribution Table (from department_stats) */}
             <Card className="border-none shadow-sm rounded-2xl bg-white overflow-hidden p-1">

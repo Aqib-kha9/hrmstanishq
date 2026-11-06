@@ -30,6 +30,9 @@ export interface BackendEmployee {
   bank_account_number: string | null;
   ifsc_code: string | null;
   pan_number: string | null;
+  aadhaar_number?: string | null;
+  lic_details?: string | null;
+  blood_group?: string | null;
   pf_number: string | null;
   uan: string | null;
   // Salary
@@ -67,17 +70,21 @@ export interface FrontendEmployee {
 const ROLE_COLORS: Record<string, string> = {
   SUPER_ADMIN: "blue",
   ADMIN: "indigo",
+  HR: "purple",
   MANAGER: "emerald",
   EMPLOYEE: "amber",
 };
 
 function mapBackendRole(backendRole: string | undefined): string {
-  switch (backendRole) {
-    case "super_admin": return "SUPER_ADMIN";
-    case "admin": case "hr": return "ADMIN";
-    case "manager": return "MANAGER";
-    default: return "EMPLOYEE";
-  }
+  if (!backendRole) return "EMPLOYEE";
+  const normalized = backendRole.trim().toUpperCase().replace(/\s+/g, "_");
+  if (normalized === "HR") return "HR";
+  if (normalized === "SUPER_ADMIN") return "SUPER_ADMIN";
+  if (normalized === "ADMIN") return "ADMIN";
+  if (normalized === "MANAGER") return "MANAGER";
+  if (normalized === "EMPLOYEE") return "EMPLOYEE";
+  // Dynamic custom role (e.g. ACCOUNTANT, BRANCH_HEAD)
+  return normalized;
 }
 
 function mapStatus(status: string | undefined): string {
@@ -86,6 +93,8 @@ function mapStatus(status: string | undefined): string {
     case "on_leave": return "On Leave";
     case "inactive": return "Inactive";
     case "terminated": return "Terminated";
+    case "resigned": return "Resigned";
+    case "suspended": return "Suspended";
     default: return "Active";
   }
 }

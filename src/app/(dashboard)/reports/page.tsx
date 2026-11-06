@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { apiGet } from "@/lib/api-client";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -513,6 +514,7 @@ export default function ReportsPage() {
 
     // ── Render ──
     return (
+        <ProtectedRoute module="REPORTS" action="READ">
         <div className="space-y-8 pb-20">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-2">
@@ -901,5 +903,6 @@ export default function ReportsPage() {
                 </Card>
             </div>
         </div>
+        </ProtectedRoute>
     );
 }

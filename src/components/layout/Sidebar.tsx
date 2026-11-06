@@ -23,15 +23,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useRole, ModuleName } from "@/context/RoleContext";
 import { useAuth } from "@/context/AuthContext";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 
 const navigation: { name: string, href: string, icon: any, module: ModuleName }[] = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard, module: 'DASHBOARD' },
@@ -52,8 +46,9 @@ const navigation: { name: string, href: string, icon: any, module: ModuleName }[
 
 export function Sidebar() {
     const pathname = usePathname();
-    const { role, setRole, hasPermission } = useRole();
-    const { logout } = useAuth();
+    const { role, hasPermission } = useRole();
+    const auth = useAuth();
+    const { logout } = auth;
 
     const filteredNavigation = navigation.filter(item => hasPermission(item.module, 'READ'));
 
@@ -72,23 +67,33 @@ export function Sidebar() {
                 </Link>
             </div>
 
-            <div className="px-4 py-3 mt-2">
-                <div className="bg-slate-50 rounded-2xl p-3 border border-slate-100">
-                    <div className="flex items-center gap-2 mb-2">
-                        <UserCircle className="h-3.5 w-3.5 text-slate-400" />
-                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Current Access</span>
+            <div className="px-4 py-3 mt-1">
+                <div className="bg-slate-50/80 rounded-2xl p-3 border border-slate-100 flex items-center justify-between">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="h-8 w-8 rounded-xl bg-slate-900 text-[#D9F99D] flex items-center justify-center font-black text-xs shrink-0 shadow-sm">
+                            {(auth.user?.name || "U").charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                            <p className="text-[10px] font-black uppercase text-slate-800 truncate tracking-tight">
+                                {auth.user?.name || "Authenticated User"}
+                            </p>
+                            <span className="text-[7.5px] font-bold text-slate-400 block truncate uppercase tracking-widest mt-0.5">
+                                {auth.user?.department || "Operations"}
+                            </span>
+                        </div>
                     </div>
-                    <Select value={role} onValueChange={(v) => setRole(v)}>
-                        <SelectTrigger className="h-8 border-none bg-white shadow-sm text-[8px] font-black uppercase tracking-widest rounded-lg">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl border-slate-100">
-                            <SelectItem value="SUPER_ADMIN" className="text-[8px] font-black uppercase">Super Admin</SelectItem>
-                            <SelectItem value="ADMIN" className="text-[8px] font-black uppercase">Admin</SelectItem>
-                            <SelectItem value="MANAGER" className="text-[8px] font-black uppercase">Manager</SelectItem>
-                            <SelectItem value="EMPLOYEE" className="text-[8px] font-black uppercase">Employee</SelectItem>
-                        </SelectContent>
-                    </Select>
+                    <Badge className={cn(
+                        "text-[7px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border-none shrink-0",
+                        (role || "").toUpperCase().includes("ADMIN")
+                            ? "bg-indigo-50 text-indigo-700"
+                            : (role || "").toUpperCase() === "HR"
+                            ? "bg-emerald-50 text-emerald-700"
+                            : (role || "").toUpperCase() === "MANAGER"
+                            ? "bg-amber-50 text-amber-700"
+                            : "bg-slate-200 text-slate-700"
+                    )}>
+                        {role.replace(/_/g, " ")}
+                    </Badge>
                 </div>
             </div>
 
