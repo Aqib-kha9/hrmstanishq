@@ -37,6 +37,7 @@ import {
     FileCheck,
     Compass,
     Sparkles,
+    History,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1172,6 +1173,12 @@ export default function EmployeeProfilePage() {
                                     <span>Total Balance Available</span>
                                     <span className="text-slate-900 font-black">{leaveMetrics.totalAvailable} Days</span>
                                 </div>
+
+                                <Link href="/leave" className="block pt-1">
+                                    <Button variant="outline" className="w-full h-10 rounded-2xl border-slate-200/80 text-[10px] font-black uppercase tracking-wider text-slate-700 hover:bg-slate-50 flex items-center justify-center gap-2 transition-all">
+                                        <History className="h-3.5 w-3.5 text-indigo-600" /> View Full Leave History & Audit
+                                    </Button>
+                                </Link>
                             </div>
                         </Card>
 

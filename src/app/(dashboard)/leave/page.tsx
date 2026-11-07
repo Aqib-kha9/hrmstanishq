@@ -26,6 +26,10 @@ import {
     TrendingUp,
     TrendingDown,
     ShieldAlert,
+    CheckCircle2,
+    AlertCircle,
+    Sparkles,
+    Filter,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -70,6 +74,8 @@ interface LeaveBalance {
     el_carried_forward?: number;
     el_used?: number;
     el_balance?: number;
+    total_annual_entitlement?: number;
+    total_remaining_balance?: number;
     total_entitled?: number;
     total_balance?: number;
     total_used?: number;
@@ -79,6 +85,7 @@ interface LeaveBalance {
     lapsed?: number;
     last_accrual_month?: string;
     consecutive_no_usage_months?: number;
+    pending_requests?: number;
 }
 
 export default function LeavePage() {
@@ -103,7 +110,16 @@ export default function LeavePage() {
     const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
     const [historyEmployee, setHistoryEmployee] = useState<any>(null);
     const [employeeHistoryRecords, setEmployeeHistoryRecords] = useState<any[]>([]);
+    const [historySummary, setHistorySummary] = useState<any>(null);
+    const [historyBalance, setHistoryBalance] = useState<any>(null);
+    const [historyFilterTab, setHistoryFilterTab] = useState<"all" | "approved" | "pending" | "rejected">("all");
     const [loadingHistory, setLoadingHistory] = useState(false);
+
+    // Audit History Picker for Admins (Req 9.3)
+    const [isAuditPickerOpen, setIsAuditPickerOpen] = useState(false);
+    const [auditSelectedEmpId, setAuditSelectedEmpId] = useState("");
+    const [auditEmpPreviewBalance, setAuditEmpPreviewBalance] = useState<any>(null);
+    const [loadingAuditBalance, setLoadingAuditBalance] = useState(false);
 
     const [balance, setBalance] = useState<LeaveBalance | null>(null);
     const [logs, setLogs] = useState<any[]>([]);
@@ -117,6 +133,7 @@ export default function LeavePage() {
     const [applySubmitting, setApplySubmitting] = useState(false);
     const [formErrors, setFormErrors] = useState<{ from_date?: string; to_date?: string; days?: string; reason?: string; employee_id?: string }>({});
     const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
+    const [selectedEmpBalance, setSelectedEmpBalance] = useState<any>(null);
     const [employees, setEmployees] = useState<any[]>([]);
     const [loadingEmployees, setLoadingEmployees] = useState(false);
 
@@ -128,19 +145,76 @@ export default function LeavePage() {
     const [grantSubmitting, setGrantSubmitting] = useState(false);
     const [grantErrors, setGrantErrors] = useState<{ employeeId?: string; count?: string; reason?: string }>({});
 
+    // Fetch employee balance when selected by Admin in Apply Sheet
+    useEffect(() => {
+        if (selectedEmployeeId) {
+            apiGet(`/leave/balance/${selectedEmployeeId}`)
+                .then((data: any) => setSelectedEmpBalance(data))
+                .catch(() => setSelectedEmpBalance(null));
+        } else {
+            setSelectedEmpBalance(null);
+        }
+    }, [selectedEmployeeId]);
+
+    // Fetch employee preview balance when selected in Audit Picker
+    useEffect(() => {
+        if (auditSelectedEmpId) {
+            setLoadingAuditBalance(true);
+            apiGet(`/leave/balance/${auditSelectedEmpId}`)
+                .then((res: any) => setAuditEmpPreviewBalance(res))
+                .catch(() => setAuditEmpPreviewBalance(null))
+                .finally(() => setLoadingAuditBalance(false));
+        } else {
+            setAuditEmpPreviewBalance(null);
+        }
+    }, [auditSelectedEmpId]);
+
     const fetchEmployeeHistory = async (emp: any) => {
+        const empId = emp.employee_id || emp.id;
+        if (!empId) return;
         setHistoryEmployee(emp);
         setHistoryDrawerOpen(true);
         setLoadingHistory(true);
+        setHistoryFilterTab("all");
         try {
-            const empId = emp.employee_id || emp.id;
             const data: any = await apiGet(`/leave/history/${empId}`);
-            setEmployeeHistoryRecords(Array.isArray(data) ? data : (data.rows || data.history || []));
+            if (data && typeof data === "object") {
+                setEmployeeHistoryRecords(data.history || (Array.isArray(data) ? data : (data.rows || [])));
+                setHistorySummary(data.summary || null);
+                setHistoryBalance(data.balance || null);
+                if (data.employee) {
+                    setHistoryEmployee((prev: any) => ({
+                        ...prev,
+                        ...data.employee,
+                        personnel: data.employee.name,
+                        empCode: data.employee.emp_code,
+                        department: data.employee.department,
+                        designation: data.employee.designation,
+                    }));
+                }
+            } else {
+                setEmployeeHistoryRecords([]);
+                setHistorySummary(null);
+                setHistoryBalance(null);
+            }
         } catch (err) {
             console.error("Failed to fetch employee leave history:", err);
             setEmployeeHistoryRecords([]);
+            setHistorySummary(null);
+            setHistoryBalance(null);
         } finally {
             setLoadingHistory(false);
+        }
+    };
+
+    const handleOpenAuditFromPicker = () => {
+        if (!auditSelectedEmpId) return;
+        const emp = employees.find((e) => String(e.id) === String(auditSelectedEmpId));
+        setIsAuditPickerOpen(false);
+        if (emp) {
+            fetchEmployeeHistory(emp);
+        } else {
+            fetchEmployeeHistory({ id: Number(auditSelectedEmpId), personnel: `Employee #${auditSelectedEmpId}` });
         }
     };
 
@@ -166,8 +240,19 @@ export default function LeavePage() {
         if (!applyTo) errors.to_date = 'End date is required';
         else if (applyTo < todayStr) errors.to_date = 'End date cannot be in the past';
         else if (applyTo < applyFrom) errors.to_date = 'End date must be after start date';
-        if (!applyDays || applyDays < 1) errors.days = 'Duration must be at least 1 day';
-        else if (balance && selectedEmployeeId === "" && applyDays > (balance.available ?? balance.total_balance ?? 0)) errors.days = `Insufficient balance (${balance.available ?? balance.total_balance ?? 0} available)`;
+
+        // Check available annual balance for selected type (Req 9.1 & 9.2)
+        const targetBalance = selectedEmployeeId ? selectedEmpBalance : balance;
+        const availableForType = applyLeaveType === "cl"
+            ? (targetBalance?.cl_balance ?? 12)
+            : (targetBalance?.el_balance ?? 12);
+
+        if (!applyDays || applyDays < 1) {
+            errors.days = 'Duration must be at least 1 day';
+        } else if (targetBalance && applyDays > availableForType) {
+            errors.days = `Insufficient ${applyLeaveType.toUpperCase()} balance (${availableForType} days available, ${applyDays} requested)`;
+        }
+
         if (!applyReason || applyReason.trim().length < 10) errors.reason = 'Reason must be at least 10 characters';
         else if (applyReason.length > 500) errors.reason = 'Reason must be under 500 characters';
         setFormErrors(errors);
@@ -429,6 +514,16 @@ export default function LeavePage() {
                         </div>
 
                         {isAdmin && (
+                            <Button
+                                onClick={() => { setIsAuditPickerOpen(true); fetchEmployees(); }}
+                                variant="outline"
+                                className="h-11 px-6 rounded-2xl border-slate-200 bg-white hover:bg-slate-50 font-black uppercase text-[9px] tracking-widest shadow-sm transition-all text-slate-700"
+                            >
+                                <History className="h-4 w-4 mr-2 text-indigo-600" /> Audit History
+                            </Button>
+                        )}
+
+                        {isAdmin && (
                             <Sheet open={isGrantOpen} onOpenChange={(v) => { setIsGrantOpen(v); if (!v) { setGrantEmployeeId(""); setGrantCount(1); setGrantReason(""); setGrantErrors({}); } else { fetchEmployees(); } }}>
                                 <SheetTrigger asChild>
                                     <Button className="bg-[#D1FAE5] text-emerald-800 hover:bg-[#A7F3D0] font-black uppercase text-[9px] tracking-widest px-8 h-11 rounded-2xl shadow-sm transition-all border border-emerald-200">
@@ -462,7 +557,7 @@ export default function LeavePage() {
                                                     >
                                                         <option value="" className="font-bold">Choose an employee...</option>
                                                         {employees.map((emp: any) => (
-                                                            <option key={emp.id} value={emp.id} className="font-bold">
+                                                             <option key={emp.id} value={emp.id} className="font-bold">
                                                                 {emp.name} - {emp.emp_code}
                                                             </option>
                                                         ))}
@@ -543,16 +638,23 @@ export default function LeavePage() {
                                         </div>
                                         <SheetTitle className="text-2xl font-black italic uppercase text-slate-900 tracking-tighter">Apply for Leave</SheetTitle>
                                         <SheetDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-loose">
-                                            Earned Leave (EL) — 2 leaves per month. Max 2 leaves per calendar month.
+                                            Annual Entitlement: 12 Casual Leaves (CL) + 12 Earned Leaves (EL) = 24 Total Days/Year
                                         </SheetDescription>
                                     </SheetHeader>
                                     <div className="grid gap-8">
                                         <div className="space-y-6">
-                                            <div className="flex items-center gap-3 p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
-                                                <Info className="h-5 w-5 text-indigo-500 shrink-0" />
-                                                <p className="text-[10px] font-bold text-indigo-700 uppercase tracking-wide leading-relaxed">
-                                                    You earn 2 EL per month. Unused leaves carry forward for up to 3 months, then lapse if still unused.
-                                                </p>
+                                            <div className="flex items-start gap-3 p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
+                                                <Info className="h-5 w-5 text-indigo-500 shrink-0 mt-0.5" />
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-black text-indigo-900 uppercase tracking-wide">
+                                                        Annual Leave Structure (Req 9.1 & 9.2)
+                                                    </p>
+                                                    <p className="text-[9px] font-bold text-indigo-700 uppercase tracking-wide leading-relaxed">
+                                                        • <strong>Casual Leave (CL):</strong> 12 days/yr, resets annually (no carryover).<br />
+                                                        • <strong>Earned Leave (EL):</strong> 12 days/yr, unused balance carry-forward permitted.<br />
+                                                        • Total Indicative Entitlement: <strong>24 Days / Year</strong>.
+                                                    </p>
+                                                </div>
                                             </div>
                                             {isAdmin && (
                                                 <div className="space-y-2">
@@ -616,6 +718,35 @@ export default function LeavePage() {
                                                     )}
                                                 </div>
                                             </div>
+
+                                            {/* Live Balance indicator for selected type (Req 9.1 & 9.2) */}
+                                            {(() => {
+                                                const targetBalance = selectedEmployeeId ? selectedEmpBalance : balance;
+                                                const curBal = applyLeaveType === 'cl' 
+                                                    ? (targetBalance?.cl_balance ?? 12) 
+                                                    : (targetBalance?.el_balance ?? 12);
+                                                const allocated = applyLeaveType === 'cl'
+                                                    ? (targetBalance?.cl_allocated ?? 12)
+                                                    : (targetBalance?.el_allocated ?? 12) + (targetBalance?.el_carried_forward ?? 0);
+                                                return (
+                                                    <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80">
+                                                        <div className="space-y-0.5">
+                                                            <span className="text-[9px] font-black uppercase tracking-wider text-slate-500 block">
+                                                                {applyLeaveType === 'cl' ? 'Casual Leave (CL)' : 'Earned Leave (EL)'} Balance (Req 9.2)
+                                                            </span>
+                                                            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">
+                                                                {curBal} remaining of {allocated} annual days
+                                                            </span>
+                                                        </div>
+                                                        <Badge className={cn(
+                                                            "font-black text-[10px] uppercase border-none px-3 h-6 rounded-lg shadow-xs",
+                                                            curBal > 0 ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
+                                                        )}>
+                                                            {curBal} Day{curBal !== 1 ? 's' : ''} Avail.
+                                                        </Badge>
+                                                    </div>
+                                                );
+                                            })()}
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div className="space-y-2">
                                                     <Label className={cn("text-[9px] font-black uppercase tracking-widest", formErrors.from_date ? "text-rose-500" : "text-slate-400")}>Start Date</Label>
@@ -874,9 +1005,23 @@ export default function LeavePage() {
                                             </td>
                                             <td className="py-5 px-4">
                                                 <div className="flex flex-col gap-1.5">
-                                                    <span className="w-fit text-[9px] font-black text-slate-600 uppercase tracking-tight italic bg-slate-50 px-2.5 py-1 rounded-md border border-slate-100">
-                                                        EL
-                                                    </span>
+                                                    {row.type === 'CL' ? (
+                                                        <span className="w-fit text-[9px] font-black text-indigo-700 uppercase tracking-tight italic bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-200 shadow-xs">
+                                                            CL (Casual)
+                                                        </span>
+                                                    ) : row.type === 'EL' ? (
+                                                        <span className="w-fit text-[9px] font-black text-emerald-700 uppercase tracking-tight italic bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200 shadow-xs">
+                                                            EL (Earned)
+                                                        </span>
+                                                    ) : row.type === 'LWP' ? (
+                                                        <span className="w-fit text-[9px] font-black text-rose-700 uppercase tracking-tight italic bg-rose-50 px-2.5 py-1 rounded-md border border-rose-200 shadow-xs">
+                                                            LWP (Unpaid)
+                                                        </span>
+                                                    ) : (
+                                                        <span className="w-fit text-[9px] font-black text-slate-700 uppercase tracking-tight italic bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200 shadow-xs">
+                                                            {row.type}
+                                                        </span>
+                                                    )}
                                                     <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{row.duration} Day{row.duration > 1 ? 's' : ''}</span>
                                                 </div>
                                             </td>
@@ -1036,70 +1181,370 @@ export default function LeavePage() {
                     </DialogContent>
                 </Dialog>
 
+                {/* Audit History Picker Dialog (Req 9.3) */}
+                <Dialog open={isAuditPickerOpen} onOpenChange={setIsAuditPickerOpen}>
+                    <DialogContent className="sm:max-w-[480px] border-none shadow-2xl rounded-3xl p-8">
+                        <DialogHeader className="space-y-3">
+                            <div className="h-12 w-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-1">
+                                <History className="h-6 w-6" />
+                            </div>
+                            <DialogTitle className="text-xl font-black italic uppercase text-slate-900 tracking-tighter">
+                                Employee Leave Audit
+                            </DialogTitle>
+                            <DialogDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
+                                Select an employee to inspect their annual leave entitlement, balance, and historical requests.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="space-y-5 py-4">
+                            <div className="space-y-2">
+                                <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Select Employee</Label>
+                                <select
+                                    value={auditSelectedEmpId}
+                                    onChange={(e) => setAuditSelectedEmpId(e.target.value)}
+                                    className={cn(
+                                        "w-full h-12 rounded-xl px-4 font-bold text-[11px] outline-none border transition-all appearance-none bg-no-repeat",
+                                        "bg-slate-50 border-slate-100 text-slate-700"
+                                    )}
+                                    style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")", backgroundPosition: "right 12px center" }}
+                                >
+                                    <option value="" className="font-bold">Choose an employee to audit...</option>
+                                    {employees.map((emp: any) => (
+                                        <option key={emp.id} value={emp.id} className="font-bold">
+                                            {emp.name} — {emp.emp_code} ({emp.department || "No Dept"})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {loadingAuditBalance && (
+                                <div className="py-4 text-center">
+                                    <Loader2 className="h-5 w-5 text-indigo-500 animate-spin mx-auto mb-1" />
+                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Loading annual balance...</span>
+                                </div>
+                            )}
+
+                            {auditEmpPreviewBalance && !loadingAuditBalance && (
+                                <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-100 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[9px] font-black uppercase tracking-wider text-indigo-900">Annual Leave Entitlement</span>
+                                        <Badge className="bg-indigo-600 text-white font-black text-[9px] border-none px-2 h-5 rounded-md">
+                                            Year {auditEmpPreviewBalance.year || new Date().getFullYear()}
+                                        </Badge>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-2 text-center">
+                                        <div className="p-2.5 rounded-xl bg-white border border-indigo-100">
+                                            <span className="text-[8px] font-bold text-slate-400 uppercase block">Casual (CL)</span>
+                                            <span className="text-sm font-black text-indigo-950">{auditEmpPreviewBalance.cl_balance ?? 12} <span className="text-[8px] font-normal text-slate-400">/ {auditEmpPreviewBalance.cl_allocated ?? 12}</span></span>
+                                        </div>
+                                        <div className="p-2.5 rounded-xl bg-white border border-indigo-100">
+                                            <span className="text-[8px] font-bold text-slate-400 uppercase block">Earned (EL)</span>
+                                            <span className="text-sm font-black text-emerald-950">{auditEmpPreviewBalance.el_balance ?? 12} <span className="text-[8px] font-normal text-slate-400">/ {(auditEmpPreviewBalance.el_allocated ?? 12) + (auditEmpPreviewBalance.el_carried_forward ?? 0)}</span></span>
+                                        </div>
+                                        <div className="p-2.5 rounded-xl bg-white border border-indigo-100">
+                                            <span className="text-[8px] font-bold text-slate-400 uppercase block">Remaining</span>
+                                            <span className="text-sm font-black text-indigo-600">{auditEmpPreviewBalance.total_remaining_balance ?? auditEmpPreviewBalance.available ?? 24} d</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <DialogFooter className="gap-3 sm:justify-start">
+                            <Button
+                                disabled={!auditSelectedEmpId}
+                                onClick={handleOpenAuditFromPicker}
+                                className="flex-1 h-12 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-[9px] tracking-widest shadow-xl transition-all disabled:opacity-50"
+                            >
+                                Open Leave History Log
+                            </Button>
+                            <Button
+                                variant="outline"
+                                onClick={() => { setIsAuditPickerOpen(false); setAuditSelectedEmpId(""); }}
+                                className="flex-1 h-12 rounded-2xl border-slate-100 font-black uppercase text-[9px] tracking-widest"
+                            >
+                                Cancel
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
                 {/* Employee Leave History Drawer (Req 9.3) */}
                 <Sheet open={historyDrawerOpen} onOpenChange={setHistoryDrawerOpen}>
-                    <SheetContent className="sm:max-w-[580px] border-none shadow-2xl p-0 overflow-y-auto">
+                    <SheetContent className="sm:max-w-[620px] border-none shadow-2xl p-0 overflow-y-auto">
                         <div className="h-2 bg-indigo-500" />
                         <div className="p-8 space-y-6">
-                            <SheetHeader className="text-left space-y-1">
-                                <div className="flex items-center gap-2">
-                                    <History className="h-5 w-5 text-indigo-600" />
-                                    <SheetTitle className="text-xl font-black italic uppercase text-slate-900 tracking-tight">
-                                        Employee Leave History
-                                    </SheetTitle>
+                            <SheetHeader className="text-left space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <div className="h-9 w-9 rounded-xl bg-indigo-50 flex items-center justify-center">
+                                            <History className="h-5 w-5 text-indigo-600" />
+                                        </div>
+                                        <div>
+                                            <SheetTitle className="text-xl font-black italic uppercase text-slate-900 tracking-tight">
+                                                Employee Leave History
+                                            </SheetTitle>
+                                            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">
+                                                Complete Audit Trail & Balance Breakdown (Req 9.3)
+                                            </p>
+                                        </div>
+                                    </div>
                                 </div>
-                                <SheetDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                    Complete leave audit log for <span className="text-slate-900 font-black">{historyEmployee?.personnel}</span> ({historyEmployee?.empCode || '—'})
-                                </SheetDescription>
+                                {/* Employee Info Card */}
+                                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-10 w-10 rounded-xl bg-slate-900 text-white font-black text-sm flex items-center justify-center">
+                                            {(historyEmployee?.personnel || historyEmployee?.name || "E").charAt(0).toUpperCase()}
+                                        </div>
+                                        <div>
+                                            <h4 className="text-sm font-black text-slate-900 uppercase italic tracking-tight">
+                                                {historyEmployee?.personnel || historyEmployee?.name || "Employee"}
+                                            </h4>
+                                            <div className="flex items-center gap-2 text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                                                <span className="font-mono text-slate-600">{historyEmployee?.empCode || historyEmployee?.emp_code || `EMP#${historyEmployee?.id}`}</span>
+                                                <span>•</span>
+                                                <span>{historyEmployee?.department || "Department —"}</span>
+                                                <span>•</span>
+                                                <span>{historyEmployee?.designation || "Staff"}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </SheetHeader>
 
                             {loadingHistory ? (
-                                <div className="py-20 text-center">
-                                    <Loader2 className="h-8 w-8 text-slate-300 animate-spin mx-auto mb-2" />
-                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Loading leave history...</p>
-                                </div>
-                            ) : employeeHistoryRecords.length === 0 ? (
-                                <div className="py-16 text-center text-slate-400">
-                                    <Activity className="h-8 w-8 text-slate-300 mx-auto mb-2" />
-                                    <p className="text-xs font-bold uppercase">No leave history records found</p>
+                                <div className="py-24 text-center space-y-3">
+                                    <Loader2 className="h-8 w-8 text-indigo-500 animate-spin mx-auto" />
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Loading leave history & balances...</p>
                                 </div>
                             ) : (
-                                <div className="space-y-3">
-                                    {employeeHistoryRecords.map((item: any, i: number) => (
-                                        <div key={item.id || i} className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
-                                            <div className="space-y-1">
-                                                <div className="flex items-center gap-2">
-                                                    <Badge className="bg-slate-900 text-white font-black text-[8px] uppercase">
-                                                        {(item.leave_type || 'EL').toUpperCase()}
-                                                    </Badge>
-                                                    <span className="text-xs font-black text-slate-800">
-                                                        {item.duration || 1} Day{item.duration > 1 ? 's' : ''}
-                                                    </span>
-                                                    <Badge className={cn(
-                                                        "text-[8px] font-black uppercase",
-                                                        item.status === 'approved' ? 'bg-emerald-100 text-emerald-800' :
-                                                        item.status === 'rejected' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
-                                                    )}>
-                                                        {item.status}
-                                                    </Badge>
-                                                </div>
-                                                <p className="text-[10px] font-bold text-slate-600">
-                                                    {new Date(item.from_date).toLocaleDateString('en-GB')} – {new Date(item.to_date).toLocaleDateString('en-GB')}
-                                                </p>
-                                                <p className="text-[9px] text-slate-400 italic">
-                                                    &ldquo;{item.reason}&rdquo;
-                                                </p>
+                                <div className="space-y-6">
+                                    {/* ── CARD 1: Applicable Annual Leave Balance (Req 9.1 & 9.2) ── */}
+                                    <div className="p-5 rounded-2xl bg-gradient-to-br from-indigo-50/80 via-white to-slate-50 border border-indigo-100/80 shadow-xs space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <Sparkles className="h-4 w-4 text-indigo-600" />
+                                                <span className="text-[10px] font-black uppercase tracking-wider text-slate-900">
+                                                    Annual Leave Balance & Entitlement
+                                                </span>
                                             </div>
-                                            <div className="text-right text-[8px] font-bold uppercase text-slate-400 space-y-1">
-                                                {item.payroll_treatment && (
-                                                    <div className="text-indigo-600 font-black">
-                                                        Payroll: {item.payroll_treatment.replace(/_/g, ' ')}
-                                                    </div>
-                                                )}
-                                                <div>Applied: {new Date(item.created_at).toLocaleDateString('en-GB')}</div>
+                                            <Badge className="bg-indigo-600 text-white font-black text-[8px] uppercase px-2 h-5 rounded-md">
+                                                Year {historyBalance?.year || new Date().getFullYear()}
+                                            </Badge>
+                                        </div>
+
+                                        <div className="grid grid-cols-3 gap-3">
+                                            {/* Casual Leave */}
+                                            <div className="p-3 rounded-xl bg-white border border-slate-200/80 space-y-1">
+                                                <span className="text-[8px] font-bold text-indigo-600 uppercase tracking-wider block">Casual (CL)</span>
+                                                <div className="text-base font-black text-slate-900">
+                                                    {historyBalance?.cl_balance ?? 12}
+                                                    <span className="text-[9px] font-bold text-slate-400 not-italic ml-1">/ {historyBalance?.cl_allocated ?? 12}</span>
+                                                </div>
+                                                <span className="text-[7px] font-bold text-slate-400 uppercase tracking-tight block">No Carryover</span>
+                                            </div>
+
+                                            {/* Earned Leave */}
+                                            <div className="p-3 rounded-xl bg-white border border-slate-200/80 space-y-1">
+                                                <span className="text-[8px] font-bold text-emerald-600 uppercase tracking-wider block">Earned (EL)</span>
+                                                <div className="text-base font-black text-slate-900">
+                                                    {historyBalance?.el_balance ?? 12}
+                                                    <span className="text-[9px] font-bold text-slate-400 not-italic ml-1">
+                                                        / {(historyBalance?.el_allocated ?? 12) + (historyBalance?.el_carried_forward ?? 0)}
+                                                    </span>
+                                                </div>
+                                                <span className="text-[7px] font-bold text-slate-400 uppercase tracking-tight block">
+                                                    {historyBalance?.el_carried_forward ? `+${historyBalance.el_carried_forward} CF` : "Carryover Allowed"}
+                                                </span>
+                                            </div>
+
+                                            {/* Total Available */}
+                                            <div className="p-3 rounded-xl bg-indigo-600 text-white space-y-1 shadow-sm">
+                                                <span className="text-[8px] font-black uppercase tracking-wider text-indigo-200 block">Applicable Balance</span>
+                                                <div className="text-base font-black">
+                                                    {historyBalance?.total_remaining_balance ?? historyBalance?.available ?? 24}
+                                                    <span className="text-[9px] font-bold text-indigo-200 ml-1">Days</span>
+                                                </div>
+                                                <span className="text-[7px] font-black uppercase text-indigo-200 tracking-tight block">
+                                                    Of {historyBalance?.total_annual_entitlement ?? 24} Annual Days
+                                                </span>
                                             </div>
                                         </div>
-                                    ))}
+                                    </div>
+
+                                    {/* ── CARD 2: Summary Metrics (Req 9.3) ── */}
+                                    <div className="grid grid-cols-4 gap-2">
+                                        <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 text-center">
+                                            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider block">Leave Taken</span>
+                                            <span className="text-sm font-black text-slate-900 mt-0.5 block">
+                                                {historySummary?.total_leave_taken ?? 0} <span className="text-[8px] text-slate-400 font-normal">Days</span>
+                                            </span>
+                                        </div>
+                                        <div className="p-3 rounded-xl bg-emerald-50/50 border border-emerald-100 text-center">
+                                            <span className="text-[8px] font-bold text-emerald-700 uppercase tracking-wider block">Approved</span>
+                                            <span className="text-sm font-black text-emerald-900 mt-0.5 block">
+                                                {historySummary?.approved_count ?? 0}
+                                            </span>
+                                        </div>
+                                        <div className="p-3 rounded-xl bg-amber-50/50 border border-amber-100 text-center">
+                                            <span className="text-[8px] font-bold text-amber-700 uppercase tracking-wider block">Pending</span>
+                                            <span className="text-sm font-black text-amber-900 mt-0.5 block">
+                                                {historySummary?.pending_count ?? 0}
+                                            </span>
+                                        </div>
+                                        <div className="p-3 rounded-xl bg-rose-50/50 border border-rose-100 text-center">
+                                            <span className="text-[8px] font-bold text-rose-700 uppercase tracking-wider block">Rejected</span>
+                                            <span className="text-sm font-black text-rose-900 mt-0.5 block">
+                                                {historySummary?.rejected_count ?? 0}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* ── Status Filter Tabs ── */}
+                                    <div className="flex bg-slate-100 p-1 rounded-xl">
+                                        {(["all", "approved", "pending", "rejected"] as const).map((tab) => {
+                                            const count = tab === "all"
+                                                ? employeeHistoryRecords.length
+                                                : tab === "approved"
+                                                ? (historySummary?.approved_count ?? employeeHistoryRecords.filter((r) => r.status === "approved").length)
+                                                : tab === "pending"
+                                                ? (historySummary?.pending_count ?? employeeHistoryRecords.filter((r) => r.status === "pending").length)
+                                                : (historySummary?.rejected_count ?? employeeHistoryRecords.filter((r) => r.status === "rejected").length);
+
+                                            return (
+                                                <button
+                                                    key={tab}
+                                                    onClick={() => setHistoryFilterTab(tab)}
+                                                    className={cn(
+                                                        "flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all",
+                                                        historyFilterTab === tab ? "bg-white text-slate-900 shadow-xs" : "text-slate-400 hover:text-slate-600"
+                                                    )}
+                                                >
+                                                    {tab} ({count})
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* ── History Records List ── */}
+                                    {(() => {
+                                        const filtered = employeeHistoryRecords.filter((r: any) => {
+                                            if (historyFilterTab === "all") return true;
+                                            return (r.status || "").toLowerCase() === historyFilterTab;
+                                        });
+
+                                        if (filtered.length === 0) {
+                                            return (
+                                                <div className="py-14 text-center text-slate-400 space-y-2 border border-dashed border-slate-200 rounded-2xl">
+                                                    <Activity className="h-7 w-7 text-slate-300 mx-auto" />
+                                                    <p className="text-xs font-bold uppercase tracking-wider">No {historyFilterTab !== "all" ? historyFilterTab : ""} leave records found</p>
+                                                </div>
+                                            );
+                                        }
+
+                                        return (
+                                            <div className="space-y-3">
+                                                {filtered.map((item: any, i: number) => {
+                                                    const leaveType = (item.leave_type || "el").toUpperCase();
+                                                    const isApproved = item.status === "approved";
+                                                    const isRejected = item.status === "rejected";
+                                                    const isPending = item.status === "pending";
+
+                                                    return (
+                                                        <div
+                                                            key={item.id || i}
+                                                            className={cn(
+                                                                "p-4 rounded-2xl border transition-all space-y-3",
+                                                                isApproved ? "bg-white border-slate-200/80 shadow-xs" :
+                                                                isPending ? "bg-amber-50/30 border-amber-200" :
+                                                                "bg-slate-50 border-slate-200/80 opacity-90"
+                                                            )}
+                                                        >
+                                                            {/* Top badges */}
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="flex items-center gap-2">
+                                                                    {leaveType === "CL" ? (
+                                                                        <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 font-black text-[8px] uppercase">
+                                                                            CL (Casual Leave)
+                                                                        </Badge>
+                                                                    ) : leaveType === "EL" ? (
+                                                                        <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 font-black text-[8px] uppercase">
+                                                                            EL (Earned Leave)
+                                                                        </Badge>
+                                                                    ) : (
+                                                                        <Badge className="bg-rose-50 text-rose-700 border-rose-200 font-black text-[8px] uppercase">
+                                                                            {leaveType} (Unpaid / LWP)
+                                                                        </Badge>
+                                                                    )}
+
+                                                                    <span className="text-xs font-black text-slate-900">
+                                                                        {item.duration || 1} Day{item.duration > 1 ? "s" : ""}
+                                                                    </span>
+                                                                </div>
+
+                                                                <Badge className={cn(
+                                                                    "text-[8px] font-black uppercase px-2.5 h-5 rounded-md border-none",
+                                                                    isApproved ? "bg-emerald-100 text-emerald-800" :
+                                                                    isRejected ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800"
+                                                                )}>
+                                                                    {item.status}
+                                                                </Badge>
+                                                            </div>
+
+                                                            {/* Date range & Applied On */}
+                                                            <div className="flex items-center justify-between text-xs">
+                                                                <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                                                                    <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                                                                    <span>
+                                                                        {new Date(item.from_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                                                                        {" – "}
+                                                                        {new Date(item.to_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                                                                    </span>
+                                                                </div>
+                                                                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">
+                                                                    Applied: {new Date(item.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                                                                </span>
+                                                            </div>
+
+                                                            {/* Reason */}
+                                                            {item.reason && (
+                                                                <p className="text-[10px] text-slate-600 italic bg-slate-50 p-2.5 rounded-xl border border-slate-100 leading-relaxed">
+                                                                    &ldquo;{item.reason}&rdquo;
+                                                                </p>
+                                                            )}
+
+                                                            {/* Action / Remarks & Payroll Treatment (Req 4.3 & 10) */}
+                                                            <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-100 text-[8px] font-bold uppercase tracking-wider">
+                                                                <div>
+                                                                    {item.approver ? (
+                                                                        <span className="text-slate-500">
+                                                                            {isApproved ? "Approved by" : "Reviewed by"}: <strong className="text-slate-800">{item.approver.name}</strong>
+                                                                        </span>
+                                                                    ) : isPending ? (
+                                                                        <span className="text-amber-700 font-bold">
+                                                                            Awaiting Admin Review • No salary cut pending approval
+                                                                        </span>
+                                                                    ) : null}
+
+                                                                    {item.remarks && (
+                                                                        <span className="ml-2 text-slate-600 font-semibold italic">
+                                                                            (Remarks: {item.remarks})
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+
+                                                                {item.payroll_treatment && (
+                                                                    <Badge variant="outline" className="text-[8px] font-black uppercase text-indigo-700 bg-indigo-50/50 border-indigo-200">
+                                                                        Payroll: {item.payroll_treatment.replace(/_/g, " ")}
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             )}
                         </div>
