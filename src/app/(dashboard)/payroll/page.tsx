@@ -122,7 +122,8 @@ export default function PayrollPage() {
         mode: "NEFT/RTGS",
         reference: `PAY-BATCH-${new Date().getTime().toString().slice(-6)}`,
         authorizedBy: "HR Manager",
-        remarks: "Monthly Payroll Release"
+        remarks: "Monthly Payroll Release",
+        sendEmails: true,
     });
 
     const [globalRules, setGlobalRules] = useState({
@@ -403,6 +404,7 @@ export default function PayrollPage() {
                 reference: txDetails.reference,
                 authorizedBy: txDetails.authorizedBy,
                 remarks: txDetails.remarks,
+                sendEmails: txDetails.sendEmails !== false,
             });
             setIsSendDialogOpen(false);
             setDisbursementStep(1);

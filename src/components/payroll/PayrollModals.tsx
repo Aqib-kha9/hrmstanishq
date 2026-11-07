@@ -382,6 +382,18 @@ export function DisbursementDialog({
                                     className="h-12 rounded-xl bg-slate-50 border-none font-bold text-[11px] px-6"
                                 />
                             </div>
+                            <div className="flex items-center gap-2.5 pt-2 px-1">
+                                <input
+                                    type="checkbox"
+                                    id="sendEmailsToggle"
+                                    checked={txDetails.sendEmails !== false}
+                                    onChange={(e) => setTxDetails({ ...txDetails, sendEmails: e.target.checked })}
+                                    className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                                />
+                                <Label htmlFor="sendEmailsToggle" className="text-[10px] font-bold text-slate-700 cursor-pointer select-none">
+                                    Automatically email PDF salary slips to all employees upon payout
+                                </Label>
+                            </div>
                         </div>
 
                         <div className="flex flex-col gap-4">
@@ -428,6 +440,24 @@ export function EmployeeHistoryDialog({
     }, [isOpen, selectedEmployee]);
 
     const handleDownload = async (row: any) => {
+        try {
+            const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
+            const token = typeof window !== 'undefined' ? localStorage.getItem('token') : '';
+            const res = await fetch(`${apiBase}/payroll/entry/${row.id}/pdf`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Payslip_${selectedEmployee?.name?.replace(/\s+/g, '_') || 'Staff'}_${row.month?.replace(/\s+/g, '_') || 'Cycle'}.pdf`;
+                a.click();
+                window.URL.revokeObjectURL(url);
+                return;
+            }
+        } catch (_) {}
+
         const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a5' });
 
         // Load logo image
