@@ -3,7 +3,7 @@
 import { cn } from "@/lib/utils";
 import { useRole } from "@/context/RoleContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
     Users,
@@ -111,23 +111,63 @@ export default function EmployeesPage() {
         notes: "",
     });
 
+    const fetchRecentEmployees = useCallback(async () => {
+        try {
+            const recentData = await apiGet<any[]>("/employees/recently-added?limit=5");
+            setRecentEmployees(recentData || []);
+        } catch (err) {
+            console.error("Failed to load recently added employees:", err);
+        }
+    }, []);
+
+    const fetchEmployees = useCallback(async () => {
+        try {
+            setLoading(true);
+            const params: Record<string, string | number> = { limit: 1000 };
+            if (selectedCompanyId) params.company_id = selectedCompanyId;
+            if (selectedOfficeId) params.office_id = selectedOfficeId;
+            const data = await apiGet<BackendEmployee[]>("/employees", params);
+            const transformed = data.map(toFrontendEmployee);
+            setPersonnel(transformed);
+        } catch (err) {
+            console.error("Failed to load employees:", err);
+            setPersonnel([]);
+        } finally {
+            setLoading(false);
+        }
+    }, [selectedCompanyId, selectedOfficeId]);
+
     useEffect(() => {
         async function fetchLookups() {
             try {
-                const [compData, offData, recentData] = await Promise.all([
+                const [compData, offData] = await Promise.all([
                     apiGet<{ id: number; name: string }[]>("/companies"),
                     apiGet<{ id: number; name: string }[]>("/offices", { limit: 100 }),
-                    apiGet<any[]>("/employees/recently-added?limit=5").catch(() => []),
                 ]);
                 setCompanies(compData || []);
                 setOffices(offData || []);
-                setRecentEmployees(recentData || []);
             } catch (err) {
                 console.error("Failed to load lookup data:", err);
             }
         }
         fetchLookups();
-    }, []);
+        fetchRecentEmployees();
+    }, [fetchRecentEmployees]);
+
+    useEffect(() => {
+        fetchEmployees();
+        fetchRecentEmployees();
+    }, [fetchEmployees, fetchRecentEmployees]);
+
+    // Auto-refresh when tab gains focus so new onboards or deletions in other tabs show instantly
+    useEffect(() => {
+        const handleFocus = () => {
+            fetchEmployees();
+            fetchRecentEmployees();
+        };
+        window.addEventListener("focus", handleFocus);
+        return () => window.removeEventListener("focus", handleFocus);
+    }, [fetchEmployees, fetchRecentEmployees]);
 
     const fetchResignedEmployees = async () => {
         try {
@@ -161,7 +201,8 @@ export default function EmployeesPage() {
             });
             alert("Employee re-hired successfully! Status updated to active.");
             setRehireDialogOpen(false);
-            window.location.reload();
+            fetchEmployees();
+            fetchRecentEmployees();
         } catch (err: any) {
             console.error("Failed to re-hire:", err);
             alert(err?.message || "Failed to re-hire employee.");
@@ -169,26 +210,6 @@ export default function EmployeesPage() {
             setRehireLoading(false);
         }
     };
-
-    useEffect(() => {
-        async function fetchEmployees() {
-            try {
-                setLoading(true);
-                const params: Record<string, string | number> = { limit: 1000 };
-                if (selectedCompanyId) params.company_id = selectedCompanyId;
-                if (selectedOfficeId) params.office_id = selectedOfficeId;
-                const data = await apiGet<BackendEmployee[]>("/employees", params);
-                const transformed = data.map(toFrontendEmployee);
-                setPersonnel(transformed);
-            } catch (err) {
-                console.error("Failed to load employees:", err);
-                setPersonnel([]);
-            } finally {
-                setLoading(false);
-            }
-        }
-        fetchEmployees();
-    }, [selectedCompanyId, selectedOfficeId]);
 
     const filteredPersonnel = personnel.filter(p =>
         p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -245,7 +266,11 @@ export default function EmployeesPage() {
         setActionLoading(`Deleting employee ${emp.name} (${emp.id}). Please wait...`);
         try {
             await apiDelete(`/employees/${emp.employeeId}`);
+            // Instantly update both personnel list and recently added widget
             setPersonnel(prev => prev.filter(p => p.employeeId !== emp.employeeId));
+            setRecentEmployees(prev => prev.filter(p => (p.id || p.employee_id) !== emp.employeeId && p.emp_code !== emp.id));
+            // Fetch the updated latest 5 employees in the background
+            await fetchRecentEmployees();
         } catch (err: any) {
             console.error("Failed to delete employee:", err);
             const msg = err.response?.data?.message || err.message || "Failed to delete employee.";
@@ -867,7 +892,7 @@ export default function EmployeesPage() {
                     onOpenChange={setImportDialogOpen} 
                     companies={companies} 
                     offices={offices} 
-                    onSuccess={() => window.location.reload()} 
+                    onSuccess={() => { fetchEmployees(); fetchRecentEmployees(); }} 
                 />
             )}
 
