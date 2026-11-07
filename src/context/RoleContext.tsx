@@ -177,7 +177,7 @@ export const RoleProvider = ({ children }: { children: ReactNode }) => {
     const userRole = (user.role || '').toUpperCase();
 
     // 1. Super Admin and Admin bypass all module permission checks
-    if (userRole === 'SUPER_ADMIN') {
+    if (userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') {
       return true;
     }
 
@@ -215,7 +215,7 @@ export const RoleProvider = ({ children }: { children: ReactNode }) => {
   const hasDirectPermission = (permissionSlug: string): boolean => {
     if (!user) return false;
     const userRole = (user.role || '').toUpperCase();
-    if (userRole === 'SUPER_ADMIN') return true;
+    if (userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') return true;
 
     const userPerms = user.permissions || [];
     if (userPerms.includes('*')) return true;

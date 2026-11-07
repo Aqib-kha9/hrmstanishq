@@ -31,7 +31,7 @@ export function PermissionGate({
   if (allowedRoles && allowedRoles.length > 0) {
     const userRole = (role || "").toUpperCase();
     const isAllowedRole = allowedRoles.map((r) => r.toUpperCase()).includes(userRole);
-    if (!isAllowedRole && userRole !== "SUPER_ADMIN") {
+    if (!isAllowedRole && userRole !== "SUPER_ADMIN" && userRole !== "ADMIN") {
       return <>{fallback}</>;
     }
   }
