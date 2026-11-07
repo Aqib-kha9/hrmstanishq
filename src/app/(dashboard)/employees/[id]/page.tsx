@@ -174,6 +174,7 @@ export default function EmployeeProfilePage() {
     const [employee, setEmployee] = useState<FrontendEmployee | null>(null);
     const [rawEmployee, setRawEmployee] = useState<BackendEmployee | null>(null);
     const [loading, setLoading] = useState(true);
+    const [actionLoading, setActionLoading] = useState<string | null>(null);
 
     // Additional data states
     const [salary, setSalary] = useState<SalaryResponse | null>(null);

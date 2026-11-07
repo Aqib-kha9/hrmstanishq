@@ -91,6 +91,9 @@ export default function EmployeesPage() {
     const [resetTarget, setResetTarget] = useState<FrontendEmployee | null>(null);
     const [customPassword, setCustomPassword] = useState("");
 
+    // Operation action loading state
+    const [actionLoading, setActionLoading] = useState<string | null>(null);
+
     // Bulk Import state
     const [importDialogOpen, setImportDialogOpen] = useState(false);
 
@@ -218,9 +221,9 @@ export default function EmployeesPage() {
     };
 
     const toggleStatus = async (emp: FrontendEmployee) => {
-        // Map frontend display status to backend status value
         const currentBackendStatus = emp.status === "Active" ? "active" : "inactive";
         const newBackendStatus = currentBackendStatus === "active" ? "inactive" : "active";
+        setActionLoading(`Updating status to ${newBackendStatus} for ${emp.name}...`);
         try {
             await apiPatch(`/employees/${emp.employeeId}/status`, { status: newBackendStatus });
             setPersonnel(prev => prev.map(p =>
@@ -228,13 +231,18 @@ export default function EmployeesPage() {
                     ? { ...p, status: newBackendStatus === "active" ? "Active" : "Inactive" }
                     : p
             ));
-        } catch (err) {
+        } catch (err: any) {
             console.error("Failed to update status:", err);
+            const msg = err.response?.data?.message || err.message || "Failed to update employee status.";
+            alert(msg);
+        } finally {
+            setActionLoading(null);
         }
     };
 
     const deleteEmployee = async (emp: FrontendEmployee) => {
         if (!window.confirm(`HARD DELETE ${emp.name} (${emp.id})? This is for TESTING ONLY. All associated records will be permanently destroyed.`)) return;
+        setActionLoading(`Deleting employee ${emp.name} (${emp.id}). Please wait...`);
         try {
             await apiDelete(`/employees/${emp.employeeId}`);
             setPersonnel(prev => prev.filter(p => p.employeeId !== emp.employeeId));
@@ -242,6 +250,8 @@ export default function EmployeesPage() {
             console.error("Failed to delete employee:", err);
             const msg = err.response?.data?.message || err.message || "Failed to delete employee.";
             alert(msg);
+        } finally {
+            setActionLoading(null);
         }
     };
 
@@ -859,6 +869,24 @@ export default function EmployeesPage() {
                     offices={offices} 
                     onSuccess={() => window.location.reload()} 
                 />
+            )}
+
+            {/* Global Action Processing Overlay */}
+            {actionLoading && (
+                <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-100 flex flex-col items-center gap-4 max-w-sm w-full text-center">
+                        <div className="h-16 w-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-inner">
+                            <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+                        </div>
+                        <div className="space-y-1">
+                            <h3 className="text-base font-black text-slate-800 tracking-tight">Processing Operation</h3>
+                            <p className="text-xs font-semibold text-slate-500 leading-relaxed">{actionLoading}</p>
+                        </div>
+                        <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden mt-1">
+                            <div className="bg-indigo-600 h-full rounded-full animate-pulse w-3/4" />
+                        </div>
+                    </div>
+                </div>
             )}
         </ProtectedRoute>
     );
