@@ -30,6 +30,7 @@ import {
     AlertCircle,
     Sparkles,
     Filter,
+    SlidersHorizontal,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -120,6 +121,13 @@ export default function LeavePage() {
     const [auditSelectedEmpId, setAuditSelectedEmpId] = useState("");
     const [auditEmpPreviewBalance, setAuditEmpPreviewBalance] = useState<any>(null);
     const [loadingAuditBalance, setLoadingAuditBalance] = useState(false);
+
+    // Leave & Payroll Treatment Dialog (Req 10)
+    const [isTreatmentDialogOpen, setIsTreatmentDialogOpen] = useState(false);
+    const [selectedTreatmentLog, setSelectedTreatmentLog] = useState<any>(null);
+    const [editTreatmentValue, setEditTreatmentValue] = useState<"paid" | "unpaid" | "adjusted_balance" | "carry_forward_next">("paid");
+    const [editTreatmentRemarks, setEditTreatmentRemarks] = useState("");
+    const [updatingTreatment, setUpdatingTreatment] = useState(false);
 
     const [balance, setBalance] = useState<LeaveBalance | null>(null);
     const [logs, setLogs] = useState<any[]>([]);
@@ -400,6 +408,28 @@ export default function LeavePage() {
             fetchBalance();
         } catch (err: any) {
             alert(err?.response?.data?.message || "Failed to process leave request");
+        }
+    };
+
+    const handleUpdateTreatment = async () => {
+        if (!selectedTreatmentLog) return;
+        setUpdatingTreatment(true);
+        try {
+            await apiPatch(`/leave/${selectedTreatmentLog.id}/payroll-treatment`, {
+                payroll_treatment: editTreatmentValue,
+                remarks: editTreatmentRemarks || undefined,
+                is_paid: editTreatmentValue !== "unpaid",
+            });
+            setIsTreatmentDialogOpen(false);
+            fetchRequests();
+            fetchBalance();
+            if (historyDrawerOpen && historyEmployee) {
+                fetchEmployeeHistory(historyEmployee);
+            }
+        } catch (err: any) {
+            alert(err?.response?.data?.message || "Failed to update payroll treatment");
+        } finally {
+            setUpdatingTreatment(false);
         }
     };
 
@@ -1092,6 +1122,20 @@ export default function LeavePage() {
                                                             <History className="h-3.5 w-3.5 text-indigo-600" />
                                                             <span className="text-[9px] font-bold uppercase tracking-widest text-slate-700">Leave History</span>
                                                         </DropdownMenuItem>
+                                                        {isAdmin && (
+                                                            <DropdownMenuItem
+                                                                onClick={() => {
+                                                                    setSelectedTreatmentLog(row);
+                                                                    setEditTreatmentValue((row.payrollTreatment as any) || (row.type === 'LWP' ? 'unpaid' : 'adjusted_balance'));
+                                                                    setEditTreatmentRemarks(row.remarks || "");
+                                                                    setIsTreatmentDialogOpen(true);
+                                                                }}
+                                                                className="flex items-center gap-2.5 p-2 rounded-lg cursor-pointer hover:bg-indigo-50 border-t border-slate-100"
+                                                            >
+                                                                <SlidersHorizontal className="h-3.5 w-3.5 text-indigo-600" />
+                                                                <span className="text-[9px] font-bold uppercase tracking-widest text-slate-700">Payroll Treatment</span>
+                                                            </DropdownMenuItem>
+                                                        )}
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                             </td>
@@ -1533,11 +1577,35 @@ export default function LeavePage() {
                                                                     )}
                                                                 </div>
 
-                                                                {item.payroll_treatment && (
-                                                                    <Badge variant="outline" className="text-[8px] font-black uppercase text-indigo-700 bg-indigo-50/50 border-indigo-200">
-                                                                        Payroll: {item.payroll_treatment.replace(/_/g, " ")}
-                                                                    </Badge>
-                                                                )}
+                                                                <div className="flex items-center gap-2">
+                                                                    {item.payroll_treatment && (
+                                                                        <Badge variant="outline" className="text-[8px] font-black uppercase text-indigo-700 bg-indigo-50/50 border-indigo-200">
+                                                                            Payroll: {item.payroll_treatment.replace(/_/g, " ")}
+                                                                        </Badge>
+                                                                    )}
+                                                                    {isAdmin && (
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                setSelectedTreatmentLog({
+                                                                                    id: item.id,
+                                                                                    personnel: historyEmployee?.personnel || historyEmployee?.name || "Employee",
+                                                                                    type: (item.leave_type || "el").toUpperCase(),
+                                                                                    duration: item.duration || 1,
+                                                                                    status: item.status,
+                                                                                    range: `${new Date(item.from_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })} – ${new Date(item.to_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`,
+                                                                                    remarks: item.remarks || "",
+                                                                                    payrollTreatment: item.payroll_treatment,
+                                                                                });
+                                                                                setEditTreatmentValue((item.payroll_treatment as any) || (item.leave_type === "lwp" ? "unpaid" : "adjusted_balance"));
+                                                                                setEditTreatmentRemarks(item.remarks || "");
+                                                                                setIsTreatmentDialogOpen(true);
+                                                                            }}
+                                                                            className="text-[8px] font-black uppercase text-indigo-600 hover:text-indigo-800 underline underline-offset-2 cursor-pointer inline-flex items-center gap-1 ml-1"
+                                                                        >
+                                                                            <SlidersHorizontal className="h-2.5 w-2.5" /> Edit
+                                                                        </button>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     );
@@ -1550,6 +1618,75 @@ export default function LeavePage() {
                         </div>
                     </SheetContent>
                 </Sheet>
+
+                {/* Payroll Treatment Dialog (Req 10) */}
+                <Dialog open={isTreatmentDialogOpen} onOpenChange={setIsTreatmentDialogOpen}>
+                    <DialogContent className="sm:max-w-[440px] border-none shadow-2xl rounded-3xl p-8">
+                        <DialogHeader className="space-y-3">
+                            <div className="h-12 w-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-1">
+                                <SlidersHorizontal className="h-6 w-6" />
+                            </div>
+                            <DialogTitle className="text-xl font-black italic uppercase text-slate-900 tracking-tighter">
+                                Payroll Treatment Control
+                            </DialogTitle>
+                            <DialogDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
+                                Determine final payroll treatment & deduction for <span className="text-slate-900 font-black italic">{selectedTreatmentLog?.personnel}</span> (Req 10).
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="space-y-4 py-4">
+                            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1">
+                                <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+                                    <span>{selectedTreatmentLog?.type} Leave ({selectedTreatmentLog?.duration} Day{selectedTreatmentLog?.duration !== 1 ? 's' : ''})</span>
+                                    <Badge variant="outline" className="text-[8px] uppercase">{selectedTreatmentLog?.status}</Badge>
+                                </div>
+                                <p className="text-[10px] text-slate-500">{selectedTreatmentLog?.range}</p>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Payroll Treatment Decision (Req 10)</Label>
+                                <select
+                                    value={editTreatmentValue}
+                                    onChange={(e: any) => setEditTreatmentValue(e.target.value)}
+                                    className="w-full h-11 px-3 rounded-xl bg-slate-50 border border-slate-100 font-bold text-[10px] uppercase outline-none focus:ring-2 ring-indigo-100 cursor-pointer text-slate-800"
+                                >
+                                    <option value="paid">Paid Leave (Deduct from Annual Balance, No Salary Cut)</option>
+                                    <option value="unpaid">Loss of Pay / Unpaid (Salary Deduction in Current Payroll)</option>
+                                    <option value="adjusted_balance">Adjust Against Annual Leave Balance (Decoupled from Cut)</option>
+                                    <option value="carry_forward_next">Carry Forward Adjustment to Following Month (Req 4.2 & 10)</option>
+                                </select>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Admin Audit Remarks</Label>
+                                <textarea
+                                    value={editTreatmentRemarks}
+                                    onChange={(e) => setEditTreatmentRemarks(e.target.value)}
+                                    placeholder="Add reason for payroll treatment decision..."
+                                    className="w-full min-h-[80px] p-3 rounded-xl bg-slate-50 border border-slate-100 font-bold text-[11px] focus:bg-white transition-all outline-none"
+                                />
+                            </div>
+                        </div>
+
+                        <DialogFooter className="gap-3 sm:justify-start">
+                            <Button
+                                disabled={updatingTreatment}
+                                onClick={handleUpdateTreatment}
+                                className="flex-1 h-12 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-[9px] tracking-widest shadow-xl transition-all"
+                            >
+                                {updatingTreatment ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                                Save Decision
+                            </Button>
+                            <Button
+                                variant="outline"
+                                onClick={() => setIsTreatmentDialogOpen(false)}
+                                className="flex-1 h-12 rounded-2xl border-slate-100 font-black uppercase text-[9px] tracking-widest"
+                            >
+                                Cancel
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
 
             </div>
         </ProtectedRoute>

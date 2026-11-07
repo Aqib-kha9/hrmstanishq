@@ -12,6 +12,7 @@ import {
     ShieldCheck, CreditCard, UserCircle, CalendarCheck, Clock, Download
 } from "lucide-react";
 import { apiGet } from "@/lib/api-client";
+import { cn } from "@/lib/utils";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { salaryToWords } from "@/lib/amount-to-words";
@@ -128,14 +129,58 @@ export function GlobalRulesSheet({
 
                                 <div className="flex items-center gap-2 mb-2 pt-4 border-t border-slate-100">
                                     <div className="h-1.5 w-1.5 rounded-full bg-rose-500" />
-                                    <span className="text-[9px] font-black text-slate-900 uppercase tracking-widest">Attendance & Manual Payroll Control (Req 4.1, 4.2)</span>
+                                    <span className="text-[9px] font-black text-slate-900 uppercase tracking-widest">Attendance & Manual Payroll Control (Req 4.1, 4.2 & 10)</span>
                                 </div>
-                                <div className="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-100/90 text-[10px] text-indigo-950 leading-relaxed">
-                                    <p className="font-bold uppercase tracking-wider text-[9px] text-indigo-800">Administrative Manual Control:</p>
-                                    <p className="text-slate-600 text-[10px] mt-0.5">
-                                        Deduct a portion of leaves this month and carry forward the rest to next month, or enter a direct <strong>Payable Days Override</strong> to take complete manual authority.
+                                <div className="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-100/90 text-[10px] text-indigo-950 leading-relaxed space-y-1">
+                                    <p className="font-bold uppercase tracking-wider text-[9px] text-indigo-800">Administrative Manual Control (Req 10):</p>
+                                    <p className="text-slate-600 text-[10px]">
+                                        Pending or unapproved leaves never automatically deduct an employee&apos;s salary. As Admin/Owner, you hold complete authority over leave approval, paid/unpaid status, balance adjustment, and current vs. future-month salary deductions.
                                     </p>
                                 </div>
+
+                                {/* Active Cycle Leave Records (Req 10) */}
+                                {selectedEmployee.cycle_leaves && selectedEmployee.cycle_leaves.length > 0 && (
+                                    <div className="space-y-2 p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                                        <span className="text-[8px] font-black uppercase tracking-wider text-slate-500 block">
+                                            Leave Requests in this Cycle ({selectedEmployee.cycle_leaves.length})
+                                        </span>
+                                        <div className="space-y-2">
+                                            {selectedEmployee.cycle_leaves.map((l: any, idx: number) => {
+                                                const isPending = l.status === 'pending';
+                                                const isUnpaid = l.payroll_treatment === 'unpaid';
+                                                const isCarry = l.payroll_treatment === 'carry_forward_next';
+                                                return (
+                                                    <div key={l.id || idx} className="p-2.5 rounded-lg bg-white border border-slate-200/80 flex items-center justify-between text-[9px]">
+                                                        <div>
+                                                            <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                                                                <Badge className="text-[7px] font-black uppercase px-1.5 h-4 rounded">
+                                                                    {(l.leave_type || 'EL').toUpperCase()}
+                                                                </Badge>
+                                                                <span>{l.duration || 1} Day{l.duration > 1 ? 's' : ''}</span>
+                                                                <span className="text-slate-400 font-normal">
+                                                                    ({new Date(l.from_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })} – {new Date(l.to_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })})
+                                                                </span>
+                                                            </div>
+                                                            {l.reason && <p className="text-[8px] text-slate-500 italic mt-0.5 truncate max-w-[280px]">&ldquo;{l.reason}&rdquo;</p>}
+                                                        </div>
+                                                        <Badge className={cn(
+                                                            "text-[7px] font-black uppercase px-2 h-4 rounded border-none",
+                                                            isPending ? "bg-amber-100 text-amber-800" :
+                                                            isUnpaid ? "bg-rose-100 text-rose-800" :
+                                                            isCarry ? "bg-indigo-100 text-indigo-800" :
+                                                            "bg-emerald-100 text-emerald-800"
+                                                        )}>
+                                                            {isPending ? "Pending (No Cut)" :
+                                                             isUnpaid ? "Unpaid (LWP)" :
+                                                             isCarry ? "Carry Next" : "Paid"}
+                                                        </Badge>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="space-y-4">
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">
