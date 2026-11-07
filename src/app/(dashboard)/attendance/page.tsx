@@ -166,71 +166,6 @@ export default function AttendancePage() {
         URL.revokeObjectURL(url);
     };
 
-    // Export monthly attendance with per-day columns (Issue 2 fix)
-    // Expands the `grid` string into individual Day 1..Day N columns so the
-    // downloaded file clearly shows which days are present/absent/weekoff/holiday.
-    const exportMonthlyToCSV = (rows: any[], filename: string) => {
-        if (!rows || rows.length === 0) return;
-        const daysInMonth = rows[0]?.grid?.length || 31;
-        const baseHeaders = ["Emp Code", "Name", "Role", "Department", "Hub", "Company", "Present", "Week Off", "Leave", "Holiday", "Tour", "Absent"];
-        const dayHeaders = Array.from({ length: daysInMonth }, (_, i) => {
-            const date = cycleDates[i];
-            if (date) {
-                const yyyy = date.getFullYear();
-                const mm = String(date.getMonth() + 1).padStart(2, '0');
-                const dd = String(date.getDate()).padStart(2, '0');
-                return `${yyyy}-${mm}-${dd}`;
-            }
-            return `Day ${i + 1}`;
-        });
-        const headers = [...baseHeaders, ...dayHeaders];
-
-        const csv = [
-            headers.join(","),
-            ...rows.map((row) => {
-                const grid = row.grid || "";
-                const dayValues = Array.from({ length: daysInMonth }, (_, i) => {
-                    const ch = grid[i] || "-";
-                    // Use short forms matching the grid UI
-                    switch (ch) {
-                        case "P": return "P";
-                        case "A": return "A";
-                        case "W": return "WO";
-                        case "H": return "H";
-                        case "T": return "T";
-                        case "L": return "L";
-                        case "-": return "-";
-                        default: return ch;
-                    }
-                });
-                const baseValues = [
-                    row.id ?? "",
-                    row.name ?? "",
-                    row.role ?? "",
-                    row.department ?? "---",
-                    row.hub ?? "",
-                    row.company ?? "",
-                    row.present ?? 0,
-                    row.woff ?? 0,
-                    row.leave ?? 0,
-                    row.holiday ?? 0,
-                    row.tour ?? 0,
-                    row.absent ?? 0,
-                ];
-                const allValues = [...baseValues, ...dayValues];
-                return allValues.map((v) => `"${(v ?? "").toString().replace(/"/g, '""')}"`).join(",");
-            }),
-        ].join("\n");
-
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${filename}_${new Date().toISOString().split("T")[0]}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
-    };
-
     // Dynamic Calendar & Cycle State (Req 6.1, 6.2)
     const [cycleType, setCycleType] = useState<"payroll" | "calendar">("payroll");
     const [currentDate] = useState(new Date());
@@ -307,6 +242,71 @@ export default function AttendancePage() {
         "January", "February", "March", "April", "May", "June",
         "July", "August", "September", "October", "November", "December"
     ];
+
+    // Export monthly attendance with dynamic per-day columns (Req 6.1, 6.2, 6.4)
+    // Dynamically uses cycleDates so that:
+    // - 28/29 day February has exactly 28/29 columns
+    // - 30-day months (Apr, Jun, Sep, Nov) have exactly 30 columns (Zero phantom 31st date)
+    // - 31-day months have 31 columns
+    // - Payroll cycle (26th to 25th) correctly maps dates across month boundaries
+    const exportMonthlyToCSV = (rows: any[], filename: string) => {
+        if (!rows || rows.length === 0) return;
+        const daysInMonth = cycleDates.length;
+        const baseHeaders = ["Emp Code", "Name", "Role", "Department", "Hub", "Company", "Present", "Week Off", "Leave", "Holiday", "Tour", "Absent"];
+        const dayHeaders = cycleDates.map((date) => {
+            const yyyy = date.getFullYear();
+            const mm = String(date.getMonth() + 1).padStart(2, '0');
+            const dd = String(date.getDate()).padStart(2, '0');
+            const dayStr = dayNames[date.getDay()];
+            return `${yyyy}-${mm}-${dd} (${dayStr})`;
+        });
+        const headers = [...baseHeaders, ...dayHeaders];
+
+        const csv = [
+            headers.join(","),
+            ...rows.map((row) => {
+                const grid = row.grid || "";
+                const dayValues = cycleDates.map((_, i) => {
+                    const ch = grid[i] || "-";
+                    switch (ch) {
+                        case "P": return "P";
+                        case "A": return "A";
+                        case "W": return "WO";
+                        case "H": return "H";
+                        case "T": return "T";
+                        case "L": return "L";
+                        case "-": return "-";
+                        default: return ch;
+                    }
+                });
+                const baseValues = [
+                    row.id ?? "",
+                    row.name ?? "",
+                    row.role ?? "",
+                    row.department ?? "---",
+                    row.hub ?? "",
+                    row.company ?? "",
+                    row.present ?? 0,
+                    row.woff ?? 0,
+                    row.leave ?? 0,
+                    row.holiday ?? 0,
+                    row.tour ?? 0,
+                    row.absent ?? 0,
+                ];
+                const allValues = [...baseValues, ...dayValues];
+                return allValues.map((v) => `"${(v ?? "").toString().replace(/"/g, '""')}"`).join(",");
+            }),
+        ].join("\n");
+
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        const cycleLabel = cycleType === "payroll" ? "PayrollCycle_26-25" : "CalendarMonth";
+        a.download = `${filename}_${cycleLabel}_${monthNames[selectedMonth]}_${selectedYear}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 8;
 
@@ -409,6 +409,8 @@ export default function AttendancePage() {
             const data: any = await apiGet("/attendance/admin/monthly-all", {
                 month: selectedMonth + 1,
                 year: selectedYear,
+                cycle_type: cycleType,
+                cycle: cycleType,
                 company_id: selectedCompanyId || undefined,
                 office_id: selectedOfficeId || undefined,
                 search: monthlyDebouncedSearch || undefined,
@@ -579,6 +581,7 @@ export default function AttendancePage() {
             const data: any = await apiGet("/attendance/admin/monthly-all", {
                 month: selectedMonth + 1,
                 year: selectedYear,
+                cycle_type: cycleType,
                 cycle: cycleType,
                 company_id: selectedCompanyId || undefined,
                 office_id: selectedOfficeId || undefined,
@@ -1430,6 +1433,82 @@ export default function AttendancePage() {
                                 </h4>
                                 <span className="text-[8px] text-rose-600 font-bold uppercase">Loss of Pay Days</span>
                             </Card>
+                        </div>
+
+                        {/* Executive Month & Day Information Banner (Req 6.3) */}
+                        <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white rounded-3xl p-5 sm:p-6 shadow-md border border-slate-800/80 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+                            <div className="flex flex-wrap items-center gap-6 sm:gap-8">
+                                <div>
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block">Selected Month</span>
+                                    <div className="flex items-center gap-2.5 mt-1.5">
+                                        <div className="h-8 w-8 rounded-xl bg-white/10 flex items-center justify-center">
+                                            <Calendar className="h-4 w-4 text-[#D9F99D]" />
+                                        </div>
+                                        <div>
+                                            <span className="text-lg sm:text-xl font-black italic tracking-tight text-white block leading-none">
+                                                {monthNames[selectedMonth]} {selectedYear}
+                                            </span>
+                                            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">
+                                                {cycleType === "payroll" ? "Payroll Cycle Mode" : "Calendar Month Mode"}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="h-10 w-px bg-slate-700/60 hidden sm:block" />
+
+                                <div>
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block">Applicable Dates / Period</span>
+                                    <div className="flex items-center gap-2.5 mt-1.5">
+                                        <div className="h-8 w-8 rounded-xl bg-sky-500/10 flex items-center justify-center">
+                                            <Clock className="h-4 w-4 text-sky-400" />
+                                        </div>
+                                        <div>
+                                            <span className="text-sm sm:text-base font-black tracking-wide text-slate-100 block leading-none">
+                                                {cycleDates.length > 0
+                                                    ? `${cycleDates[0].toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} — ${cycleDates[cycleDates.length - 1].toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`
+                                                    : "---"}
+                                            </span>
+                                            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">
+                                                {cycleType === "payroll" ? "From 26th previous month to 25th current month" : "From 1st to final calendar day of month"}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="h-10 w-px bg-slate-700/60 hidden sm:block" />
+
+                                <div>
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block">Total Calendar Days</span>
+                                    <div className="flex items-center gap-2.5 mt-1.5">
+                                        <div className="h-8 w-8 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                                            <span className="text-base font-black text-emerald-400">{daysInSelectedMonth}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-base sm:text-lg font-black tracking-tight text-emerald-400 block leading-none">
+                                                {daysInSelectedMonth} Days
+                                            </span>
+                                            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">
+                                                Active Working/Calendar Period
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row items-start lg:items-end gap-2">
+                                <Badge className="bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[9px] font-black uppercase px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                                    Dynamic Grid: {daysInSelectedMonth} Columns Active
+                                </Badge>
+                                <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider">
+                                    {cycleType === "calendar" && daysInSelectedMonth === 30 && "30-day month (No phantom 31st date)"}
+                                    {cycleType === "calendar" && daysInSelectedMonth === 28 && "28-day February (Exact 28 columns)"}
+                                    {cycleType === "calendar" && daysInSelectedMonth === 29 && "Leap February (Exact 29 columns)"}
+                                    {cycleType === "calendar" && daysInSelectedMonth === 31 && "31-day month (Full 31 columns)"}
+                                    {cycleType === "payroll" && `Payroll Cycle (26th to 25th: ${daysInSelectedMonth} days)`}
+                                </span>
+                            </div>
                         </div>
 
                         <Card className="border-none shadow-sm rounded-[2.5rem] bg-white overflow-hidden">
