@@ -130,12 +130,18 @@ export function GlobalRulesSheet({
                                     <div className="h-1.5 w-1.5 rounded-full bg-rose-500" />
                                     <span className="text-[9px] font-black text-slate-900 uppercase tracking-widest">Attendance & Manual Payroll Control (Req 4.1, 4.2)</span>
                                 </div>
+                                <div className="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-100/90 text-[10px] text-indigo-950 leading-relaxed">
+                                    <p className="font-bold uppercase tracking-wider text-[9px] text-indigo-800">Administrative Manual Control:</p>
+                                    <p className="text-slate-600 text-[10px] mt-0.5">
+                                        Deduct a portion of leaves this month and carry forward the rest to next month, or enter a direct <strong>Payable Days Override</strong> to take complete manual authority.
+                                    </p>
+                                </div>
                                 <div className="space-y-4">
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">
                                             <div className="flex justify-between items-center ml-1">
-                                                <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Loss of Pay (Absent Days)</Label>
-                                                <Badge className="bg-blue-50 text-blue-600 border-none font-bold text-[7px] uppercase tracking-widest px-1.5 h-3.5">Live Sync</Badge>
+                                                <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Recorded Absences</Label>
+                                                <Badge className="bg-blue-50 text-blue-600 border-none font-bold text-[7px] uppercase tracking-widest px-1.5 h-3.5">Attendance Sync</Badge>
                                             </div>
                                             <Input
                                                 type="number"
@@ -143,13 +149,13 @@ export function GlobalRulesSheet({
                                                 value={selectedEmployee.absentDays}
                                                 className="h-10 rounded-xl bg-blue-50/30 border-blue-100/50 font-bold text-[10px] text-blue-700 cursor-not-allowed"
                                             />
-                                            <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest ml-1">Live recorded absent days</p>
+                                            <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest ml-1">Live muster absent days</p>
                                         </div>
 
                                         <div className="space-y-2">
                                             <div className="flex justify-between items-center ml-1">
-                                                <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Payable Days Override (Req 4.1)</Label>
-                                                <Badge className="bg-indigo-50 text-indigo-600 border-none font-bold text-[7px] uppercase tracking-widest px-1.5 h-3.5">Direct</Badge>
+                                                <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Direct Payable Days Override (Req 4.1)</Label>
+                                                <Badge className="bg-amber-100 text-amber-800 border-none font-bold text-[7px] uppercase tracking-widest px-1.5 h-3.5">Admin</Badge>
                                             </div>
                                             <Input
                                                 type="number"
@@ -158,7 +164,7 @@ export function GlobalRulesSheet({
                                                 onChange={(e) => handleSalaryUpdate(selectedEmployee.id, 'manualPayableDays', e.target.value === "" ? null : parseFloat(e.target.value))}
                                                 className="h-10 rounded-xl bg-slate-50 border-slate-100 font-bold text-[10px] focus:bg-white transition-all"
                                             />
-                                            <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest ml-1">Direct manual override</p>
+                                            <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest ml-1">Directly locks payable days</p>
                                         </div>
                                     </div>
 
@@ -187,7 +193,7 @@ export function GlobalRulesSheet({
                                     </div>
 
                                     <div className="space-y-2">
-                                        <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Admin Calculation Notes / Audit Reason</Label>
+                                        <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Admin Audit Reason / Note</Label>
                                         <Input
                                             placeholder="Reason for manual adjustment..."
                                             value={selectedEmployee.adminNotes ?? selectedEmployee.admin_notes ?? ""}
@@ -202,14 +208,20 @@ export function GlobalRulesSheet({
                                 <div className="absolute top-0 right-0 p-6 opacity-5">
                                     <TrendingUp className="h-20 w-20" />
                                 </div>
-                                <div className="grid grid-cols-2 gap-6 relative z-10">
+                                <div className="grid grid-cols-3 gap-4 relative z-10">
                                     <div>
-                                        <p className="text-[8px] font-black uppercase text-slate-100 tracking-[0.3em] mb-1">LOP Deduction</p>
-                                        <h4 className="text-lg font-black text-rose-400 tracking-tighter italic">₹{calculateProductionNet(selectedEmployee)?.lop?.toLocaleString()}</h4>
+                                        <p className="text-[8px] font-black uppercase text-indigo-300 tracking-[0.2em] mb-1">Payable Days</p>
+                                        <h4 className="text-xl font-black text-white tracking-tight italic">
+                                            {calculateProductionNet(selectedEmployee)?.payableDays} <span className="text-xs text-slate-400 font-normal">/ {selectedEmployee.dynamicDays || 30}</span>
+                                        </h4>
+                                    </div>
+                                    <div>
+                                        <p className="text-[8px] font-black uppercase text-rose-300 tracking-[0.2em] mb-1">LOP Deduction</p>
+                                        <h4 className="text-xl font-black text-rose-400 tracking-tight italic">₹{calculateProductionNet(selectedEmployee)?.lop?.toLocaleString()}</h4>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-[8px] font-black uppercase text-[#D9F99D] tracking-[0.3em] mb-1">Net In-Hand</p>
-                                        <h4 className="text-3xl font-black italic tracking-tighter text-white">₹{calculateProductionNet(selectedEmployee).net.toLocaleString()}</h4>
+                                        <p className="text-[8px] font-black uppercase text-[#D9F99D] tracking-[0.2em] mb-1">Net In-Hand</p>
+                                        <h4 className="text-2xl font-black italic tracking-tighter text-[#D9F99D]">₹{calculateProductionNet(selectedEmployee).net.toLocaleString()}</h4>
                                     </div>
                                 </div>
                             </div>

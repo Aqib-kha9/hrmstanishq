@@ -33,6 +33,7 @@ import {
     Clock,
     FileDown,
     LayoutList,
+    SlidersHorizontal,
     CalendarCheck,
     AlertCircle,
     UserCircle,
@@ -243,71 +244,70 @@ export default function PayrollPage() {
     }, []);
 
     const calculateProductionNet = (row: any) => {
-        // Prefer backend pre-calculated values (backend handles pro-rating & live attendance sync)
-        if (row.net !== undefined && row.net !== null) {
-            return {
-                basic: row.basic ?? 0,
-                hra: row.hra ?? 0,
-                other: row.other ?? 0,
-                proratedGross: row.proratedGross ?? 0,
-                totalEarnings: row.totalEarnings ?? 0,
-                pf: row.pf ?? 0,
-                esi: row.esi ?? 0,
-                pt: row.pt ?? 0,
-                grossDeductions: row.grossDeductions ?? 0,
-                net: row.net ?? 0,
-                pfEmployer: row.pfEmployer ?? 0,
-                esiEmployer: row.esiEmployer ?? 0,
-                totalMonthlyCTC: row.totalMonthlyCTC ?? 0,
-            };
-        }
+        const daysInMonth = Number(row.dynamicDays) || 30;
+        const elapsedDays = row.elapsedDays != null ? Math.min(Number(row.elapsedDays), daysInMonth) : daysInMonth;
 
-        // Fallback: client-side formula (used if backend values not yet available)
-        const daysInMonth = 28;
-        const payableDays = Math.max(0, daysInMonth - (row.absentDays || 0));
+        // Administrative Control & Manual Leave Adjustment (Req 4.1 & 4.2)
+        const rawAbsent = Number(row.absentDays ?? row.absent_days ?? 0);
+        const leaveAdjust = Number(row.leaveAdjustmentDays ?? row.leave_adjustment_days ?? 0);
+        const carryForward = Number(row.leaveCarryForwardDays ?? row.leave_carry_forward_days ?? 0);
 
-        // Fixed Structure
-        const fixedBasic = Math.round(row.fixedGross * 0.40);
+        const effectiveAbsentDays = Math.max(0, rawAbsent + leaveAdjust - carryForward);
+
+        const manualPayable = row.manualPayableDays ?? row.manual_payable_days;
+        const hasManualOverride = manualPayable !== null && manualPayable !== undefined && manualPayable !== "" && !isNaN(Number(manualPayable));
+        const payableDays = hasManualOverride
+            ? Math.max(0, Math.min(daysInMonth, Number(manualPayable)))
+            : Math.max(0, elapsedDays - effectiveAbsentDays);
+
+        const fixedGross = Number(row.fixedGross ?? row.fixed_gross) || 0;
+        const fixedBasic = Math.round(fixedGross * 0.40);
         const fixedHra = Math.round(fixedBasic * 0.40);
-        const fixedOther = row.fixedGross - fixedBasic - fixedHra;
+        const fixedOther = fixedGross - fixedBasic - fixedHra;
 
-        // Prorated Structure
         const basic = Math.round((fixedBasic / daysInMonth) * payableDays);
         const hra = Math.round((fixedHra / daysInMonth) * payableDays);
         const other = Math.round((fixedOther / daysInMonth) * payableDays);
-
         const proratedGross = basic + hra + other;
-        const totalEarnings = proratedGross + (row.previousArrears || 0) + (row.bonus || 0) + (row.incentive || 0);
 
-        // Deductions
+        const totalEarnings = proratedGross
+            + (Number(row.previousArrears ?? row.previous_arrears) || 0)
+            + (Number(row.bonus) || 0)
+            + (Number(row.incentive) || 0);
+
         let pf = 0;
-        if (row.pfApplicable) {
-            const pfBasic = row.pfCeiling ? Math.min(basic, 15000) : basic;
+        if (row.pfApplicable ?? row.pf_applicable) {
+            const pfBasic = (row.pfCeiling ?? row.pf_ceiling) ? Math.min(basic, 15000) : basic;
             pf = Math.round(pfBasic * 0.12);
         }
 
         let esi = 0;
-        if (row.esicApplicable) {
+        if (row.esicApplicable ?? row.esic_applicable) {
             esi = Math.ceil(totalEarnings * 0.0075);
         }
 
         let pt = 0;
-        if (proratedGross > 33333) pt = 208;
-        else if (proratedGross > 25000) pt = 167;
-        else if (proratedGross > 15000) pt = 125;
+        if ((row.ptApplicable ?? row.pt_applicable) !== false) {
+            if (proratedGross > 33333) pt = 208;
+            else if (proratedGross > 25000) pt = 167;
+            else if (proratedGross > 15000) pt = 125;
+        }
 
-        const grossDeductions = pf + esi + pt + (row.loanDeduction || 0) + (row.otherDeduction || 0);
+        const loanDeduction = Number(row.loanDeduction ?? row.loan_deduction) || 0;
+        const otherDeduction = Number(row.otherDeduction ?? row.other_deduction) || 0;
+        const grossDeductions = pf + esi + pt + loanDeduction + otherDeduction;
         const net = totalEarnings - grossDeductions;
 
-        // Employer Contribution
         const pfEmployer = pf;
-        const esiEmployer = row.esicApplicable ? Math.ceil(totalEarnings * 0.0325) : 0;
+        const esiEmployer = (row.esicApplicable ?? row.esic_applicable) ? Math.ceil(totalEarnings * 0.0325) : 0;
         const totalMonthlyCTC = totalEarnings + pfEmployer + esiEmployer;
-
-        const lop = row.fixedGross - proratedGross;
+        const lop = fixedGross - proratedGross;
 
         return {
+            fixedGross, fixedBasic, fixedHra, fixedOther,
             basic, hra, other, proratedGross, totalEarnings,
+            payableDays, effectiveAbsentDays,
+            hasManualOverride,
             pf, esi, pt, grossDeductions, net,
             pfEmployer, esiEmployer, totalMonthlyCTC, lop
         };
@@ -316,10 +316,30 @@ export default function PayrollPage() {
     const calculateNet = (row: any) => calculateProductionNet(row).net;
 
     const handleSalaryUpdate = async (id: number, field: string, value: any) => {
-        setLedger(prev => prev.map(emp => emp.id === id ? { ...emp, [field]: value } : emp));
+        setLedger(prev => prev.map(emp => {
+            if (emp.id !== id) return emp;
+            const updated = { ...emp, [field]: value };
+            if (field === 'manualPayableDays') updated.manual_payable_days = value;
+            if (field === 'leaveAdjustmentDays') updated.leave_adjustment_days = value;
+            if (field === 'leaveCarryForwardDays') updated.leave_carry_forward_days = value;
+            if (field === 'adminNotes') updated.admin_notes = value;
+            return updated;
+        }));
+        setSelectedEmployee((prev: any) => {
+            if (!prev || prev.id !== id) return prev;
+            const updated = { ...prev, [field]: value };
+            if (field === 'manualPayableDays') updated.manual_payable_days = value;
+            if (field === 'leaveAdjustmentDays') updated.leave_adjustment_days = value;
+            if (field === 'leaveCarryForwardDays') updated.leave_carry_forward_days = value;
+            if (field === 'adminNotes') updated.admin_notes = value;
+            return updated;
+        });
         try {
             const backendField = field.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-            await apiPatch(`/payroll/entry/${id}`, { [backendField]: value });
+            const res = await apiPatch<any>(`/payroll/entry/${id}`, { [backendField]: value });
+            if (res && res.data) {
+                setLedger(prev => prev.map(emp => emp.id === id ? { ...emp, ...res.data } : emp));
+            }
         } catch (e) {
             console.error("Failed to update entry:", e);
         }
@@ -767,9 +787,14 @@ export default function PayrollPage() {
                                             </TableCell>
                                             <TableCell className="text-xs font-black text-slate-900">
                                                 <div className="flex flex-col gap-0.5">
-                                                    <span className="text-[9px] font-bold text-slate-500">Muster: <strong className="text-slate-900">{row.total_muster_days ?? 30}</strong></span>
-                                                    <span className="text-[9px] font-bold text-emerald-600">Payable: <strong className="text-emerald-700">{row.payable_days ?? (30 - (row.absentDays || 0))}</strong></span>
-                                                    <span className="text-[9px] font-bold text-rose-500">LWP: <strong className="text-rose-600">{row.lwp_days ?? row.absentDays ?? 0}</strong></span>
+                                                    <span className="text-[9px] font-bold text-slate-500">Muster: <strong className="text-slate-900">{row.total_muster_days ?? row.totalMusterDays ?? 30}</strong></span>
+                                                    <span className="text-[9px] font-bold text-emerald-600 flex items-center gap-1">
+                                                        Payable: <strong className="text-emerald-700">{pNet.payableDays}</strong>
+                                                        {pNet.hasManualOverride && (
+                                                            <Badge className="bg-amber-100 text-amber-800 border-none font-black text-[7px] px-1 h-3.5 rounded uppercase tracking-wider">Manual</Badge>
+                                                        )}
+                                                    </span>
+                                                    <span className="text-[9px] font-bold text-rose-500">LWP: <strong className="text-rose-600">{pNet.effectiveAbsentDays}</strong></span>
                                                 </div>
                                             </TableCell>
                                             <TableCell className="text-xs font-black text-slate-900">
@@ -834,18 +859,20 @@ export default function PayrollPage() {
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                             </TableCell>
-                                            <TableCell className="text-left w-[180px]">
+                                            <TableCell className="text-left w-[240px]">
                                                 <div className="flex items-center justify-start gap-1.5">
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
-                                                        className="h-8 w-8 rounded-lg border-slate-100 p-0 hover:bg-slate-50"
+                                                        className="h-8 px-2.5 rounded-lg border-indigo-200 bg-indigo-50/50 hover:bg-indigo-100 text-indigo-700 font-bold text-[10px] gap-1.5 shadow-xs transition-all"
                                                         onClick={() => {
                                                             setSelectedEmployee(row);
                                                             setIsConfigOpen(true);
                                                         }}
+                                                        title="Review & Adjust Leave / Payable Days"
                                                     >
-                                                        <LayoutList className="h-4 w-4 text-slate-400" />
+                                                        <SlidersHorizontal className="h-3.5 w-3.5 text-indigo-600" />
+                                                        <span>Adjust</span>
                                                     </Button>
                                                     <Button
                                                         variant="outline"
