@@ -4,7 +4,7 @@ import { useRole } from "@/context/RoleContext";
 import MonthYearPicker from "@/components/MonthYearPicker";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { apiGet, apiPost } from "@/lib/api-client";
+import { apiGet, apiPost, apiPut } from "@/lib/api-client";
 import dynamic from "next/dynamic";
 import {
     Clock,
@@ -43,6 +43,8 @@ import {
     Info,
     Building2,
     Plane,
+    Compass,
+    Sliders,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -98,20 +100,40 @@ export default function AttendancePage() {
     const [selectedDepartment, setSelectedDepartment] = useState("");
     const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Fetch companies, offices and departments for filter dropdowns
+    // Fetch companies, offices, departments and late threshold for filter dropdowns (Req 5.3)
     useEffect(() => {
         Promise.all([
             apiGet<{ id: number; name: string }[]>("/companies"),
             apiGet<{ id: number; name: string }[]>("/offices", { limit: 100 }),
             apiGet<string[]>("/leave/departments"),
+            apiGet<any>("/config/late-threshold").catch(() => null),
         ])
-            .then(([compRes, offRes, deptRes]) => {
+            .then(([compRes, offRes, deptRes, lateRes]) => {
                 setCompanies(Array.isArray(compRes) ? compRes : []);
                 setOffices(Array.isArray(offRes) ? offRes : []);
                 setDepartments(Array.isArray(deptRes) ? deptRes : []);
+                if (lateRes && lateRes.lateThresholdMinutes) {
+                    setLateThresholdMinutes(lateRes.lateThresholdMinutes);
+                    setTempLateThreshold(lateRes.lateThresholdMinutes);
+                }
             })
             .catch(() => { setCompanies([]); setOffices([]); setDepartments([]); });
     }, []);
+
+    const handleUpdateLateThreshold = async (minutes: number) => {
+        setLateThresholdSaving(true);
+        try {
+            await apiPut("/config/late-threshold", { lateThresholdMinutes: minutes });
+            setLateThresholdMinutes(minutes);
+            setTempLateThreshold(minutes);
+            setIsLateThresholdOpen(false);
+        } catch (err: any) {
+            console.error("Failed to update late threshold:", err);
+            alert(err?.response?.data?.message || "Failed to update late threshold.");
+        } finally {
+            setLateThresholdSaving(false);
+        }
+    };
 
     // Debounced search
     const handleSearchChange = (value: string) => {
@@ -297,14 +319,22 @@ export default function AttendancePage() {
         setIsMapOpen(true);
     };
 
-    // Manual Attendance State (Req 5.1, 5.2)
+    // Manual & Authorized Attendance State (Req 5.1, 5.2)
     const [isManualEntryOpen, setIsManualEntryOpen] = useState(false);
     const [manualEmpId, setManualEmpId] = useState("");
     const [manualDate, setManualDate] = useState("");
     const [manualStatus, setManualStatus] = useState("Present");
     const [manualReason, setManualReason] = useState("");
     const [manualIsOutdoor, setManualIsOutdoor] = useState(false);
+    const [manualCheckInTime, setManualCheckInTime] = useState("");
+    const [manualCheckOutTime, setManualCheckOutTime] = useState("");
     const [manualSubmitting, setManualSubmitting] = useState(false);
+
+    // Late Attendance Threshold State (Req 5.3)
+    const [lateThresholdMinutes, setLateThresholdMinutes] = useState(60);
+    const [isLateThresholdOpen, setIsLateThresholdOpen] = useState(false);
+    const [tempLateThreshold, setTempLateThreshold] = useState(60);
+    const [lateThresholdSaving, setLateThresholdSaving] = useState(false);
 
     // Tour Management State
     const [isTourOpen, setIsTourOpen] = useState(false);
@@ -577,17 +607,21 @@ export default function AttendancePage() {
     useEffect(() => { if (activeTab === "history") { setHistoryPage(1); fetchHistory(1); } }, [historyFrom, historyTo, selectedCompanyId, selectedOfficeId, historyDebouncedSearch, selectedDepartment]);
     useEffect(() => { if (activeTab === "monthly") fetchMonthly(); }, [activeTab, selectedMonth, selectedYear, cycleType, fetchMonthly]);
 
-    // Manual entry submit
+    // Manual & Authorized entry submit (Req 5.1 & 5.2)
     const handleManualSubmit = async () => {
         if (!manualEmpId || !manualDate || !manualStatus) return;
         setManualSubmitting(true);
         try {
+            const isOutdoorDuty = manualIsOutdoor || manualStatus === "Present - Outdoor";
+            const normalizedStatus = manualStatus === "Present - Outdoor" ? "Present" : manualStatus;
             await apiPost("/attendance/admin/manual-entry", {
                 employeeId: manualEmpId,
                 date: manualDate,
-                status: manualStatus,
+                status: normalizedStatus,
                 reason: manualReason,
-                is_outdoor: manualIsOutdoor,
+                is_outdoor: isOutdoorDuty,
+                check_in_time: manualCheckInTime || undefined,
+                check_out_time: manualCheckOutTime || undefined,
             });
             setIsManualEntryOpen(false);
             setManualEmpId("");
@@ -595,6 +629,8 @@ export default function AttendancePage() {
             setManualStatus("Present");
             setManualReason("");
             setManualIsOutdoor(false);
+            setManualCheckInTime("");
+            setManualCheckOutTime("");
             if (activeTab === "live") fetchLiveAttendance();
             if (activeTab === "history") fetchHistory();
             if (activeTab === "monthly") fetchMonthly();
@@ -658,18 +694,40 @@ export default function AttendancePage() {
                         <p className="text-[10px] font-bold text-slate-400 mt-4 uppercase tracking-[0.2em]">Real-time GPS Monitoring & Deep Intelligence</p>
                     </div>
 
-                    <div className="flex items-center gap-4">
+                    <div className="flex flex-wrap items-center gap-3">
+                        {/* Late Attendance Rule / Config Trigger (Req 5.3) */}
+                        <Button
+                            onClick={() => {
+                                setTempLateThreshold(lateThresholdMinutes);
+                                setIsLateThresholdOpen(true);
+                            }}
+                            variant="outline"
+                            className="border-amber-200 bg-amber-50/70 hover:bg-amber-100 text-amber-900 font-black uppercase text-[9px] tracking-widest px-4 h-11 rounded-2xl shadow-xs transition-all gap-2"
+                            title="Configure Late Attendance Threshold Rule (Req 5.3)"
+                        >
+                            <Clock className="h-4 w-4 text-amber-600" />
+                            <span>Late Rule: {lateThresholdMinutes}m</span>
+                        </Button>
                         <Button
                             onClick={() => setIsTourOpen(true)}
-                            className="bg-indigo-600 text-white hover:bg-indigo-700 font-black uppercase text-[9px] tracking-widest px-6 h-11 rounded-2xl shadow-md transition-all hover:translate-y-[-2px]"
+                            className="bg-indigo-600 text-white hover:bg-indigo-700 font-black uppercase text-[9px] tracking-widest px-5 h-11 rounded-2xl shadow-md transition-all hover:translate-y-[-2px]"
                         >
                             <Plane className="h-4 w-4 mr-2 text-[#D9F99D]" /> Mark Tour
                         </Button>
                         <Button
-                            onClick={() => setIsManualEntryOpen(true)}
-                            className="bg-slate-900 text-white hover:bg-black font-black uppercase text-[9px] tracking-widest px-6 h-11 rounded-2xl shadow-md transition-all hover:translate-y-[-2px]"
+                            onClick={() => {
+                                setManualEmpId("");
+                                setManualDate(new Date().toISOString().split('T')[0]);
+                                setManualStatus("Present");
+                                setManualReason("");
+                                setManualIsOutdoor(false);
+                                setManualCheckInTime("10:00");
+                                setManualCheckOutTime("19:00");
+                                setIsManualEntryOpen(true);
+                            }}
+                            className="bg-slate-900 text-white hover:bg-black font-black uppercase text-[9px] tracking-widest px-5 h-11 rounded-2xl shadow-md transition-all hover:translate-y-[-2px]"
                         >
-                            <UserPlus className="h-4 w-4 mr-2 text-[#D9F99D]" /> Manual Entry
+                            <UserCheck className="h-4 w-4 mr-2 text-[#D9F99D]" /> Authorized Mark
                         </Button>
                         <div className="flex bg-slate-100 p-1 rounded-2xl">
                             <Button
@@ -886,9 +944,17 @@ export default function AttendancePage() {
                                                             <span className="text-[10px] font-black text-slate-700 italic">IN: {log.punchIn}</span>
                                                             <span className="text-[10px] font-black text-slate-400 italic">OUT: {log.punchOut}</span>
                                                         </div>
-                                                        <div className="flex items-center gap-1.5 opacity-60">
-                                                            <Smartphone className="h-2.5 w-2.5 text-slate-400" />
-                                                            <span className="text-[8px] font-bold uppercase tracking-widest text-slate-400">{log.device}</span>
+                                                        <div className="flex items-center gap-1.5">
+                                                            {log.isOutdoor ? (
+                                                                <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200/60 font-black text-[7px] px-1.5 h-4 rounded uppercase tracking-wider flex items-center gap-1 shadow-xs">
+                                                                    <Compass className="h-2.5 w-2.5 text-emerald-600" /> Outdoor Duty
+                                                                </Badge>
+                                                            ) : (
+                                                                <div className="flex items-center gap-1.5 opacity-60">
+                                                                    <Smartphone className="h-2.5 w-2.5 text-slate-400" />
+                                                                    <span className="text-[8px] font-bold uppercase tracking-widest text-slate-400">{log.device}</span>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </td>
@@ -923,8 +989,19 @@ export default function AttendancePage() {
                                                     </div>
                                                 </td>
                                                 <td className="py-5 px-8">
-                                                    <div className="space-y-1.5">
-                                                        <span className="text-[9px] font-bold text-slate-400 italic">No special remarks</span>
+                                                    <div className="space-y-1">
+                                                        {log.remarks ? (
+                                                            <p className="text-[9px] font-bold text-slate-700 leading-tight max-w-[200px] truncate" title={log.remarks}>
+                                                                {log.remarks}
+                                                            </p>
+                                                        ) : (
+                                                            <span className="text-[9px] font-bold text-slate-300 italic">No remarks</span>
+                                                        )}
+                                                        {log.markedBy && (
+                                                            <Badge className="bg-indigo-50 text-indigo-700 border-none font-bold text-[7px] px-1.5 h-3.5 rounded uppercase tracking-wider block w-fit">
+                                                                Authorized by {log.markedBy.name}
+                                                            </Badge>
+                                                        )}
                                                     </div>
                                                 </td>
                                                 <td className="py-5 px-8">
@@ -1651,55 +1728,91 @@ export default function AttendancePage() {
                 )}
             </div>
 
-            {/* Manual Attendance Entry Dialog */}
+            {/* Authorized Attendance & Outdoor Duty Dialog (Req 5.1 & 5.2) */}
             <Dialog open={isManualEntryOpen} onOpenChange={setIsManualEntryOpen}>
-                <DialogContent className="sm:max-w-[425px] rounded-[2rem] p-0 overflow-hidden bg-white border-none shadow-2xl">
+                <DialogContent className="sm:max-w-[500px] rounded-[2rem] p-0 overflow-hidden bg-white border-none shadow-2xl">
                     <div className="bg-slate-900 p-8 text-center relative overflow-hidden">
-                        <div className="absolute top-0 right-0 p-6 opacity-10">
-                            <ShieldCheck className="h-24 w-24 text-white" />
+                        <div className="absolute inset-0 opacity-10">
+                            <div className="absolute inset-0 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]" />
                         </div>
                         <div className="relative z-10 flex flex-col items-center">
-                            <div className="h-14 w-14 bg-white/10 rounded-2xl flex items-center justify-center mb-4">
+                            <div className="h-14 w-14 bg-white/10 rounded-2xl flex items-center justify-center mb-3">
                                 <UserCheck className="h-7 w-7 text-[#D9F99D]" />
                             </div>
-                            <DialogTitle className="text-2xl font-black italic uppercase tracking-tighter text-white">Manual Override</DialogTitle>
-                            <DialogDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">
-                                Admin Privileged Action & Authorized Marking
+                            <DialogTitle className="text-2xl font-black italic uppercase tracking-tighter text-white">Authorized Marking</DialogTitle>
+                            <DialogDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                                Mark Attendance on Employee's Behalf & Outdoor Duty
                             </DialogDescription>
                         </div>
                     </div>
 
-                    <div className="p-8 space-y-5">
-                        <div className="space-y-2">
-                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Employee ID</Label>
+                    <div className="p-8 space-y-4">
+                        <div className="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-100 text-[10px] text-indigo-950">
+                            <p className="font-bold">Administrative Access Control (Req 5.1 & 5.2):</p>
+                            <p className="text-slate-600 text-[9px] mt-0.5">
+                                Logged under your authorized credentials with audit history. For outdoor duties or field operations, geofence checks are automatically bypassed.
+                            </p>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Employee Code or Numeric ID</Label>
                             <Input
-                                placeholder="e.g. EMP005"
+                                placeholder="e.g. EMP118196 or 6"
                                 value={manualEmpId}
                                 onChange={(e) => setManualEmpId(e.target.value)}
-                                className="h-12 rounded-xl bg-slate-50 border-none font-bold text-xs uppercase"
+                                className="h-11 rounded-xl bg-slate-50 border-none font-bold text-xs uppercase"
                             />
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
                                 <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Date</Label>
                                 <Input
                                     type="date"
                                     value={manualDate}
                                     onChange={(e) => setManualDate(e.target.value)}
-                                    className="h-12 rounded-xl bg-slate-50 border-none font-bold text-xs uppercase"
+                                    className="h-11 rounded-xl bg-slate-50 border-none font-bold text-xs uppercase"
                                 />
                             </div>
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                                 <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Status</Label>
                                 <select
                                     value={manualStatus}
-                                    onChange={(e) => setManualStatus(e.target.value)}
-                                    className="h-12 w-full px-3 rounded-xl bg-slate-50 border-none font-bold text-[10px] uppercase outline-none focus:ring-2 ring-indigo-100"
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        setManualStatus(val);
+                                        if (val === "Present - Outdoor") {
+                                            setManualIsOutdoor(true);
+                                        }
+                                    }}
+                                    className="h-11 w-full px-3 rounded-xl bg-slate-50 border-none font-bold text-[10px] uppercase outline-none focus:ring-2 ring-indigo-100"
                                 >
-                                    <option value="Present">Present</option>
-                                    <option value="Absent">Absent</option>
+                                    <option value="Present">Present (Standard In-Office)</option>
+                                    <option value="Present - Outdoor">Present (Outdoor / Field Duty)</option>
+                                    <option value="Late">Late Arrival</option>
                                     <option value="Half Day">Half Day</option>
+                                    <option value="Absent">Absent</option>
                                 </select>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Check-In Time</Label>
+                                <Input
+                                    type="time"
+                                    value={manualCheckInTime}
+                                    onChange={(e) => setManualCheckInTime(e.target.value)}
+                                    className="h-10 rounded-xl bg-slate-50 border-none font-bold text-xs"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Check-Out Time</Label>
+                                <Input
+                                    type="time"
+                                    value={manualCheckOutTime}
+                                    onChange={(e) => setManualCheckOutTime(e.target.value)}
+                                    className="h-10 rounded-xl bg-slate-50 border-none font-bold text-xs"
+                                />
                             </div>
                         </div>
 
@@ -1713,42 +1826,112 @@ export default function AttendancePage() {
                                 className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                             />
                             <div className="flex flex-col cursor-pointer">
-                                <label htmlFor="manualIsOutdoor" className="text-[10px] font-black uppercase tracking-wider text-slate-900 cursor-pointer">
-                                    Outdoor / Field Duty Punch
+                                <label htmlFor="manualIsOutdoor" className="text-[10px] font-black uppercase tracking-wider text-slate-900 cursor-pointer flex items-center gap-1.5">
+                                    <Compass className="h-3 w-3 text-emerald-600" /> Outdoor / Field Duty Punch
                                 </label>
-                                <span className="text-[8px] font-bold text-slate-400">Bypasses office geofence verification</span>
+                                <span className="text-[8px] font-bold text-slate-400">Bypasses office geofence verification (for client visits, audits, site work)</span>
                             </div>
                         </div>
 
-                        <div className="space-y-2">
-                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Authorized Reason & Log</Label>
+                        <div className="space-y-1.5">
+                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Authorized Reason / Audit Rationale</Label>
                             <textarea
-                                placeholder="Provide detailed reason for manual entry or outdoor duty..."
+                                placeholder="State reason for marking on behalf (e.g. Client site meeting at Delhi Branch, field duty authorization)..."
                                 value={manualReason}
                                 onChange={(e) => setManualReason(e.target.value)}
-                                className="w-full h-20 p-4 rounded-xl bg-slate-50 border-none font-bold text-xs resize-none outline-none focus:ring-2 ring-indigo-100"
+                                className="w-full h-18 p-3 rounded-xl bg-slate-50 border-none font-bold text-xs resize-none outline-none focus:ring-2 ring-indigo-100"
                             />
                         </div>
                     </div>
 
                     <div className="p-6 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
                         <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
-                            <Info className="h-3 w-3" /> Logged as Admin
+                            <ShieldCheck className="h-3.5 w-3.5 text-indigo-500" /> Recorded in Audit Log
                         </span>
                         <div className="flex gap-3">
                             <Button variant="ghost" onClick={() => setIsManualEntryOpen(false)} className="text-[9px] font-black uppercase tracking-widest text-slate-500 rounded-xl hover:bg-slate-200">Cancel</Button>
                             <Button onClick={handleManualSubmit} disabled={manualSubmitting} className="bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-[9px] tracking-widest rounded-xl px-6 shadow-md transition-all hover:translate-y-[-2px] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0">
-                                {manualSubmitting ? (
-                                    <span className="flex items-center gap-2">
-                                        <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                        </svg>
-                                        Submitting...
-                                    </span>
-                                ) : (
-                                    "Submit"
-                                )}
+                                {manualSubmitting ? "Submitting..." : "Authorize Entry"}
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Late Attendance Policy & Threshold Dialog (Req 5.3) */}
+            <Dialog open={isLateThresholdOpen} onOpenChange={setIsLateThresholdOpen}>
+                <DialogContent className="sm:max-w-[460px] rounded-[2rem] p-0 overflow-hidden bg-white border-none shadow-2xl">
+                    <div className="bg-amber-500 p-8 text-center relative overflow-hidden">
+                        <div className="absolute inset-0 opacity-10">
+                            <div className="absolute inset-0 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]" />
+                        </div>
+                        <div className="relative z-10 flex flex-col items-center">
+                            <div className="h-14 w-14 bg-white/20 rounded-2xl flex items-center justify-center mb-3">
+                                <Clock className="h-7 w-7 text-white" />
+                            </div>
+                            <DialogTitle className="text-2xl font-black italic uppercase tracking-tighter text-white">Late Attendance Rule</DialogTitle>
+                            <DialogDescription className="text-[10px] font-bold text-amber-100 uppercase tracking-widest mt-1">
+                                Configurable Grace Period Threshold (Req 5.3)
+                            </DialogDescription>
+                        </div>
+                    </div>
+
+                    <div className="p-8 space-y-5">
+                        <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/60 text-[10px] text-amber-950 leading-relaxed">
+                            <p className="font-bold">Threshold Calculation Logic:</p>
+                            <p className="text-slate-600 text-[10px] mt-0.5">
+                                Employees punching in up to <strong>{tempLateThreshold} minutes</strong> ({Math.round((tempLateThreshold / 60) * 10) / 10} hours) after their shift start time are treated within grace. Any punch beyond this threshold is automatically categorized as <strong>Late</strong>.
+                            </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Select Standard Grace Buffer</Label>
+                            <div className="grid grid-cols-3 gap-2">
+                                {[15, 30, 45, 60, 90, 120].map((mins) => (
+                                    <Button
+                                        key={mins}
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() => setTempLateThreshold(mins)}
+                                        className={cn(
+                                            "h-11 rounded-xl font-black text-xs transition-all",
+                                            tempLateThreshold === mins
+                                                ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+                                                : "bg-slate-50 border-slate-100 text-slate-700 hover:bg-slate-100"
+                                        )}
+                                    >
+                                        {mins} mins {mins === 60 ? "(1 hr)" : mins === 120 ? "(2 hrs)" : ""}
+                                    </Button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Custom Threshold (Minutes)</Label>
+                            <Input
+                                type="number"
+                                min={0}
+                                max={360}
+                                value={tempLateThreshold}
+                                onChange={(e) => setTempLateThreshold(Math.max(0, parseInt(e.target.value) || 0))}
+                                className="h-11 rounded-xl bg-slate-50 border-none font-bold text-xs"
+                            />
+                            <p className="text-[8px] font-bold text-slate-400 ml-1">Company standard: 60 minutes (1 hour) grace window</p>
+                        </div>
+                    </div>
+
+                    <div className="p-6 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">
+                            Current: {lateThresholdMinutes} mins
+                        </span>
+                        <div className="flex gap-3">
+                            <Button variant="ghost" onClick={() => setIsLateThresholdOpen(false)} className="text-[9px] font-black uppercase tracking-widest text-slate-500 rounded-xl hover:bg-slate-200">Cancel</Button>
+                            <Button
+                                onClick={() => handleUpdateLateThreshold(tempLateThreshold)}
+                                disabled={lateThresholdSaving}
+                                className="bg-slate-900 hover:bg-black text-[#D9F99D] font-black uppercase text-[9px] tracking-widest rounded-xl px-6 shadow-md transition-all disabled:opacity-50"
+                            >
+                                {lateThresholdSaving ? "Saving..." : "Save Late Rule"}
                             </Button>
                         </div>
                     </div>
