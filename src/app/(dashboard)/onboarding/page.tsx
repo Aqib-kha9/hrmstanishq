@@ -454,14 +454,18 @@ function OnboardingForm() {
         bank_name?: string;
         ifsc_code?: string;
     } | null>(null);
+    const [imgPreviewError, setImgPreviewError] = useState(false);
 
     const getDocPreviewUrl = (url?: string) => {
         if (!url) return "";
         if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) {
             return url;
         }
-        const backendBase = process.env.NEXT_PUBLIC_API_URL?.replace("/api/v1", "") || "http://localhost:5000";
-        return `${backendBase}${url.startsWith("/") ? "" : "/"}${url}`;
+        const backendBase = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000")
+            .replace(/\/api\/v1\/?$/, "")
+            .replace(/\/+$/, "");
+        const cleanPath = url.startsWith("/") ? url : `/${url}`;
+        return `${backendBase}${cleanPath}`;
     };
 
     // ── Resigned Conflict Warning State (Req 23) ──
@@ -2709,7 +2713,8 @@ function OnboardingForm() {
                                                             type="button"
                                                             size="sm"
                                                             variant="outline"
-                                                            onClick={() =>
+                                                            onClick={() => {
+                                                                setImgPreviewError(false);
                                                                 setPreviewDoc({
                                                                     ...doc,
                                                                     candidate_name: reviewCandidate.candidate_name || reviewCandidate.email,
@@ -2718,8 +2723,8 @@ function OnboardingForm() {
                                                                     bank_account_number: reviewCandidate.submitted_data?.bank_account_number,
                                                                     bank_name: reviewCandidate.submitted_data?.bank_name,
                                                                     ifsc_code: reviewCandidate.submitted_data?.ifsc_code,
-                                                                })
-                                                            }
+                                                                });
+                                                            }}
                                                             className="h-7 px-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200 font-bold text-xs flex items-center gap-1 shadow-none transition-all cursor-pointer"
                                                         >
                                                             <Eye className="h-3.5 w-3.5" />
@@ -3111,22 +3116,47 @@ function OnboardingForm() {
                                             title={previewDoc.filename}
                                             className="w-full h-[520px] rounded-xl border border-slate-200 bg-white"
                                         />
+                                    ) : imgPreviewError ? (
+                                        <div className="flex flex-col items-center justify-center p-8 text-center space-y-3 bg-white rounded-xl border border-dashed border-slate-300 w-full min-h-[300px]">
+                                            <div className="h-14 w-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-inner">
+                                                <FileText className="h-7 w-7" />
+                                            </div>
+                                            <div className="space-y-1 max-w-[380px]">
+                                                <p className="text-sm font-bold text-slate-800 break-words">{previewDoc.filename}</p>
+                                                <p className="text-xs text-slate-500">
+                                                    Image preview is not directly embeddable. Use the buttons below to open or download the document:
+                                                </p>
+                                            </div>
+                                            <div className="flex items-center gap-2 pt-2">
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        const targetUrl = getDocPreviewUrl(previewDoc.file_url);
+                                                        window.open(targetUrl, "_blank");
+                                                    }}
+                                                    className="h-8 px-4 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5"
+                                                >
+                                                    <ExternalLink className="h-3.5 w-3.5" />
+                                                    <span>Open Full File</span>
+                                                </Button>
+                                                <a
+                                                    href={getDocPreviewUrl(previewDoc.file_url)}
+                                                    download={previewDoc.filename}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="inline-flex items-center gap-1.5 h-8 px-4 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors border border-slate-200"
+                                                >
+                                                    <Download className="h-3.5 w-3.5" />
+                                                    <span>Download</span>
+                                                </a>
+                                            </div>
+                                        </div>
                                     ) : (
                                         <img
                                             src={getDocPreviewUrl(previewDoc.file_url)}
                                             alt={previewDoc.filename}
-                                            crossOrigin="anonymous"
-                                            onError={(e) => {
-                                                const target = e.currentTarget;
-                                                if (!target.dataset.triedFallback) {
-                                                    target.dataset.triedFallback = "true";
-                                                    if (target.src.includes(":5000/uploads/")) {
-                                                        target.src = target.src.replace("http://localhost:5000", "");
-                                                    } else if (!target.src.includes(":5000") && target.src.includes("/uploads/")) {
-                                                        target.src = `http://localhost:5000${previewDoc.file_url?.startsWith("/") ? "" : "/"}${previewDoc.file_url}`;
-                                                    }
-                                                }
-                                            }}
+                                            onError={() => setImgPreviewError(true)}
                                             className="max-h-[500px] w-auto max-w-full object-contain rounded-xl shadow-md border border-slate-200/80 bg-white"
                                         />
                                     )}
