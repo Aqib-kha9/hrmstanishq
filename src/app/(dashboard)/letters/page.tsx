@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   FileType, FileText, Download, Eye,
   CheckCircle2, Search, Clock, FileSignature, ArrowUpRight, Mail,
-  Loader2, AlertCircle, Send, Pencil, X, Save, RefreshCw
+  Loader2, AlertCircle, Send, Pencil, X, Save, RefreshCw,
+  Plus, Trash2, History, UserCheck, Briefcase, Building2, Sparkles, Phone, ExternalLink
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,9 +17,9 @@ import {
 } from "@/components/ui/dialog";
 import { LetterPreview, typeAccentMap } from "./templateDesigns";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { apiGet, apiPost } from "@/lib/api-client";
+import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api-client";
 
-const cn = (...classes: string[]) => classes.filter(Boolean).join(" ");
+const cn = (...classes: (string | boolean | undefined | null)[]) => classes.filter(Boolean).join(" ");
 
 type TemplateItem = {
   id: number;
@@ -39,10 +40,11 @@ type EmployeeOption = {
   emp_code: string;
   department?: string;
   designation?: string;
+  email?: string;
 };
 
 type PreviewEmployee = {
-  id: number;
+  id: number | string;
   name: string;
   emp_code: string;
   designation: string;
@@ -64,7 +66,47 @@ type PreviewData = {
     variant_count: number;
   };
   employee: PreviewEmployee;
+  signatory?: {
+    id: number;
+    name: string;
+    designation: string;
+    signature_url?: string;
+  } | null;
   content: string;
+};
+
+type IssuedLetter = {
+  id: number;
+  employee_id: number | null;
+  candidate_name: string | null;
+  candidate_email: string | null;
+  candidate_phone: string | null;
+  type: string;
+  title: string;
+  content: string | null;
+  issued_date: string;
+  status: "draft" | "issued" | "acknowledged" | "revoked";
+  pdf_url?: string | null;
+  signatory_id?: number | null;
+  issuedTo?: {
+    id: number;
+    emp_code: string;
+    name: string;
+    department?: string;
+    designation?: string;
+    email?: string;
+  } | null;
+  signatory?: {
+    id: number;
+    name: string;
+    designation: string;
+    signature_url?: string;
+  } | null;
+  issuedBy?: {
+    id: number;
+    emp_code: string;
+    name: string;
+  } | null;
 };
 
 const TYPE_LABEL_MAP: Record<string, string> = {
@@ -72,12 +114,23 @@ const TYPE_LABEL_MAP: Record<string, string> = {
   appointment: "Appointment Letter",
   promotion: "Promotion Letter",
   transfer: "Transfer Letter",
-  resignation: "Resignation Letter",
-  experience: "Experience Letter",
+  resignation: "Resignation Acceptance",
+  experience: "Experience Certificate",
   relieving: "Relieving Letter",
   warning: "Warning Letter",
   "non-performance": "Non-Performance Letter",
-  absenteeism: "Absenteeism Letter",
+  absenteeism: "Absenteeism Warning",
+};
+
+const TYPE_BADGE_STYLE: Record<string, string> = {
+  offer: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  appointment: "bg-blue-50 text-blue-700 border-blue-200",
+  promotion: "bg-purple-50 text-purple-700 border-purple-200",
+  transfer: "bg-amber-50 text-amber-700 border-amber-200",
+  warning: "bg-rose-50 text-rose-700 border-rose-200",
+  resignation: "bg-slate-100 text-slate-700 border-slate-200",
+  experience: "bg-cyan-50 text-cyan-700 border-cyan-200",
+  relieving: "bg-teal-50 text-teal-700 border-teal-200",
 };
 
 const variantMeta = [
@@ -88,8 +141,36 @@ const variantMeta = [
   { id: 5, label: "Classic Formal", desc: "Double-border frame · Old-world look" },
 ];
 
+const AVAILABLE_PLACEHOLDERS = [
+  { tag: "[Employee_Name]", desc: "Full Name" },
+  { tag: "[Job_Title]", desc: "Designation" },
+  { tag: "[Department]", desc: "Department" },
+  { tag: "[Office_Location]", desc: "Office / Branch" },
+  { tag: "[Company_Name]", desc: "Company Legal Name" },
+  { tag: "[Start_Date]", desc: "Effective / Start Date" },
+  { tag: "[Joining_Date]", desc: "Date of Joining" },
+  { tag: "[Salary]", desc: "Monthly Gross" },
+  { tag: "[Salary_Annual]", desc: "Annual Gross" },
+  { tag: "[CTC]", desc: "Monthly CTC" },
+  { tag: "[CTC_Annual]", desc: "Annual CTC" },
+  { tag: "[Basic_Salary]", desc: "Monthly Basic (40%)" },
+  { tag: "[HRA]", desc: "Monthly HRA" },
+  { tag: "[Special_Allowance]", desc: "Special Allowance" },
+  { tag: "[PF_Employee]", desc: "Employee PF Deduction" },
+  { tag: "[ESI_Employee]", desc: "Employee ESIC Deduction" },
+  { tag: "[Professional_Tax]", desc: "Professional Tax (PT)" },
+  { tag: "[Total_Deductions]", desc: "Total Monthly Deductions" },
+  { tag: "[Net_Take_Home]", desc: "Net Take-Home Pay" },
+  { tag: "[PF_Employer]", desc: "Employer PF Contribution" },
+  { tag: "[ESI_Employer]", desc: "Employer ESIC Contribution" },
+  { tag: "[Signatory_Name]", desc: "Signatory Name" },
+  { tag: "[Signatory_Designation]", desc: "Signatory Role" },
+];
+
 export default function LettersPage() {
+  const [activeTab, setActiveTab] = useState<"templates" | "history">("templates");
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateItem | null>(null);
   const [selectedVariant, setSelectedVariant] = useState(1);
   const [selectedEmployee, setSelectedEmployee] = useState<string>("");
@@ -101,17 +182,40 @@ export default function LettersPage() {
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [signatories, setSignatories] = useState<any[]>([]);
-  const [letters, setLetters] = useState<any[]>([]);
+  const [letters, setLetters] = useState<IssuedLetter[]>([]);
+  const [lettersLoading, setLettersLoading] = useState(false);
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyTypeFilter, setHistoryTypeFilter] = useState("all");
+  const [historyStatusFilter, setHistoryStatusFilter] = useState("all");
+
+  // Preview state
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [editedContent, setEditedContent] = useState<string>("");
   const [isEditing, setIsEditing] = useState(false);
+
+  // Candidate mode state (Req 12.4)
   const [candidateMode, setCandidateMode] = useState(false);
   const [candidateData, setCandidateData] = useState({
-    name: '', email: '', designation: '', department: '', office: '', company: '', date_of_joining: '', fixed_gross: '',
-    pf_applicable: true, pf_ceiling: true, pf_contribution_mode: 'shared', pf_employer_rate: 0.12, pf_employee_rate: 0.12,
-    esic_applicable: true, esic_contribution_mode: 'shared', esic_employer_rate: 0.0325, esic_employee_rate: 0.0075,
-    pt_applicable: true
+    name: "",
+    email: "",
+    phone: "",
+    designation: "",
+    department: "",
+    office: "",
+    company: "",
+    date_of_joining: "",
+    fixed_gross: "",
+    pf_applicable: true,
+    pf_ceiling: true,
+    pf_contribution_mode: "shared",
+    pf_employer_rate: 0.12,
+    pf_employee_rate: 0.12,
+    esic_applicable: true,
+    esic_contribution_mode: "shared",
+    esic_employer_rate: 0.0325,
+    esic_employee_rate: 0.0075,
+    pt_applicable: true,
   });
 
   // Action state
@@ -121,14 +225,36 @@ export default function LettersPage() {
   const [sending, setSending] = useState(false);
   const [seeding, setSeeding] = useState(false);
 
+  // Template Editor Modal state (Req 12.3)
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
+  const [templateForm, setTemplateForm] = useState({
+    name: "",
+    type: "offer",
+    category: "Hiring",
+    description: "",
+    content: "",
+    is_active: true,
+  });
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [templateSaveError, setTemplateSaveError] = useState("");
+
+  // Companies & Offices
+  const [companies, setCompanies] = useState<any[]>([]);
+  const [offices, setOffices] = useState<any[]>([]);
+
   // ── Seed Templates Handler ──
-  const handleSeedTemplates = async () => {
+  const handleSeedTemplates = async (force: boolean = false) => {
     setSeeding(true);
+    setIssueError("");
+    setIssueSuccess("");
     try {
-      await apiPost<any>("/letters/templates/seed");
+      const query = force ? "?force=true" : "";
+      await apiPost<any>(`/letters/templates/seed${query}`);
       await fetchTemplates();
+      setIssueSuccess(force ? "Templates reset to official default standards successfully!" : "Default templates seeded successfully!");
     } catch (err: any) {
-      // Non-critical
+      setIssueError(err?.message || "Failed to seed templates");
     } finally {
       setSeeding(false);
     }
@@ -138,11 +264,10 @@ export default function LettersPage() {
   const fetchTemplates = useCallback(async () => {
     try {
       const data = await apiGet<any>("/letters/templates/all");
-      // apiGet unwraps res.data.data — so data is either the array or { data: [...] }
       const rows = Array.isArray(data) ? data : (data?.data || data?.rows || []);
       setTemplates(rows);
     } catch {
-      // Templates fetch is non-critical
+      // Non-critical
     } finally {
       setLoading(false);
     }
@@ -150,12 +275,15 @@ export default function LettersPage() {
 
   // ── Fetch Letters ──
   const fetchLetters = useCallback(async () => {
+    setLettersLoading(true);
     try {
-      const data = await apiGet<any>("/letters");
+      const data = await apiGet<any>("/letters", { limit: 200 });
       const rows = Array.isArray(data) ? data : (data?.data || data?.rows || []);
       setLetters(rows);
     } catch {
       // Non-critical
+    } finally {
+      setLettersLoading(false);
     }
   }, []);
 
@@ -170,6 +298,7 @@ export default function LettersPage() {
         emp_code: e.emp_code,
         department: e.department,
         designation: e.designation,
+        email: e.email,
       })));
     } catch {
       // Non-critical
@@ -177,9 +306,6 @@ export default function LettersPage() {
   }, []);
 
   // ── Fetch Companies and Offices ──
-  const [companies, setCompanies] = useState<any[]>([]);
-  const [offices, setOffices] = useState<any[]>([]);
-
   const fetchCompaniesAndOffices = useCallback(async () => {
     try {
       const compData = await apiGet<any>("/companies");
@@ -192,15 +318,20 @@ export default function LettersPage() {
     }
   }, []);
 
+  // ── Fetch Signatories (Req 12.3) ──
   const fetchSignatories = useCallback(async () => {
     try {
-      const data = await apiGet<any>("/signatories", { active: 'true' });
+      const data = await apiGet<any>("/signatories", { active: "true" });
       const rows = Array.isArray(data) ? data : (data?.data || data?.rows || []);
       setSignatories(rows);
+      if (rows.length > 0 && !selectedSignatory) {
+        // Pre-select first active signatory as default
+        setSelectedSignatory(String(rows[0].id));
+      }
     } catch {
       // Non-critical
     }
-  }, []);
+  }, [selectedSignatory]);
 
   useEffect(() => {
     fetchTemplates();
@@ -214,24 +345,23 @@ export default function LettersPage() {
   useEffect(() => {
     if (typeof window !== "undefined" && employees.length > 0 && templates.length > 0) {
       const params = new URLSearchParams(window.location.search);
-      const empId = params.get('employeeId');
-      const tType = params.get('templateType');
+      const empId = params.get("employeeId");
+      const tType = params.get("templateType");
       
       if (empId && !selectedEmployee) {
-        // Ensure it is a string for the select value
         setSelectedEmployee(empId);
       }
       
       if (tType && !selectedTemplate) {
-        const found = templates.find(t => t.type === tType || t.name.toLowerCase().includes('offer'));
+        const found = templates.find(t => t.type === tType || t.name.toLowerCase().includes(tType.toLowerCase()));
         if (found) {
           setSelectedTemplate(found);
         }
       }
     }
-  }, [employees, templates]);
+  }, [employees, templates, selectedEmployee, selectedTemplate]);
 
-  // ── Fetch Preview when template + employee/candidate selected ──
+  // ── Fetch Preview when template + employee/candidate/signatory changes ──
   useEffect(() => {
     if (!selectedTemplate) {
       setPreviewData(null);
@@ -247,7 +377,10 @@ export default function LettersPage() {
     const load = async () => {
       setPreviewLoading(true);
       try {
-        const payload: any = { templateId: selectedTemplate.id };
+        const payload: any = { 
+          templateId: selectedTemplate.id,
+          signatory_id: selectedSignatory ? parseInt(selectedSignatory, 10) : undefined,
+        };
         if (!candidateMode) {
           payload.employeeId = selectedEmployee;
         } else {
@@ -276,27 +409,45 @@ export default function LettersPage() {
       }
     };
     
-    const timer = setTimeout(load, 500);
+    const timer = setTimeout(load, 400);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [selectedTemplate, selectedEmployee, candidateMode, candidateData]);
+  }, [selectedTemplate, selectedEmployee, candidateMode, candidateData, selectedSignatory]);
 
   // ── Filtered templates ──
-  const filtered = templates.filter(t =>
-    t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (t.category && t.category.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    t.type.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredTemplates = templates.filter(t => {
+    const matchesSearch = t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (t.category && t.category.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      t.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (t.description && t.description.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesCategory = selectedCategory === "all" || (t.category && t.category.toLowerCase() === selectedCategory.toLowerCase());
+    return matchesSearch && matchesCategory;
+  });
 
-  const issuedCount = letters.filter((l: any) => l.status === "issued" || l.status === "acknowledged").length;
-  const ackCount = letters.filter((l: any) => l.status === "acknowledged").length;
+  // ── Filtered History ──
+  const filteredHistory = letters.filter(l => {
+    const query = historySearch.toLowerCase();
+    const matchesSearch = !query ||
+      l.title.toLowerCase().includes(query) ||
+      (l.candidate_name && l.candidate_name.toLowerCase().includes(query)) ||
+      (l.candidate_email && l.candidate_email.toLowerCase().includes(query)) ||
+      (l.issuedTo?.name && l.issuedTo.name.toLowerCase().includes(query)) ||
+      (l.issuedTo?.emp_code && l.issuedTo.emp_code.toLowerCase().includes(query));
+    const matchesType = historyTypeFilter === "all" || l.type === historyTypeFilter;
+    const matchesStatus = historyStatusFilter === "all" || l.status === historyStatusFilter;
+    return matchesSearch && matchesType && matchesStatus;
+  });
+
+  const issuedCount = letters.filter(l => l.status === "issued" || l.status === "acknowledged").length;
+  const ackCount = letters.filter(l => l.status === "acknowledged").length;
+  const candidateLetterCount = letters.filter(l => !l.employee_id).length;
   const compliancePct = issuedCount > 0 ? Math.round((ackCount / issuedCount) * 100) : 100;
 
   const accentColor = (selectedTemplate)
-    ? (typeAccentMap[selectedTemplate.type] || '#1e293b')
-    : '#1e293b';
+    ? (typeAccentMap[selectedTemplate.type] || "#1e293b")
+    : "#1e293b";
 
-  // ── Handle PDF Download ──
-  const handleDownloadPDF = async () => {
+  // ── Handle PDF Generation & Download (with optional official record) ──
+  const handleDownloadPDF = async (record: boolean = false) => {
     if (!selectedTemplate) {
       setIssueError("Please select a template.");
       return;
@@ -323,10 +474,9 @@ export default function LettersPage() {
       const previewContainer = document.getElementById("pdf-preview-container");
       let fullHtml = previewContainer ? previewContainer.outerHTML : "";
       if (typeof window !== "undefined") {
-        fullHtml = fullHtml.replace(/src="\/company_logopng.png"/g, `src="${window.location.origin}/company_logopng.png"`);
+        fullHtml = fullHtml.replace(/src="\/(?!\/)/g, `src="${window.location.origin}/`);
       }
 
-      // Use raw fetch to get the PDF blob (not JSON)
       const response = await fetch(`${baseUrl}/letters/generate-pdf`, {
         method: "POST",
         headers: {
@@ -342,6 +492,7 @@ export default function LettersPage() {
           content: content,
           fullHtml: fullHtml,
           signatory_id: selectedSignatory ? parseInt(selectedSignatory, 10) : undefined,
+          recordLetter: record,
         }),
       });
 
@@ -354,13 +505,19 @@ export default function LettersPage() {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `${selectedTemplate.type}-${previewData?.employee?.emp_code || "employee"}.pdf`;
+      const recipientCode = candidateMode ? (candidateData.name.replace(/\s+/g, "_") || "candidate") : (previewData?.employee?.emp_code || "employee");
+      link.download = `${selectedTemplate.type}-${recipientCode}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
-      setIssueSuccess("PDF downloaded successfully!");
+      if (record) {
+        setIssueSuccess("Letter issued, recorded in history, and PDF downloaded!");
+        await fetchLetters();
+      } else {
+        setIssueSuccess("PDF generated and downloaded successfully!");
+      }
     } catch (err: any) {
       setIssueError(err?.message || "Failed to generate PDF.");
     } finally {
@@ -368,7 +525,7 @@ export default function LettersPage() {
     }
   };
 
-  // ── Handle Email Send ──
+  // ── Handle Email Send & Record (Req 12.1 & 12.4) ──
   const handleSendEmail = async () => {
     if (!selectedTemplate) {
       setIssueError("Please select a template.");
@@ -379,7 +536,7 @@ export default function LettersPage() {
       return;
     }
     if (candidateMode && !candidateData.email) {
-      setIssueError("Please enter candidate email address.");
+      setIssueError("Please enter a valid candidate email address.");
       return;
     }
     
@@ -393,7 +550,7 @@ export default function LettersPage() {
       const previewContainer = document.getElementById("pdf-preview-container");
       let fullHtml = previewContainer ? previewContainer.outerHTML : "";
       if (typeof window !== "undefined") {
-        fullHtml = fullHtml.replace(/src="\/company_logopng.png"/g, `src="${window.location.origin}/company_logopng.png"`);
+        fullHtml = fullHtml.replace(/src="\/(?!\/)/g, `src="${window.location.origin}/`);
       }
 
       await apiPost("/letters/send-email", {
@@ -406,7 +563,9 @@ export default function LettersPage() {
         fullHtml: fullHtml,
         signatory_id: selectedSignatory ? parseInt(selectedSignatory, 10) : undefined,
       });
-      setIssueSuccess("Letter sent successfully via email!");
+
+      const recipientName = candidateMode ? candidateData.name : (previewData?.employee?.name || "Employee");
+      setIssueSuccess(`Letter successfully issued, recorded, and sent to ${recipientName} via email!`);
       await fetchLetters();
     } catch (err: any) {
       setIssueError(err?.message || "Failed to send email.");
@@ -415,7 +574,78 @@ export default function LettersPage() {
     }
   };
 
-  // ── Build preview props ──
+  // ── Delete Issued Letter Handler ──
+  const handleDeleteLetter = async (id: number) => {
+    if (!window.confirm("Are you sure you want to delete this issued letter record?")) return;
+    try {
+      await apiDelete(`/letters/${id}`);
+      await fetchLetters();
+    } catch (err: any) {
+      alert(err?.message || "Failed to delete letter");
+    }
+  };
+
+  // ── Open Template Editor (Req 12.3) ──
+  const handleOpenEditor = (template?: TemplateItem) => {
+    if (template) {
+      setEditingTemplateId(template.id);
+      setTemplateForm({
+        name: template.name,
+        type: template.type,
+        category: template.category || "Hiring",
+        description: template.description || "",
+        content: template.content || "",
+        is_active: template.is_active,
+      });
+    } else {
+      setEditingTemplateId(null);
+      setTemplateForm({
+        name: "",
+        type: "offer",
+        category: "Hiring",
+        description: "",
+        content: "<p>Dear <strong>[Employee_Name]</strong>,</p>\n\n<p>Enter template body here...</p>",
+        is_active: true,
+      });
+    }
+    setTemplateSaveError("");
+    setEditorOpen(true);
+  };
+
+  // ── Save Template (Create or Update) ──
+  const handleSaveTemplate = async () => {
+    if (!templateForm.name.trim()) {
+      setTemplateSaveError("Template name is required.");
+      return;
+    }
+    setSavingTemplate(true);
+    setTemplateSaveError("");
+    try {
+      if (editingTemplateId) {
+        await apiPatch(`/letters/templates/${editingTemplateId}`, templateForm);
+      } else {
+        await apiPost("/letters/templates", templateForm);
+      }
+      await fetchTemplates();
+      setEditorOpen(false);
+    } catch (err: any) {
+      setTemplateSaveError(err?.message || "Failed to save template.");
+    } finally {
+      setSavingTemplate(false);
+    }
+  };
+
+  // ── Insert Placeholder in Template Editor ──
+  const handleInsertPlaceholder = (tag: string) => {
+    setTemplateForm(prev => ({
+      ...prev,
+      content: prev.content + ` ${tag} `,
+    }));
+  };
+
+  // ── Build preview props for Live Preview ──
+  const activeSignatoryObj = selectedSignatory ? signatories.find(s => String(s.id) === selectedSignatory) : null;
+
   const employeeForPreview = previewData?.employee ? {
     name: previewData.employee.name,
     designation: previewData.employee.designation,
@@ -423,202 +653,458 @@ export default function LettersPage() {
     office: (previewData.employee.office as any)?.name || previewData.employee.office,
     company: previewData.employee.company,
     companyDetails: previewData.employee.companyDetails,
-    date: previewData.employee.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-  } : (selectedEmployee ? employees.find(e => String(e.id) === selectedEmployee) : null) ? {
+    date: previewData.employee.date || new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
+  } : (!candidateMode && selectedEmployee ? employees.find(e => String(e.id) === selectedEmployee) : null) ? {
     name: employees.find(e => String(e.id) === selectedEmployee)!.name,
     designation: employees.find(e => String(e.id) === selectedEmployee)!.designation,
     department: employees.find(e => String(e.id) === selectedEmployee)!.department,
     office: undefined,
     company: undefined,
     companyDetails: undefined,
-    date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+    date: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
   } : {
-    name: candidateData.name || 'Candidate',
-    designation: candidateData.designation || 'TBD',
-    department: candidateData.department || 'TBD',
-    office: candidateData.office || 'Head Office',
-    company: candidateData.company || 'Apaar Logistics',
-    date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+    name: candidateData.name || "Candidate Name",
+    designation: candidateData.designation || "Proposed Designation",
+    department: candidateData.department || "Department",
+    office: candidateData.office || "Head Office",
+    company: candidateData.company || "Company",
+    date: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
   };
 
   return (
     <ProtectedRoute module="LETTERS" action="READ">
-      <div className="space-y-10 pb-20">
+      <div className="space-y-8 pb-20">
 
         {/* ── Page Header ── */}
-        <div className="px-2">
-          <h1 className="text-xl font-black text-slate-900 flex items-center gap-3 italic uppercase tracking-tighter underline underline-offset-4 decoration-[#D9F99D] decoration-2">
-            <FileType className="h-6 w-6 text-rose-500" /> Letters & Docs
-          </h1>
-          <p className="text-[8px] font-black text-slate-400 mt-4 uppercase tracking-[0.4em]">
-            Create and manage official letters and documents.
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-2">
+          <div>
+            <h1 className="text-xl font-black text-slate-900 flex items-center gap-3 italic uppercase tracking-tighter underline underline-offset-4 decoration-[#D9F99D] decoration-2">
+              <FileType className="h-6 w-6 text-rose-500" /> Offer & Appointment Letter Engine
+            </h1>
+            <p className="text-[9px] font-black text-slate-400 mt-2 uppercase tracking-[0.3em]">
+              Executive letters, candidate generation, salary breakup annexures & signatories (Section 12)
+            </p>
+          </div>
+
+          {/* Top Tabs */}
+          <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+            <button
+              onClick={() => setActiveTab("templates")}
+              className={cn(
+                "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-2",
+                activeTab === "templates"
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-500 hover:text-slate-900"
+              )}
+            >
+              <FileSignature className="h-3.5 w-3.5" />
+              Document Templates
+            </button>
+            <button
+              onClick={() => setActiveTab("history")}
+              className={cn(
+                "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-2",
+                activeTab === "history"
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-500 hover:text-slate-900"
+              )}
+            >
+              <History className="h-3.5 w-3.5" />
+              Issued Letters
+              {letters.length > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full text-[8px] bg-slate-900 text-white font-mono">
+                  {letters.length}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
-        {/* ── Stats ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        {/* ── Stats Overview ── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { label: "Active Templates", value: `${templates.filter(t => t.is_active).length} Templates`, icon: FileSignature, bg: "bg-white" },
             { label: "Letters Issued", value: `${issuedCount} Letters`, icon: Send, bg: "bg-white" },
-            { label: "Compliance", value: `${compliancePct}% Acknowledged`, icon: CheckCircle2, bg: "bg-[#D9F99D]" },
+            { label: "Candidate Letters", value: `${candidateLetterCount} Issued`, icon: Briefcase, bg: "bg-white" },
+            { label: "Compliance Rate", value: `${compliancePct}% Acknowledged`, icon: CheckCircle2, bg: "bg-[#D9F99D]" },
           ].map((stat, i) => (
-            <Card key={i} className={`${stat.bg} border-none rounded-2xl p-6 shadow-sm flex flex-col justify-between h-36 group hover:shadow-md transition-all`}>
-              <div className="h-9 w-9 bg-slate-50 rounded-xl flex items-center justify-center group-hover:bg-[#D9F99D]/20 transition-colors">
-                <stat.icon className="h-5 w-5 text-slate-400 group-focus-within:text-slate-900 transition-colors" />
+            <Card key={i} className={`${stat.bg} border-none rounded-2xl p-5 shadow-sm flex flex-col justify-between h-32 group hover:shadow-md transition-all`}>
+              <div className="h-8 w-8 bg-slate-50 rounded-xl flex items-center justify-center group-hover:bg-[#D9F99D]/30 transition-colors">
+                <stat.icon className="h-4 w-4 text-slate-500 group-hover:text-slate-900 transition-colors" />
               </div>
               <div>
                 <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{stat.label}</p>
-                <h3 className="text-lg font-black text-slate-900 uppercase italic tracking-tighter">{stat.value}</h3>
+                <h3 className="text-base font-black text-slate-900 uppercase italic tracking-tighter">{stat.value}</h3>
               </div>
             </Card>
           ))}
         </div>
 
-        {/* ── Template Grid ── */}
-        <Card className="border-none shadow-sm rounded-2xl bg-white overflow-hidden p-1">
-          <CardHeader className="p-6 pb-3 border-none">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-              <div>
-                <CardTitle className="text-lg font-black italic text-slate-900 underline underline-offset-4 decoration-[#D9F99D] decoration-2 uppercase tracking-tighter">
-                  Template List
-                </CardTitle>
-                <CardDescription className="text-[8px] font-black text-slate-400 mt-4 uppercase tracking-[0.3em] italic">
-                  All official document templates
-                </CardDescription>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="relative group">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-300 group-focus-within:text-slate-900 transition-colors" />
-                  <Input
-                    placeholder="Search templates..."
-                    className="h-10 w-64 pl-12 bg-slate-50 border-none rounded-xl font-bold text-[10px] focus-visible:ring-1 focus-visible:ring-[#D9F99D] shadow-inner"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
+        {/* ── TAB 1: DOCUMENT TEMPLATES ── */}
+        {activeTab === "templates" && (
+          <Card className="border-none shadow-sm rounded-2xl bg-white overflow-hidden p-2">
+            <CardHeader className="p-6 pb-4 border-none">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <CardTitle className="text-lg font-black italic text-slate-900 underline underline-offset-4 decoration-[#D9F99D] decoration-2 uppercase tracking-tighter">
+                    Document Template Catalog
+                  </CardTitle>
+                  <CardDescription className="text-[9px] font-black text-slate-400 mt-2 uppercase tracking-[0.25em]">
+                    Select an official template to generate, customize, and issue letters
+                  </CardDescription>
                 </div>
-                <Button
-                  onClick={handleSeedTemplates}
-                  disabled={seeding}
-                  variant="outline"
-                  size="sm"
-                  className="h-10 border-slate-200 hover:bg-[#D9F99D]/20 hover:border-[#D9F99D] font-black text-[9px] uppercase tracking-widest rounded-xl px-4 transition-all"
-                >
-                  {seeding ? (
-                    <span className="flex items-center gap-1.5">
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      Seeding...
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1.5">
-                      <RefreshCw className="h-3 w-3" />
-                      Seed
-                    </span>
-                  )}
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
 
-          <CardContent className="p-4">
-            {loading ? (
-              <div className="flex items-center justify-center py-20">
-                <Loader2 className="h-8 w-8 animate-spin text-slate-300" />
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="relative group">
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-300 group-focus-within:text-slate-900 transition-colors" />
+                    <Input
+                      placeholder="Search templates..."
+                      className="h-9 w-56 pl-10 bg-slate-50 border-none rounded-xl font-bold text-[10px] focus-visible:ring-1 focus-visible:ring-[#D9F99D] shadow-inner"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+
+                  <Button
+                    onClick={() => handleOpenEditor()}
+                    size="sm"
+                    className="h-9 bg-slate-900 text-white hover:bg-slate-800 font-black text-[9px] uppercase tracking-wider rounded-xl px-3.5"
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-1" /> New Template
+                  </Button>
+
+                  <Button
+                    onClick={() => handleSeedTemplates(true)}
+                    disabled={seeding}
+                    variant="outline"
+                    size="sm"
+                    title="Reset all standard corporate templates to official standards"
+                    className="h-9 border-slate-200 hover:bg-[#D9F99D]/20 hover:border-[#D9F99D] font-black text-[9px] uppercase tracking-wider rounded-xl px-3"
+                  >
+                    {seeding ? (
+                      <span className="flex items-center gap-1.5">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Resetting...
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1.5">
+                        <RefreshCw className="h-3 w-3" />
+                        Reset Standards
+                      </span>
+                    )}
+                  </Button>
+                </div>
               </div>
-            ) : filtered.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                <FileText className="h-10 w-10 mb-4 opacity-30" />
-                <p className="text-[10px] font-black uppercase tracking-widest">No templates found</p>
-                <p className="text-[8px] mt-1">Seed default templates to get started.</p>
-                <Button
-                  onClick={handleSeedTemplates}
-                  disabled={seeding}
-                  className="mt-6 bg-[#D9F99D] hover:bg-[#C7F07A] text-slate-900 font-black text-[9px] uppercase tracking-widest rounded-xl px-5 h-10 shadow-sm hover:shadow-md transition-all hover:translate-y-[-2px] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
-                >
-                  {seeding ? (
-                    <span className="flex items-center gap-2">
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      Seeding...
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-2">
-                      <RefreshCw className="h-3 w-3" />
-                      Seed Templates
-                    </span>
-                  )}
-                </Button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {filtered.map((template) => (
-                  <Card key={template.id} className="border-2 border-slate-50 rounded-2xl p-5 hover:border-[#D9F99D] hover:bg-slate-50/50 transition-all group relative overflow-hidden">
-                    <div className="flex items-start justify-between relative z-10">
-                      <div className="space-y-3">
-                        <Badge className={cn(
-                          "border-none font-black text-[7px] uppercase tracking-widest px-2.5 h-4.5 rounded-md",
-                          template.is_active ? "bg-[#D1FAE5] text-emerald-600" : "bg-[#FEF3C7] text-amber-600"
-                        )}>
-                          {template.is_active ? "Active" : "Draft"}
-                        </Badge>
-                        <h3 className="text-lg font-black text-slate-900 uppercase italic tracking-tighter group-hover:translate-x-1 transition-transform">
-                          {template.name}
-                        </h3>
-                        <div className="flex items-center gap-4">
-                          <div className="space-y-0.5">
-                            <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Type</p>
-                            <p className="text-[9px] font-bold text-slate-600 uppercase">{TYPE_LABEL_MAP[template.type] || template.type}</p>
-                          </div>
-                          <div className="space-y-0.5">
-                            <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Category</p>
-                            <p className="text-[9px] font-bold text-slate-600 uppercase">{template.category || "General"}</p>
-                          </div>
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost" size="icon"
-                        className="h-9 w-9 rounded-lg bg-white border-2 border-slate-50 hover:bg-[#D9F99D] hover:border-[#D9F99D] transition-all"
-                        onClick={() => { setSelectedTemplate(template); setSelectedVariant(1); setIssueError(""); setIssueSuccess(""); setIsEditing(false); }}
-                      >
-                        <Eye className="h-4 w-4 text-slate-400" />
-                      </Button>
-                    </div>
-                    <div className="absolute -right-3 -bottom-3 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity rotate-12">
-                      <FileText className="h-24 w-24" />
-                    </div>
-                    <div className="mt-6 flex items-center justify-between border-t border-slate-50 pt-3 relative z-10">
-                      <p className="text-[8px] font-black text-slate-300 uppercase tracking-widest italic flex items-center gap-2">
-                        <Clock className="h-2.5 w-2.5" /> Updated: {new Date(template.updated_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}
-                      </p>
-                      <Button
-                        onClick={() => { setSelectedTemplate(template); setSelectedVariant(1); setIssueError(""); setIssueSuccess(""); setIsEditing(false); }}
-                        variant="link"
-                        className="text-rose-500 font-black uppercase text-[8px] tracking-widest p-0 h-auto"
-                      >
-                        Generate <ArrowUpRight className="h-2.5 w-2.5 ml-1" />
-                      </Button>
-                    </div>
-                  </Card>
+
+              {/* Category Pills */}
+              <div className="flex items-center gap-2 pt-4 overflow-x-auto">
+                {["all", "Hiring", "Disciplinary", "Exit", "General"].map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedCategory(cat)}
+                    className={cn(
+                      "px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all",
+                      selectedCategory.toLowerCase() === cat.toLowerCase()
+                        ? "bg-[#D9F99D] text-slate-900 shadow-sm"
+                        : "bg-slate-50 text-slate-500 hover:bg-slate-100"
+                    )}
+                  >
+                    {cat}
+                  </button>
                 ))}
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </CardHeader>
 
-        {/* ── Generate Dialog ── */}
+            <CardContent className="p-4">
+              {loading ? (
+                <div className="flex items-center justify-center py-20">
+                  <Loader2 className="h-8 w-8 animate-spin text-slate-300" />
+                </div>
+              ) : filteredTemplates.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                  <FileText className="h-10 w-10 mb-4 opacity-30" />
+                  <p className="text-[10px] font-black uppercase tracking-widest">No templates found</p>
+                  <p className="text-[9px] mt-1">Seed default templates or create a new template.</p>
+                  <Button
+                    onClick={() => handleSeedTemplates(false)}
+                    disabled={seeding}
+                    className="mt-6 bg-[#D9F99D] hover:bg-[#C7F07A] text-slate-900 font-black text-[9px] uppercase tracking-widest rounded-xl px-5 h-10 shadow-sm"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5 mr-2" /> Seed Default Templates
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredTemplates.map((template) => {
+                    const isOffer = template.type === "offer";
+                    const isAppointment = template.type === "appointment";
+                    return (
+                      <Card
+                        key={template.id}
+                        className={cn(
+                          "border-2 rounded-2xl p-5 transition-all group relative overflow-hidden flex flex-col justify-between",
+                          isAppointment ? "border-blue-100 bg-blue-50/20 hover:border-blue-400" :
+                          isOffer ? "border-emerald-100 bg-emerald-50/20 hover:border-emerald-400" :
+                          "border-slate-100 bg-white hover:border-[#D9F99D] hover:bg-slate-50/40"
+                        )}
+                      >
+                        <div className="space-y-3 relative z-10">
+                          <div className="flex items-center justify-between">
+                            <Badge className={cn("border font-bold text-[8px] uppercase tracking-wider px-2 py-0.5 rounded-md", TYPE_BADGE_STYLE[template.type] || "bg-slate-100 text-slate-700")}>
+                              {TYPE_LABEL_MAP[template.type] || template.type}
+                            </Badge>
+                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                              {template.category || "General"}
+                            </span>
+                          </div>
+
+                          <div>
+                            <h3 className="text-base font-black text-slate-900 uppercase italic tracking-tight group-hover:translate-x-0.5 transition-transform">
+                              {template.name}
+                            </h3>
+                            <p className="text-[9px] text-slate-500 mt-1 line-clamp-2">
+                              {template.description || "Official HR template with dynamic placeholder binding."}
+                            </p>
+                          </div>
+
+                          {/* Specific callout pill for Req 12.2 */}
+                          {isAppointment && (
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-100/70 text-blue-800 text-[8px] font-black uppercase tracking-wider">
+                              <Sparkles className="h-3 w-3 text-blue-600" />
+                              Includes Annexure A Salary Breakup
+                            </div>
+                          )}
+                          {isOffer && (
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-100/70 text-emerald-800 text-[8px] font-black uppercase tracking-wider">
+                              <Briefcase className="h-3 w-3 text-emerald-600" />
+                              Offered CTC & Joining Terms
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mt-6 pt-3 border-t border-slate-100 flex items-center justify-between relative z-10">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleOpenEditor(template)}
+                            className="h-8 px-2.5 text-slate-500 hover:text-slate-900 hover:bg-white text-[8px] font-black uppercase tracking-wider rounded-lg"
+                          >
+                            <Pencil className="h-3 w-3 mr-1" /> Edit Template
+                          </Button>
+
+                          <Button
+                            onClick={() => {
+                              setSelectedTemplate(template);
+                              setSelectedVariant(1);
+                              setIssueError("");
+                              setIssueSuccess("");
+                              setIsEditing(false);
+                            }}
+                            size="sm"
+                            className="h-8 px-3.5 bg-slate-900 text-white hover:bg-[#D9F99D] hover:text-slate-900 font-black uppercase text-[8px] tracking-wider rounded-xl transition-all"
+                          >
+                            Generate <ArrowUpRight className="h-3 w-3 ml-1" />
+                          </Button>
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ── TAB 2: ISSUED LETTERS HISTORY ── */}
+        {activeTab === "history" && (
+          <Card className="border-none shadow-sm rounded-2xl bg-white overflow-hidden p-2">
+            <CardHeader className="p-6 pb-4 border-none">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <CardTitle className="text-lg font-black italic text-slate-900 underline underline-offset-4 decoration-[#D9F99D] decoration-2 uppercase tracking-tighter">
+                    Issued Letters History
+                  </CardTitle>
+                  <CardDescription className="text-[9px] font-black text-slate-400 mt-2 uppercase tracking-[0.25em]">
+                    Log of all generated, issued, and emailed documents for candidates and employees
+                  </CardDescription>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="relative group">
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-300 group-focus-within:text-slate-900 transition-colors" />
+                    <Input
+                      placeholder="Search recipient or title..."
+                      className="h-9 w-60 pl-10 bg-slate-50 border-none rounded-xl font-bold text-[10px] focus-visible:ring-1 focus-visible:ring-[#D9F99D] shadow-inner"
+                      value={historySearch}
+                      onChange={(e) => setHistorySearch(e.target.value)}
+                    />
+                  </div>
+
+                  <select
+                    value={historyTypeFilter}
+                    onChange={(e) => setHistoryTypeFilter(e.target.value)}
+                    className="h-9 px-3 rounded-xl bg-slate-50 border border-slate-200 text-[10px] font-bold text-slate-700 outline-none"
+                  >
+                    <option value="all">All Letter Types</option>
+                    <option value="offer">Offer Letters</option>
+                    <option value="appointment">Appointment Letters</option>
+                    <option value="warning">Warning Letters</option>
+                    <option value="promotion">Promotion Letters</option>
+                    <option value="transfer">Transfer Letters</option>
+                    <option value="experience">Experience Letters</option>
+                    <option value="relieving">Relieving Letters</option>
+                  </select>
+
+                  <select
+                    value={historyStatusFilter}
+                    onChange={(e) => setHistoryStatusFilter(e.target.value)}
+                    className="h-9 px-3 rounded-xl bg-slate-50 border border-slate-200 text-[10px] font-bold text-slate-700 outline-none"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="issued">Issued</option>
+                    <option value="acknowledged">Acknowledged</option>
+                  </select>
+
+                  <Button
+                    onClick={fetchLetters}
+                    variant="outline"
+                    size="sm"
+                    className="h-9 rounded-xl border-slate-200 px-3 text-[9px] font-black uppercase tracking-wider"
+                  >
+                    <RefreshCw className={cn("h-3 w-3 mr-1", lettersLoading && "animate-spin")} /> Refresh
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent className="p-4">
+              {lettersLoading ? (
+                <div className="flex items-center justify-center py-20">
+                  <Loader2 className="h-8 w-8 animate-spin text-slate-300" />
+                </div>
+              ) : filteredHistory.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                  <History className="h-10 w-10 mb-4 opacity-30" />
+                  <p className="text-[10px] font-black uppercase tracking-widest">No letters recorded yet</p>
+                  <p className="text-[9px] mt-1">Generate and issue letters from the Templates tab to view history here.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-slate-100">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-100 bg-slate-50/70 text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                        <th className="py-3 px-4">Recipient</th>
+                        <th className="py-3 px-4">Letter Type</th>
+                        <th className="py-3 px-4">Title / Signatory</th>
+                        <th className="py-3 px-4">Issued Date</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50 text-[11px]">
+                      {filteredHistory.map((item) => {
+                        const isCandidate = !item.employee_id;
+                        return (
+                          <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="py-3.5 px-4">
+                              <div className="flex items-center gap-2">
+                                {isCandidate ? (
+                                  <div>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-bold text-slate-900">{item.candidate_name || "Candidate"}</span>
+                                      <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-[7px] font-black px-1.5 py-0 rounded">
+                                        CANDIDATE
+                                      </Badge>
+                                    </div>
+                                    <p className="text-[9px] text-slate-400">{item.candidate_email || "No email"}</p>
+                                    {item.candidate_phone && (
+                                      <p className="text-[8px] text-slate-400 flex items-center gap-1"><Phone className="h-2.5 w-2.5" />{item.candidate_phone}</p>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-bold text-slate-900">{item.issuedTo?.name || "Employee"}</span>
+                                      <Badge className="bg-slate-100 text-slate-700 text-[7px] font-mono px-1.5 py-0 rounded">
+                                        {item.issuedTo?.emp_code || "EMP"}
+                                      </Badge>
+                                    </div>
+                                    <p className="text-[9px] text-slate-400">
+                                      {item.issuedTo?.designation || "Staff"} · {item.issuedTo?.department || "General"}
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+
+                            <td className="py-3.5 px-4">
+                              <Badge className={cn("border text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md", TYPE_BADGE_STYLE[item.type] || "bg-slate-100 text-slate-700")}>
+                                {TYPE_LABEL_MAP[item.type] || item.type}
+                              </Badge>
+                            </td>
+
+                            <td className="py-3.5 px-4">
+                              <p className="font-bold text-slate-800 line-clamp-1">{item.title}</p>
+                              <p className="text-[9px] text-slate-400">
+                                Signatory: <span className="font-semibold text-slate-600">{item.signatory?.name || "Default Signatory"}</span>
+                              </p>
+                            </td>
+
+                            <td className="py-3.5 px-4 font-mono text-[10px] text-slate-600">
+                              {item.issued_date ? new Date(item.issued_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "N/A"}
+                            </td>
+
+                            <td className="py-3.5 px-4">
+                              <Badge className={cn(
+                                "border text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md",
+                                item.status === "acknowledged" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                                item.status === "issued" ? "bg-blue-50 text-blue-700 border-blue-200" :
+                                "bg-slate-50 text-slate-600 border-slate-200"
+                              )}>
+                                {item.status}
+                              </Badge>
+                            </td>
+
+                            <td className="py-3.5 px-4 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  title="Delete Record"
+                                  onClick={() => handleDeleteLetter(item.id)}
+                                  className="h-8 w-8 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ── GENERATE & CUSTOMIZE LETTER DIALOG ── */}
         <Dialog open={!!selectedTemplate} onOpenChange={(val) => { if (!val) { setSelectedTemplate(null); setPreviewData(null); setIsEditing(false); } }}>
           <DialogContent
             className="rounded-2xl p-0 overflow-hidden border-none shadow-2xl [&>button]:text-white [&>button]:top-5 [&>button]:right-5 [&>button]:z-50 [&>button]:bg-white/10 [&>button]:rounded-full [&>button]:p-1"
-            style={{ width: '98vw', maxWidth: 1600, height: '95vh' }}
+            style={{ width: "98vw", maxWidth: 1600, height: "95vh" }}
           >
             <DialogTitle className="sr-only">
               {selectedTemplate?.name ?? "Document Generator"}
             </DialogTitle>
             <div className="flex h-full w-full overflow-hidden">
 
-              {/* ── A4 Preview ── */}
+              {/* ── A4 Preview Area ── */}
               <div className="flex-1 min-w-0 bg-slate-300 overflow-auto flex items-start justify-center p-8">
                 <div id="pdf-preview-container" className="shrink-0 shadow-2xl" style={{ width: 794 }}>
                   {previewLoading ? (
-                    <div className="flex items-center justify-center bg-white" style={{ width: 794, minHeight: 400 }}>
+                    <div className="flex items-center justify-center bg-white" style={{ width: 794, minHeight: 500 }}>
                       <Loader2 className="h-8 w-8 animate-spin text-slate-300" />
                     </div>
                   ) : (
@@ -629,7 +1115,7 @@ export default function LettersPage() {
                       templateId={String(selectedTemplate?.id || "")}
                       accentColor={accentColor}
                       employee={employeeForPreview}
-                      signatory={selectedSignatory ? signatories.find((s) => String(s.id) === selectedSignatory) : null}
+                      signatory={activeSignatoryObj}
                       editable={isEditing}
                       onContentChange={setEditedContent}
                     />
@@ -637,329 +1123,448 @@ export default function LettersPage() {
                 </div>
               </div>
 
-              {/* ── Right Panel ── */}
-              <div style={{ width: 320, minWidth: 320, background: '#0f172a', display: 'flex', flexDirection: 'column', borderLeft: '1px solid rgba(255,255,255,0.06)', overflow: 'hidden' }}>
-                <div style={{ flex: 1, overflowY: 'auto', padding: 32, display: 'flex', flexDirection: 'column', gap: 24 }}>
+              {/* ── Right Control Panel ── */}
+              <div style={{ width: 340, minWidth: 340, background: "#0f172a", display: "flex", flexDirection: "column", borderLeft: "1px solid rgba(255,255,255,0.06)", overflow: "hidden" }}>
+                <div style={{ flex: 1, overflowY: "auto", padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
 
-                  {/* Title */}
+                  {/* Header Title & Letter Type */}
                   <div>
-                    <h3 style={{ fontSize: 16, fontWeight: 900, textTransform: 'uppercase', fontStyle: 'italic', letterSpacing: '-0.5px', color: '#d9f99d', margin: 0 }}>
+                    <h3 style={{ fontSize: 16, fontWeight: 900, textTransform: "uppercase", fontStyle: "italic", letterSpacing: "-0.5px", color: "#d9f99d", margin: 0 }}>
                       {selectedTemplate?.name}
                     </h3>
-                    <p style={{ fontSize: 8, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '2px', marginTop: 4 }}>
+                    <p style={{ fontSize: 8, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "2px", marginTop: 4 }}>
                       {TYPE_LABEL_MAP[selectedTemplate?.type || ""] || selectedTemplate?.type} · {selectedTemplate?.category || "General"}
                     </p>
                   </div>
 
-                  {/* Edit Toggle */}
-                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {/* Inline Content Edit Toggle (Req 12.3) */}
+                  <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 16, display: "flex", flexDirection: "column", gap: 6 }}>
                     <Button
                       variant={isEditing ? "default" : "outline"}
                       size="sm"
                       onClick={() => setIsEditing(!isEditing)}
                       className={cn(
-                        "w-full font-black text-[8px] uppercase tracking-widest rounded-xl h-9",
+                        "w-full font-black text-[9px] uppercase tracking-wider rounded-xl h-9 transition-all",
                         isEditing
                           ? "bg-[#d9f99d] text-[#0f172a] hover:bg-[#bef264] border-none"
                           : "bg-transparent border border-white/10 text-white hover:bg-white/5"
                       )}
                     >
                       {isEditing ? (
-                        <><Save className="h-3 w-3 mr-1.5" /> Editing Mode ON</>
+                        <><Save className="h-3 w-3 mr-1.5" /> Inline Edit Mode: ACTIVE</>
                       ) : (
-                        <><Pencil className="h-3 w-3 mr-1.5" /> Edit Content</>
+                        <><Pencil className="h-3 w-3 mr-1.5" /> Edit Letter Body Inline</>
                       )}
                     </Button>
                     {isEditing && (
-                      <p style={{ fontSize: 7, fontWeight: 600, color: '#64748b', margin: 0, textAlign: 'center' }}>
-                        Click on the text in the preview to edit inline. Changes are auto-saved for PDF/email.
+                      <p style={{ fontSize: 8, fontWeight: 600, color: "#94a3b8", margin: 0, textAlign: "center" }}>
+                        Click anywhere in the letter preview to type directly. Changes are automatically embedded in PDF & email.
                       </p>
                     )}
                   </div>
 
-                  {/* Variant Picker */}
-                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <p style={{ fontSize: 7, fontWeight: 900, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '3px', margin: 0 }}>Design Variant</p>
-                    {variantMeta.map((v) => (
-                      <button
-                        key={v.id}
-                        onClick={() => setSelectedVariant(v.id)}
-                        style={{
-                          width: '100%', textAlign: 'left', borderRadius: 12, padding: '10px 12px',
-                          border: selectedVariant === v.id ? '1px solid #d9f99d' : '1px solid rgba(255,255,255,0.1)',
-                          background: selectedVariant === v.id ? 'rgba(217,249,157,0.1)' : 'rgba(255,255,255,0.04)',
-                          cursor: 'pointer', transition: 'all 0.15s',
-                        }}
-                      >
-                        <div style={{ fontSize: 10, fontWeight: 900, textTransform: 'uppercase', color: selectedVariant === v.id ? '#d9f99d' : '#e2e8f0' }}>{v.label}</div>
-                        <div style={{ fontSize: 8, fontWeight: 600, color: selectedVariant === v.id ? '#a3e635' : '#94a3b8', marginTop: 2 }}>{v.desc}</div>
-                      </button>
-                    ))}
+                  {/* Design Variant Picker */}
+                  <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 16, display: "flex", flexDirection: "column", gap: 6 }}>
+                    <p style={{ fontSize: 8, fontWeight: 900, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "2px", margin: 0 }}>Design Variant</p>
+                    <div className="grid grid-cols-1 gap-1.5">
+                      {variantMeta.map((v) => (
+                        <button
+                          key={v.id}
+                          onClick={() => setSelectedVariant(v.id)}
+                          style={{
+                            width: "100%", textAlign: "left", borderRadius: 10, padding: "8px 10px",
+                            border: selectedVariant === v.id ? "1px solid #d9f99d" : "1px solid rgba(255,255,255,0.08)",
+                            background: selectedVariant === v.id ? "rgba(217,249,157,0.12)" : "rgba(255,255,255,0.03)",
+                            cursor: "pointer", transition: "all 0.15s",
+                          }}
+                        >
+                          <div style={{ fontSize: 9, fontWeight: 900, textTransform: "uppercase", color: selectedVariant === v.id ? "#d9f99d" : "#e2e8f0" }}>{v.label}</div>
+                          <div style={{ fontSize: 7.5, color: selectedVariant === v.id ? "#a3e635" : "#64748b", marginTop: 2 }}>{v.desc}</div>
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
-                  {/* Mode Toggle */}
-                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <div style={{ display: 'flex', gap: 8 }}>
+                  {/* Mode Toggle: Existing Employee vs Candidate (Req 12.4) */}
+                  <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 16, display: "flex", flexDirection: "column", gap: 6 }}>
+                    <p style={{ fontSize: 8, fontWeight: 900, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "2px", margin: 0 }}>Target Recipient</p>
+                    <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,0.05)", padding: 4, borderRadius: 10 }}>
                       <button
                         onClick={() => setCandidateMode(false)}
                         style={{
-                          flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 10, fontWeight: 700,
-                          background: !candidateMode ? '#d9f99d' : 'rgba(255,255,255,0.05)',
-                          color: !candidateMode ? '#0f172a' : '#94a3b8',
-                          border: 'none', cursor: 'pointer', transition: 'all 0.2s'
+                          flex: 1, padding: "6px 0", borderRadius: 8, fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: "1px",
+                          background: !candidateMode ? "#d9f99d" : "transparent",
+                          color: !candidateMode ? "#0f172a" : "#94a3b8",
+                          border: "none", cursor: "pointer", transition: "all 0.2s"
                         }}
                       >
-                        Employee
+                        Existing Employee
                       </button>
                       <button
                         onClick={() => setCandidateMode(true)}
                         style={{
-                          flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 10, fontWeight: 700,
-                          background: candidateMode ? '#d9f99d' : 'rgba(255,255,255,0.05)',
-                          color: candidateMode ? '#0f172a' : '#94a3b8',
-                          border: 'none', cursor: 'pointer', transition: 'all 0.2s'
+                          flex: 1, padding: "6px 0", borderRadius: 8, fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: "1px",
+                          background: candidateMode ? "#d9f99d" : "transparent",
+                          color: candidateMode ? "#0f172a" : "#94a3b8",
+                          border: "none", cursor: "pointer", transition: "all 0.2s"
                         }}
                       >
-                        Candidate
+                        Prospective Candidate
                       </button>
                     </div>
                   </div>
 
                   {/* Dynamic Selection Area */}
                   {!candidateMode ? (
-                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <p style={{ fontSize: 7, fontWeight: 900, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '3px', margin: 0 }}>Select Employee</p>
+                    <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 16, display: "flex", flexDirection: "column", gap: 6 }}>
+                      <p style={{ fontSize: 8, fontWeight: 900, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "2px", margin: 0 }}>Select Employee</p>
                       <select
-                        style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, height: 40, padding: '0 12px', fontSize: 10, fontWeight: 700, color: '#e2e8f0', outline: 'none' }}
+                        style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, height: 38, padding: "0 10px", fontSize: 10, fontWeight: 700, color: "#e2e8f0", outline: "none" }}
                         value={selectedEmployee}
                         onChange={(e) => { setSelectedEmployee(e.target.value); setIssueError(""); setIssueSuccess(""); setIsEditing(false); }}
                       >
-                        <option value="" style={{ background: '#1e293b', color: '#64748b' }}>Select an employee…</option>
+                        <option value="" style={{ background: "#1e293b", color: "#64748b" }}>Choose an employee…</option>
                         {employees.map((emp) => (
-                          <option key={emp.id} value={emp.id} style={{ background: '#1e293b', color: '#e2e8f0' }}>
+                          <option key={emp.id} value={emp.id} style={{ background: "#1e293b", color: "#e2e8f0" }}>
                             {emp.name} ({emp.emp_code}){emp.department ? ` – ${emp.department}` : ""}
                           </option>
                         ))}
                       </select>
-                      {employees.length === 0 && !loading && (
-                        <p style={{ fontSize: 7, fontWeight: 600, color: '#64748b', margin: 0 }}>No employees loaded</p>
-                      )}
                     </div>
                   ) : (
-                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <p style={{ fontSize: 7, fontWeight: 900, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '3px', margin: 0 }}>Candidate Details</p>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        <input type="text" placeholder="Full Name" value={candidateData.name} onChange={(e) => setCandidateData({...candidateData, name: e.target.value})} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '8px 12px', fontSize: 10, color: '#fff', outline: 'none' }} />
-                        <input type="email" placeholder="Email Address" value={candidateData.email} onChange={(e) => setCandidateData({...candidateData, email: e.target.value})} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '8px 12px', fontSize: 10, color: '#fff', outline: 'none' }} />
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          <input type="text" placeholder="Designation" value={candidateData.designation} onChange={(e) => setCandidateData({...candidateData, designation: e.target.value})} style={{ flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '8px 12px', fontSize: 10, color: '#fff', outline: 'none' }} />
-                          <input type="text" placeholder="Department" value={candidateData.department} onChange={(e) => setCandidateData({...candidateData, department: e.target.value})} style={{ flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '8px 12px', fontSize: 10, color: '#fff', outline: 'none' }} />
+                    /* Candidate Details Form (Req 12.4) */
+                    <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+                      <div className="flex items-center justify-between">
+                        <p style={{ fontSize: 8, fontWeight: 900, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "2px", margin: 0 }}>Candidate Information</p>
+                        <span className="text-[7px] text-[#d9f99d] font-mono">No profile required</span>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        <input
+                          type="text"
+                          placeholder="Candidate Full Name *"
+                          value={candidateData.name}
+                          onChange={(e) => setCandidateData({...candidateData, name: e.target.value})}
+                          style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "7px 10px", fontSize: 10, color: "#fff", outline: "none" }}
+                        />
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <input
+                            type="email"
+                            placeholder="Email Address *"
+                            value={candidateData.email}
+                            onChange={(e) => setCandidateData({...candidateData, email: e.target.value})}
+                            style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "7px 10px", fontSize: 10, color: "#fff", outline: "none" }}
+                          />
+                          <input
+                            type="tel"
+                            placeholder="Phone Number"
+                            value={candidateData.phone}
+                            onChange={(e) => setCandidateData({...candidateData, phone: e.target.value})}
+                            style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "7px 10px", fontSize: 10, color: "#fff", outline: "none" }}
+                          />
                         </div>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          <select value={candidateData.company} onChange={(e) => setCandidateData({...candidateData, company: e.target.value})} style={{ flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '8px 12px', fontSize: 10, color: '#fff', outline: 'none' }}>
-                            <option value="" style={{ background: '#1e293b', color: '#64748b' }}>Select Company…</option>
-                            {companies.map(c => <option key={c.id} value={c.name} style={{ background: '#1e293b', color: '#e2e8f0' }}>{c.name}</option>)}
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <input
+                            type="text"
+                            placeholder="Proposed Role *"
+                            value={candidateData.designation}
+                            onChange={(e) => setCandidateData({...candidateData, designation: e.target.value})}
+                            style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "7px 10px", fontSize: 10, color: "#fff", outline: "none" }}
+                          />
+                          <input
+                            type="text"
+                            placeholder="Department"
+                            value={candidateData.department}
+                            onChange={(e) => setCandidateData({...candidateData, department: e.target.value})}
+                            style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "7px 10px", fontSize: 10, color: "#fff", outline: "none" }}
+                          />
+                        </div>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <select
+                            value={candidateData.company}
+                            onChange={(e) => setCandidateData({...candidateData, company: e.target.value})}
+                            style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "7px 10px", fontSize: 10, color: "#fff", outline: "none" }}
+                          >
+                            <option value="" style={{ background: "#1e293b", color: "#64748b" }}>Select Company…</option>
+                            {companies.map(c => <option key={c.id} value={c.name} style={{ background: "#1e293b", color: "#e2e8f0" }}>{c.name}</option>)}
                           </select>
-                          <select value={candidateData.office} onChange={(e) => setCandidateData({...candidateData, office: e.target.value})} style={{ flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '8px 12px', fontSize: 10, color: '#fff', outline: 'none' }}>
-                            <option value="" style={{ background: '#1e293b', color: '#64748b' }}>Select Office…</option>
-                            {offices.filter(o => !candidateData.company || companies.find(c => c.name === candidateData.company)?.id === o.company_id).map(o => <option key={o.id} value={o.name} style={{ background: '#1e293b', color: '#e2e8f0' }}>{o.name}</option>)}
+                          <select
+                            value={candidateData.office}
+                            onChange={(e) => setCandidateData({...candidateData, office: e.target.value})}
+                            style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "7px 10px", fontSize: 10, color: "#fff", outline: "none" }}
+                          >
+                            <option value="" style={{ background: "#1e293b", color: "#64748b" }}>Select Office…</option>
+                            {offices.filter(o => !candidateData.company || companies.find(c => c.name === candidateData.company)?.id === o.company_id).map(o => <option key={o.id} value={o.name} style={{ background: "#1e293b", color: "#e2e8f0" }}>{o.name}</option>)}
                           </select>
                         </div>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          <input type="number" placeholder="Monthly Gross CTC" value={candidateData.fixed_gross} onChange={(e) => setCandidateData({...candidateData, fixed_gross: e.target.value})} style={{ flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '8px 12px', fontSize: 10, color: '#fff', outline: 'none' }} />
-                          <input type="date" placeholder="Date of Joining" value={candidateData.date_of_joining} onChange={(e) => setCandidateData({...candidateData, date_of_joining: e.target.value})} style={{ flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '8px 12px', fontSize: 10, color: '#fff', outline: 'none' }} />
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <input
+                            type="number"
+                            placeholder="Monthly Gross CTC (₹)"
+                            value={candidateData.fixed_gross}
+                            onChange={(e) => setCandidateData({...candidateData, fixed_gross: e.target.value})}
+                            style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "7px 10px", fontSize: 10, color: "#fff", outline: "none" }}
+                          />
+                          <input
+                            type="date"
+                            placeholder="Joining Date"
+                            value={candidateData.date_of_joining}
+                            onChange={(e) => setCandidateData({...candidateData, date_of_joining: e.target.value})}
+                            style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "7px 10px", fontSize: 10, color: "#fff", outline: "none" }}
+                          />
                         </div>
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                          <label style={{ fontSize: 9, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 4, width: '100px' }}>
-                            <input type="checkbox" checked={candidateData.pf_applicable} onChange={e => setCandidateData({...candidateData, pf_applicable: e.target.checked})} /> PF Applicable
+
+                        {/* Statutory Components Toggle for Candidate */}
+                        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: 4 }}>
+                          <label style={{ fontSize: 8.5, color: "#94a3b8", display: "flex", alignItems: "center", gap: 4 }}>
+                            <input type="checkbox" checked={candidateData.pf_applicable} onChange={e => setCandidateData({...candidateData, pf_applicable: e.target.checked})} /> PF
                           </label>
                           {candidateData.pf_applicable && (
-                            <label style={{ fontSize: 9, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <input type="checkbox" checked={candidateData.pf_ceiling} onChange={e => setCandidateData({...candidateData, pf_ceiling: e.target.checked})} /> ₹15k Ceiling
+                            <label style={{ fontSize: 8.5, color: "#94a3b8", display: "flex", alignItems: "center", gap: 4 }}>
+                              <input type="checkbox" checked={candidateData.pf_ceiling} onChange={e => setCandidateData({...candidateData, pf_ceiling: e.target.checked})} /> ₹15k Cap
                             </label>
                           )}
-                          {candidateData.pf_applicable && (
-                            <select value={candidateData.pf_contribution_mode} onChange={e => setCandidateData({...candidateData, pf_contribution_mode: e.target.value})} style={{ flex: 1, minWidth: 100, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '4px 8px', fontSize: 9, color: '#fff' }}>
-                              <option value="shared" style={{ background: '#1e293b' }}>Shared (Both)</option>
-                              <option value="employer_only" style={{ background: '#1e293b' }}>Employer Only</option>
-                              <option value="employee_only" style={{ background: '#1e293b' }}>Employee Only</option>
-                              <option value="none" style={{ background: '#1e293b' }}>None</option>
-                            </select>
-                          )}
-                          {candidateData.pf_applicable && candidateData.pf_contribution_mode !== 'none' && (
-                            <div style={{ display: 'flex', gap: 4, width: '100%' }}>
-                              {(candidateData.pf_contribution_mode === 'shared' || candidateData.pf_contribution_mode === 'employer_only') && (
-                                <input type="number" step="0.01" placeholder="Employer Rate (0.12)" value={candidateData.pf_employer_rate} onChange={(e) => setCandidateData({...candidateData, pf_employer_rate: parseFloat(e.target.value)})} style={{ flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '4px 8px', fontSize: 9, color: '#fff', outline: 'none' }} />
-                              )}
-                              {(candidateData.pf_contribution_mode === 'shared' || candidateData.pf_contribution_mode === 'employee_only') && (
-                                <input type="number" step="0.01" placeholder="Employee Rate (0.12)" value={candidateData.pf_employee_rate} onChange={(e) => setCandidateData({...candidateData, pf_employee_rate: parseFloat(e.target.value)})} style={{ flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '4px 8px', fontSize: 9, color: '#fff', outline: 'none' }} />
-                              )}
-                            </div>
-                          )}
-                        </div>
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                          <label style={{ fontSize: 9, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 4, width: '100px' }}>
-                            <input type="checkbox" checked={candidateData.esic_applicable} onChange={e => setCandidateData({...candidateData, esic_applicable: e.target.checked})} /> ESIC Applicable
+                          <label style={{ fontSize: 8.5, color: "#94a3b8", display: "flex", alignItems: "center", gap: 4 }}>
+                            <input type="checkbox" checked={candidateData.esic_applicable} onChange={e => setCandidateData({...candidateData, esic_applicable: e.target.checked})} /> ESIC
                           </label>
-                          {candidateData.esic_applicable && (
-                            <select value={candidateData.esic_contribution_mode} onChange={e => setCandidateData({...candidateData, esic_contribution_mode: e.target.value})} style={{ flex: 1, minWidth: 100, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '4px 8px', fontSize: 9, color: '#fff' }}>
-                              <option value="shared" style={{ background: '#1e293b' }}>Shared (Both)</option>
-                              <option value="employer_only" style={{ background: '#1e293b' }}>Employer Only</option>
-                              <option value="employee_only" style={{ background: '#1e293b' }}>Employee Only</option>
-                              <option value="none" style={{ background: '#1e293b' }}>None</option>
-                            </select>
-                          )}
-                          {candidateData.esic_applicable && candidateData.esic_contribution_mode !== 'none' && (
-                            <div style={{ display: 'flex', gap: 4, width: '100%' }}>
-                              {(candidateData.esic_contribution_mode === 'shared' || candidateData.esic_contribution_mode === 'employer_only') && (
-                                <input type="number" step="0.0001" placeholder="Employer Rate (0.0325)" value={candidateData.esic_employer_rate} onChange={(e) => setCandidateData({...candidateData, esic_employer_rate: parseFloat(e.target.value)})} style={{ flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '4px 8px', fontSize: 9, color: '#fff', outline: 'none' }} />
-                              )}
-                              {(candidateData.esic_contribution_mode === 'shared' || candidateData.esic_contribution_mode === 'employee_only') && (
-                                <input type="number" step="0.0001" placeholder="Employee Rate (0.0075)" value={candidateData.esic_employee_rate} onChange={(e) => setCandidateData({...candidateData, esic_employee_rate: parseFloat(e.target.value)})} style={{ flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '4px 8px', fontSize: 9, color: '#fff', outline: 'none' }} />
-                              )}
-                            </div>
-                          )}
-                        </div>
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                          <label style={{ fontSize: 9, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 4, width: '100px' }}>
-                            <input type="checkbox" checked={candidateData.pt_applicable} onChange={e => setCandidateData({...candidateData, pt_applicable: e.target.checked})} /> PT Applicable
+                          <label style={{ fontSize: 8.5, color: "#94a3b8", display: "flex", alignItems: "center", gap: 4 }}>
+                            <input type="checkbox" checked={candidateData.pt_applicable} onChange={e => setCandidateData({...candidateData, pt_applicable: e.target.checked})} /> PT
                           </label>
                         </div>
                       </div>
                     </div>
                   )}
 
-                  {/* Signatory Selection */}
-                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <p style={{ fontSize: 7, fontWeight: 900, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '3px', margin: 0 }}>Authorised Signatory</p>
+                  {/* Authorised Signatory Selector (Req 12.3) */}
+                  <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 16, display: "flex", flexDirection: "column", gap: 6 }}>
+                    <div className="flex items-center justify-between">
+                      <p style={{ fontSize: 8, fontWeight: 900, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "2px", margin: 0 }}>Authorised Signatory</p>
+                      {activeSignatoryObj && (
+                        <span className="text-[7px] text-[#d9f99d] font-bold">Signature Connected</span>
+                      )}
+                    </div>
                     <select
-                      style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, height: 40, padding: '0 12px', fontSize: 10, fontWeight: 700, color: '#e2e8f0', outline: 'none' }}
+                      style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, height: 38, padding: "0 10px", fontSize: 10, fontWeight: 700, color: "#e2e8f0", outline: "none" }}
                       value={selectedSignatory}
                       onChange={(e) => setSelectedSignatory(e.target.value)}
                     >
-                      <option value="" style={{ background: '#1e293b', color: '#64748b' }}>Default Signatory…</option>
+                      <option value="" style={{ background: "#1e293b", color: "#64748b" }}>Default Signatory Block…</option>
                       {signatories.map((sig) => (
-                        <option key={sig.id} value={sig.id} style={{ background: '#1e293b', color: '#e2e8f0' }}>
+                        <option key={sig.id} value={sig.id} style={{ background: "#1e293b", color: "#e2e8f0" }}>
                           {sig.name} ({sig.designation})
                         </option>
                       ))}
                     </select>
-                  </div>
-
-                  {/* Employee Info (when selected + preview loaded) */}
-                  {previewData?.employee && (
-                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <p style={{ fontSize: 7, fontWeight: 900, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '3px', margin: 0 }}>Employee Details</p>
-                      <div style={{ background: 'rgba(255,255,255,0.04)', padding: 12, borderRadius: 12, border: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ fontSize: 8, color: '#64748b' }}>Name</span>
-                          <span style={{ fontSize: 9, fontWeight: 700, color: '#e2e8f0' }}>{previewData.employee.name}</span>
+                    {activeSignatoryObj && (
+                      <div className="p-2 rounded-lg bg-white/5 border border-white/5 flex items-center justify-between">
+                        <div>
+                          <p className="text-[9px] font-bold text-slate-200">{activeSignatoryObj.name}</p>
+                          <p className="text-[7.5px] text-slate-400">{activeSignatoryObj.designation}</p>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ fontSize: 8, color: '#64748b' }}>Code</span>
-                          <span style={{ fontSize: 9, fontWeight: 700, color: '#e2e8f0' }}>{previewData.employee.emp_code}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ fontSize: 8, color: '#64748b' }}>Designation</span>
-                          <span style={{ fontSize: 9, fontWeight: 700, color: '#e2e8f0' }}>{previewData.employee.designation}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ fontSize: 8, color: '#64748b' }}>Department</span>
-                          <span style={{ fontSize: 9, fontWeight: 700, color: '#e2e8f0' }}>{previewData.employee.department}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ fontSize: 8, color: '#64748b' }}>Office</span>
-                          <span style={{ fontSize: 9, fontWeight: 700, color: '#e2e8f0' }}>{previewData.employee.office}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ fontSize: 8, color: '#64748b' }}>Email</span>
-                          <span style={{ fontSize: 9, fontWeight: 700, color: '#d9f99d' }}>{previewData.employee.email}</span>
-                        </div>
+                        {activeSignatoryObj.signature_url ? (
+                          <span className="text-[7px] font-mono text-emerald-400 bg-emerald-950/40 px-1.5 py-0.5 rounded">Digital Stamp Ready</span>
+                        ) : (
+                          <span className="text-[7px] font-mono text-slate-400">Formal Line Block</span>
+                        )}
                       </div>
-                    </div>
-                  )}
-
-                  {/* Dynamic Fields Info */}
-                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <p style={{ fontSize: 7, fontWeight: 900, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '3px', margin: 0 }}>Dynamic Fields</p>
-                    <div style={{ background: 'rgba(255,255,255,0.04)', padding: 12, borderRadius: 12, border: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {["[Employee_Name]", "[Job_Title]", "[Date]", "[Department]", "[Office_Location]", "[Company_Name]", "[Employee_Code]", "[Salary]", "[Joining_Date]"].map(f => (
-                        <div key={f} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8' }}>{f}</span>
-                          <span style={{ fontSize: 7, fontWeight: 900, color: previewData ? '#d9f99d' : '#64748b', textTransform: 'uppercase' }}>
-                            {previewData ? 'Filled' : 'Auto'}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
+                    )}
                   </div>
 
-                  {/* Email toggle */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <input
-                      type="checkbox"
-                      checked={emailEnabled}
-                      onChange={(e) => setEmailEnabled(e.target.checked)}
-                      style={{ accentColor: '#d9f99d', width: 12, height: 12 }}
-                    />
-                    <span style={{ fontSize: 9, fontWeight: 700, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '1px' }}>Enable Email Auto-Send</span>
-                  </div>
-
-                  {/* Status Messages */}
+                  {/* Status Alerts */}
                   {issueError && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(239,68,68,0.15)', borderRadius: 8, padding: '8px 12px' }}>
-                      <AlertCircle style={{ width: 12, height: 12, color: '#fca5a5', flexShrink: 0 }} />
-                      <span style={{ fontSize: 8, fontWeight: 700, color: '#fca5a5' }}>{issueError}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(239,68,68,0.15)", borderRadius: 8, padding: "8px 10px" }}>
+                      <AlertCircle style={{ width: 12, height: 12, color: "#fca5a5", flexShrink: 0 }} />
+                      <span style={{ fontSize: 8.5, fontWeight: 700, color: "#fca5a5" }}>{issueError}</span>
                     </div>
                   )}
                   {issueSuccess && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(34,197,94,0.15)', borderRadius: 8, padding: '8px 12px' }}>
-                      <CheckCircle2 style={{ width: 12, height: 12, color: '#86efac', flexShrink: 0 }} />
-                      <span style={{ fontSize: 8, fontWeight: 700, color: '#86efac' }}>{issueSuccess}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(34,197,94,0.15)", borderRadius: 8, padding: "8px 10px" }}>
+                      <CheckCircle2 style={{ width: 12, height: 12, color: "#86efac", flexShrink: 0 }} />
+                      <span style={{ fontSize: 8.5, fontWeight: 700, color: "#86efac" }}>{issueSuccess}</span>
                     </div>
                   )}
                 </div>
 
-                {/* Action Buttons */}
-                <div style={{ padding: '20px 24px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {/* Action Buttons Panel */}
+                <div style={{ padding: 18, borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column", gap: 8 }}>
+                  {/* Send Email & Record */}
                   <button
                     disabled={sending || (candidateMode ? !candidateData.name : !selectedEmployee) || !previewData}
                     onClick={handleSendEmail}
                     style={{
-                      width: '100%', background: '#d9f99d', color: '#0f172a', fontWeight: 900, fontSize: 9, height: 44,
-                      borderRadius: 12, border: 'none', cursor: sending || (candidateMode ? !candidateData.name : !selectedEmployee) || !previewData ? 'not-allowed' : 'pointer',
-                      textTransform: 'uppercase', letterSpacing: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                      width: "100%", background: "#d9f99d", color: "#0f172a", fontWeight: 900, fontSize: 9, height: 40,
+                      borderRadius: 10, border: "none", cursor: sending || (candidateMode ? !candidateData.name : !selectedEmployee) || !previewData ? "not-allowed" : "pointer",
+                      textTransform: "uppercase", letterSpacing: "1.5px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
                       opacity: sending || (candidateMode ? !candidateData.name : !selectedEmployee) || !previewData ? 0.5 : 1,
                     }}
                   >
                     {sending ? (
-                      <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Sending…</>
+                      <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Sending Email…</>
                     ) : (
-                      <><Mail style={{ width: 14, height: 14 }} /> {candidateMode ? 'Send Email' : 'Email & Record'}</>
+                      <><Mail style={{ width: 13, height: 13 }} /> Email & Issue to History</>
                     )}
                   </button>
-                  <button
-                    disabled={issuing || (candidateMode ? !candidateData.name : !selectedEmployee) || !previewData}
-                    onClick={handleDownloadPDF}
-                    style={{
-                      width: '100%', background: 'transparent', color: '#e2e8f0', fontWeight: 900, fontSize: 9, height: 44,
-                      borderRadius: 12, border: '1px solid rgba(255,255,255,0.12)', cursor: issuing || (candidateMode ? !candidateData.name : !selectedEmployee) || !previewData ? 'not-allowed' : 'pointer',
-                      textTransform: 'uppercase', letterSpacing: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                      opacity: issuing || (candidateMode ? !candidateData.name : !selectedEmployee) || !previewData ? 0.5 : 1,
-                    }}
-                  >
-                    {issuing ? (
-                      <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating…</>
-                    ) : (
-                      <><Download style={{ width: 14, height: 14 }} /> Download PDF</>
-                    )}
-                  </button>
+
+                  <div className="flex gap-2">
+                    {/* Issue & Download PDF */}
+                    <button
+                      disabled={issuing || (candidateMode ? !candidateData.name : !selectedEmployee) || !previewData}
+                      onClick={() => handleDownloadPDF(true)}
+                      style={{
+                        flex: 1, background: "rgba(255,255,255,0.08)", color: "#e2e8f0", fontWeight: 900, fontSize: 8.5, height: 36,
+                        borderRadius: 10, border: "1px solid rgba(255,255,255,0.15)", cursor: issuing || (candidateMode ? !candidateData.name : !selectedEmployee) || !previewData ? "not-allowed" : "pointer",
+                        textTransform: "uppercase", letterSpacing: "1px", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                        opacity: issuing || (candidateMode ? !candidateData.name : !selectedEmployee) || !previewData ? 0.5 : 1,
+                      }}
+                    >
+                      {issuing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                      Issue & Download
+                    </button>
+
+                    {/* Preview PDF Only */}
+                    <button
+                      disabled={issuing || (candidateMode ? !candidateData.name : !selectedEmployee) || !previewData}
+                      onClick={() => handleDownloadPDF(false)}
+                      style={{
+                        flex: 1, background: "transparent", color: "#94a3b8", fontWeight: 700, fontSize: 8.5, height: 36,
+                        borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", cursor: issuing || (candidateMode ? !candidateData.name : !selectedEmployee) || !previewData ? "not-allowed" : "pointer",
+                        textTransform: "uppercase", letterSpacing: "1px", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                        opacity: issuing || (candidateMode ? !candidateData.name : !selectedEmployee) || !previewData ? 0.5 : 1,
+                      }}
+                    >
+                      <Download className="h-3 w-3" />
+                      PDF Only
+                    </button>
+                  </div>
                 </div>
               </div>
 
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* ── TEMPLATE EDITOR MODAL (Req 12.3: Admin template editing) ── */}
+        <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
+          <DialogContent className="max-w-2xl rounded-2xl p-6 bg-white shadow-2xl border-none">
+            <DialogHeader>
+              <DialogTitle className="text-base font-black italic uppercase tracking-tight text-slate-900">
+                {editingTemplateId ? "Edit Document Template" : "Create New Document Template"}
+              </DialogTitle>
+              <DialogDescription className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                Customize template text, salary placeholders, and legal terms
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 my-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Template Name *</label>
+                  <Input
+                    value={templateForm.name}
+                    onChange={(e) => setTemplateForm({ ...templateForm, name: e.target.value })}
+                    placeholder="e.g. Appointment Letter (Executive)"
+                    className="h-9 mt-1 text-xs font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Type *</label>
+                  <select
+                    value={templateForm.type}
+                    onChange={(e) => setTemplateForm({ ...templateForm, type: e.target.value })}
+                    className="w-full h-9 mt-1 rounded-md border border-slate-200 px-3 text-xs font-bold text-slate-800 outline-none"
+                  >
+                    <option value="offer">Offer Letter</option>
+                    <option value="appointment">Appointment Letter</option>
+                    <option value="warning">Warning Letter</option>
+                    <option value="promotion">Promotion Letter</option>
+                    <option value="transfer">Transfer Letter</option>
+                    <option value="resignation">Resignation Acceptance</option>
+                    <option value="experience">Experience Certificate</option>
+                    <option value="relieving">Relieving Letter</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Category</label>
+                  <Input
+                    value={templateForm.category}
+                    onChange={(e) => setTemplateForm({ ...templateForm, category: e.target.value })}
+                    placeholder="e.g. Hiring, Disciplinary, Exit"
+                    className="h-9 mt-1 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Description</label>
+                  <Input
+                    value={templateForm.description}
+                    onChange={(e) => setTemplateForm({ ...templateForm, description: e.target.value })}
+                    placeholder="Brief description for HR"
+                    className="h-9 mt-1 text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Placeholder Helper Toolbar */}
+              <div>
+                <label className="text-[8px] font-black uppercase text-slate-400 tracking-wider block mb-1">
+                  Click to Insert Dynamic Placeholder Tag:
+                </label>
+                <div className="flex flex-wrap gap-1 p-2 bg-slate-50 rounded-xl border border-slate-100 max-h-24 overflow-y-auto">
+                  {AVAILABLE_PLACEHOLDERS.map(p => (
+                    <button
+                      key={p.tag}
+                      type="button"
+                      onClick={() => handleInsertPlaceholder(p.tag)}
+                      className="px-2 py-0.5 rounded text-[8px] font-mono bg-white hover:bg-[#D9F99D] text-slate-700 hover:text-slate-900 border border-slate-200 transition-colors shadow-2xs"
+                      title={p.desc}
+                    >
+                      +{p.tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[8px] font-black uppercase text-slate-400 tracking-wider block mb-1">
+                  Template HTML Content *
+                </label>
+                <textarea
+                  value={templateForm.content}
+                  onChange={(e) => setTemplateForm({ ...templateForm, content: e.target.value })}
+                  rows={10}
+                  className="w-full font-mono text-[11px] p-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#D9F99D] shadow-inner"
+                  placeholder="Enter HTML letter content with placeholders..."
+                />
+              </div>
+
+              {templateSaveError && (
+                <p className="text-xs font-bold text-rose-500">{templateSaveError}</p>
+              )}
+            </div>
+
+            <DialogFooter className="gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEditorOpen(false)}
+                className="rounded-xl text-xs font-bold"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSaveTemplate}
+                disabled={savingTemplate}
+                size="sm"
+                className="bg-slate-900 text-white hover:bg-slate-800 rounded-xl text-xs font-bold"
+              >
+                {savingTemplate ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Save className="h-3 w-3 mr-1" />}
+                Save Template
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
       </div>
     </ProtectedRoute>
   );
