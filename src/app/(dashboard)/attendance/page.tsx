@@ -343,7 +343,11 @@ export default function AttendancePage() {
     const exportMonthlyToCSV = (rows: any[], filename: string) => {
         if (!rows || rows.length === 0) return;
         const daysInMonth = cycleDates.length;
-        const baseHeaders = ["Emp Code", "Name", "Role", "Department", "Hub", "Company", "Present", "Week Off", "Leave", "Holiday", "Tour", "Absent"];
+        const baseHeaders = [
+            "Emp Code", "Name", "Role", "Department", "Hub", "Company",
+            "Muster Days", "Present Days", "Week Off", "Paid Leave", "Holiday", "Tour (Paid)",
+            "Payable Days", "LWP Days", "Fixed Gross (INR)", "Estimated Payout (INR)"
+        ];
         const dayHeaders = cycleDates.map((date) => {
             const yyyy = date.getFullYear();
             const mm = String(date.getMonth() + 1).padStart(2, '0');
@@ -370,6 +374,13 @@ export default function AttendancePage() {
                         default: return ch;
                     }
                 });
+                const musterDays = row.muster_days ?? daysInMonth;
+                const payableDays = (row.present ?? 0) + (row.woff ?? 0) + (row.leave ?? 0) + (row.holiday ?? 0) + (row.tour ?? 0);
+                const lwpDays = row.absent ?? 0;
+                const salary = row.salary || 0;
+                const dailyRate = Math.round(salary / (musterDays || 1));
+                const estimatedPayout = payableDays * dailyRate;
+
                 const baseValues = [
                     row.id ?? "",
                     row.name ?? "",
@@ -377,12 +388,16 @@ export default function AttendancePage() {
                     row.department ?? "---",
                     row.hub ?? "",
                     row.company ?? "",
+                    musterDays,
                     row.present ?? 0,
                     row.woff ?? 0,
                     row.leave ?? 0,
                     row.holiday ?? 0,
                     row.tour ?? 0,
-                    row.absent ?? 0,
+                    payableDays,
+                    lwpDays,
+                    salary,
+                    estimatedPayout,
                 ];
                 const allValues = [...baseValues, ...dayValues];
                 return allValues.map((v) => `"${(v ?? "").toString().replace(/"/g, '""')}"`).join(",");
@@ -408,6 +423,15 @@ export default function AttendancePage() {
     const openMap = (log: any) => {
         setSelectedMapLog(log);
         setIsMapOpen(true);
+    };
+
+    // Attendance to Payroll Breakdown Dialog State (Req 8)
+    const [selectedPayrollBreakdown, setSelectedPayrollBreakdown] = useState<any | null>(null);
+    const [isPayrollBreakdownOpen, setIsPayrollBreakdownOpen] = useState(false);
+
+    const openPayrollBreakdown = (emp: any) => {
+        setSelectedPayrollBreakdown(emp);
+        setIsPayrollBreakdownOpen(true);
     };
 
     // Manual & Authorized Attendance State (Req 5.1, 5.2)
@@ -1500,9 +1524,9 @@ export default function AttendancePage() {
                                 <span className="text-[8px] text-slate-400 font-bold uppercase">In View</span>
                             </Card>
                             <Card className="bg-blue-50/80 rounded-2xl p-4 shadow-sm border-none">
-                                <p className="text-[8px] font-black uppercase tracking-widest text-blue-600">Cycle Muster Days</p>
+                                <p className="text-[8px] font-black uppercase tracking-widest text-blue-600">1. Muster / Total Days</p>
                                 <h4 className="text-2xl font-black italic tracking-tighter text-blue-950 mt-1">{daysInSelectedMonth}</h4>
-                                <span className="text-[8px] text-blue-500 font-bold uppercase">{cycleType === "payroll" ? "26th - 25th" : "1st - Month End"}</span>
+                                <span className="text-[8px] text-blue-500 font-bold uppercase">{cycleType === "payroll" ? "26th - 25th Cycle" : "Calendar Month"}</span>
                             </Card>
                             <Card className="bg-emerald-50/80 rounded-2xl p-4 shadow-sm border-none">
                                 <p className="text-[8px] font-black uppercase tracking-widest text-emerald-600">Total Present Days</p>
@@ -1512,19 +1536,44 @@ export default function AttendancePage() {
                                 <span className="text-[8px] text-emerald-600 font-bold uppercase">Recorded Staff Days</span>
                             </Card>
                             <Card className="bg-indigo-50/80 rounded-2xl p-4 shadow-sm border-none">
-                                <p className="text-[8px] font-black uppercase tracking-widest text-indigo-600">Total Payable Days</p>
+                                <p className="text-[8px] font-black uppercase tracking-widest text-indigo-600">2. Payable Days</p>
                                 <h4 className="text-2xl font-black italic tracking-tighter text-indigo-950 mt-1">
                                     {monthlyRows.reduce((sum, r) => sum + ((r.present || 0) + (r.woff || 0) + (r.leave || 0) + (r.holiday || 0) + (r.tour || 0)), 0)}
                                 </h4>
-                                <span className="text-[8px] text-indigo-600 font-bold uppercase">Present + WO + H + L</span>
+                                <span className="text-[8px] text-indigo-600 font-bold uppercase">Present + WO + H + L + Tour</span>
                             </Card>
                             <Card className="bg-rose-50/80 rounded-2xl p-4 shadow-sm border-none">
-                                <p className="text-[8px] font-black uppercase tracking-widest text-rose-600">Total LWP / Absent</p>
+                                <p className="text-[8px] font-black uppercase tracking-widest text-rose-600">3. LWP (Loss of Pay)</p>
                                 <h4 className="text-2xl font-black italic tracking-tighter text-rose-950 mt-1">
                                     {monthlyRows.reduce((sum, r) => sum + (r.absent || 0), 0)}
                                 </h4>
-                                <span className="text-[8px] text-rose-600 font-bold uppercase">Loss of Pay Days</span>
+                                <span className="text-[8px] text-rose-600 font-bold uppercase">Salary Deducted Days</span>
                             </Card>
+                        </div>
+
+                        {/* Attendance & Payroll Calculation Relationship Bridge (Req 8) */}
+                        <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 text-slate-700 shadow-sm">
+                            <div className="flex flex-wrap items-center gap-3 text-[10px]">
+                                <div className="flex items-center gap-1.5 font-black uppercase tracking-wider text-slate-900">
+                                    <Info className="h-4 w-4 text-indigo-600 shrink-0" />
+                                    <span>Payroll Relationship:</span>
+                                </div>
+                                <div className="flex items-center gap-1.5 font-bold">
+                                    <span className="bg-blue-100 text-blue-900 px-2 py-0.5 rounded-md font-black">Muster Days ({daysInSelectedMonth})</span>
+                                    <span className="text-slate-400 font-black">=</span>
+                                    <span className="bg-indigo-100 text-indigo-900 px-2 py-0.5 rounded-md font-black">Payable Days</span>
+                                    <span className="text-slate-400 font-black">+</span>
+                                    <span className="bg-rose-100 text-rose-900 px-2 py-0.5 rounded-md font-black">LWP Days</span>
+                                </div>
+                                <div className="hidden lg:inline text-slate-300">|</div>
+                                <span className="text-slate-500 font-semibold hidden sm:inline">
+                                    Per-Day Rate = Fixed Gross ÷ Muster Days • Gross Payout = Payable Days × Daily Rate
+                                </span>
+                            </div>
+                            <div className="text-[8px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                                <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
+                                Click any Payable or LWP badge for breakdown
+                            </div>
                         </div>
 
                         {/* Executive Month & Day Information Banner (Req 6.3) */}
@@ -1887,14 +1936,22 @@ export default function AttendancePage() {
                                                     </td>
                                                     {/* Payable Days */}
                                                     <td className="py-3 px-3 text-center border-r border-slate-50 bg-emerald-50/20">
-                                                        <div className="flex flex-col items-center justify-center gap-0.5 cursor-help" title={`Employee: ${emp.name}\nFixed Gross: ₹${(emp.salary || 0).toLocaleString('en-IN')}\n\nPayable Days Breakdown:\n• Present: ${emp.present ?? 0}\n• Weekly Off: ${emp.woff ?? 0}\n• Holiday: ${emp.holiday ?? 0}\n• Paid Leave: ${emp.leave ?? 0}\n• Tour (Paid): ${emp.tour ?? 0}\n────────────────\nPayable Days: ${payable}\nPer-Day Rate: ₹${dailyRate.toLocaleString('en-IN')}\nEstimated Payout: ₹${(payable * dailyRate).toLocaleString('en-IN')}`}>
-                                                            <Badge className="bg-emerald-500 text-white font-black text-[10px] h-6 px-2.5 rounded-md shadow-sm hover:bg-emerald-600">{payable}</Badge>
+                                                        <div
+                                                            onClick={() => openPayrollBreakdown(emp)}
+                                                            className="flex flex-col items-center justify-center gap-0.5 cursor-pointer group/badge"
+                                                            title={`Employee: ${emp.name}\nFixed Gross: ₹${(emp.salary || 0).toLocaleString('en-IN')}\nPer-Day Rate: ₹${dailyRate.toLocaleString('en-IN')}\n────────────────\nMuster Days: ${emp.muster_days ?? daysInSelectedMonth}\n• Present: ${emp.present ?? 0}\n• Weekly Off: ${emp.woff ?? 0}\n• Holiday: ${emp.holiday ?? 0}\n• Paid Leave: ${emp.leave ?? 0}\n• Tour (Paid): ${emp.tour ?? 0}\n────────────────\nPayable Days: ${payable}\nEstimated Gross Payout: ₹${(payable * dailyRate).toLocaleString('en-IN')}\n\n(Click to view full payroll calculation breakdown)`}
+                                                        >
+                                                            <Badge className="bg-emerald-500 text-white font-black text-[10px] h-6 px-2.5 rounded-md shadow-sm group-hover/badge:bg-emerald-600 transition-transform group-hover/badge:scale-105">{payable}</Badge>
                                                         </div>
                                                     </td>
                                                     {/* LWP / Absent Days */}
                                                     <td className="py-3 px-3 text-center border-r border-slate-50 bg-rose-50/10">
-                                                        <div className="cursor-help" title={`Employee: ${emp.name}\nFixed Gross: ₹${(emp.salary || 0).toLocaleString('en-IN')}\nPer-Day Rate: ₹${dailyRate.toLocaleString('en-IN')}\n────────────────\nAbsent/LWP Days: ${emp.absent ?? 0}\nSalary Deduction: ₹${((emp.absent || 0) * dailyRate).toLocaleString('en-IN')}\nNet Payable Days: ${payable} - ${emp.absent ?? 0} = ${Math.max(0, payable - (emp.absent || 0))}\nEstimated Net: ₹${(Math.max(0, payable - (emp.absent || 0)) * dailyRate).toLocaleString('en-IN')}`}>
-                                                            <Badge className={cn("font-black text-[10px] h-6 px-2.5 rounded-md shadow-sm", (emp.absent || 0) > 0 ? "bg-rose-500 text-white hover:bg-rose-600" : "bg-slate-100 text-slate-400 hover:bg-slate-200")}>{emp.absent ?? 0}</Badge>
+                                                        <div
+                                                            onClick={() => openPayrollBreakdown(emp)}
+                                                            className="cursor-pointer group/badge"
+                                                            title={`Employee: ${emp.name}\nFixed Gross: ₹${(emp.salary || 0).toLocaleString('en-IN')}\nPer-Day Rate: ₹${dailyRate.toLocaleString('en-IN')}\n────────────────\nMuster Days: ${emp.muster_days ?? daysInSelectedMonth}\nPayable Days: ${payable}\nLWP / Absent: ${emp.absent ?? 0}\n────────────────\nEquation: ${emp.muster_days ?? daysInSelectedMonth} (Muster) = ${payable} (Payable) + ${emp.absent ?? 0} (LWP)\nSalary Deduction: ₹${((emp.absent || 0) * dailyRate).toLocaleString('en-IN')}\n\n(Click to view full payroll calculation breakdown)`}
+                                                        >
+                                                            <Badge className={cn("font-black text-[10px] h-6 px-2.5 rounded-md shadow-sm transition-transform group-hover/badge:scale-105", (emp.absent || 0) > 0 ? "bg-rose-500 text-white group-hover/badge:bg-rose-600" : "bg-slate-100 text-slate-400 group-hover/badge:bg-slate-200")}>{emp.absent ?? 0}</Badge>
                                                         </div>
                                                     </td>
                                                     {/* Day cells */}
@@ -2032,6 +2089,164 @@ export default function AttendancePage() {
                     </div>
                 )}
             </div>
+
+            {/* Attendance & Payroll Calculation Breakdown Dialog (Req 8) */}
+            <Dialog open={isPayrollBreakdownOpen} onOpenChange={setIsPayrollBreakdownOpen}>
+                <DialogContent className="sm:max-w-[560px] rounded-[2rem] p-0 overflow-hidden bg-white border-none shadow-2xl">
+                    {selectedPayrollBreakdown && (() => {
+                        const emp = selectedPayrollBreakdown;
+                        const musterDays = emp.muster_days ?? daysInSelectedMonth;
+                        const present = emp.present ?? 0;
+                        const woff = emp.woff ?? 0;
+                        const holiday = emp.holiday ?? 0;
+                        const leave = emp.leave ?? 0;
+                        const tour = emp.tour ?? 0;
+                        const payableDays = present + woff + holiday + leave + tour;
+                        const lwpDays = emp.absent ?? 0;
+                        const fixedGross = emp.salary || 0;
+                        const dailyRate = Math.round(fixedGross / (musterDays || 1));
+                        const grossEarned = payableDays * dailyRate;
+                        const lwpDeduction = lwpDays * dailyRate;
+                        const isBalanced = (payableDays + lwpDays) === musterDays;
+
+                        return (
+                            <div>
+                                <div className="bg-slate-900 p-7 text-white relative overflow-hidden">
+                                    <div className="absolute inset-0 opacity-10">
+                                        <div className="absolute inset-0 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]" />
+                                    </div>
+                                    <div className="relative z-10 flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-12 w-12 bg-white/10 rounded-2xl flex items-center justify-center font-black italic text-lg text-[#D9F99D] shadow-md">
+                                                {emp.name.charAt(0)}
+                                            </div>
+                                            <div>
+                                                <DialogTitle className="text-xl font-black italic tracking-tight text-white">
+                                                    {emp.name}
+                                                </DialogTitle>
+                                                <DialogDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                                                    {emp.id} • {emp.role} • {emp.company || "Company"}
+                                                </DialogDescription>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">Fixed Gross CTC</span>
+                                            <span className="text-base font-black text-emerald-400">₹{fixedGross.toLocaleString('en-IN')}/mo</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="p-7 space-y-5">
+                                    {/* 3 Core Fields Requirement 8 Summary Cards */}
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <div className="bg-blue-50/70 border border-blue-100 rounded-2xl p-3 text-center">
+                                            <span className="text-[8px] font-black uppercase tracking-wider text-blue-600 block">1. Muster Days</span>
+                                            <span className="text-2xl font-black text-blue-950 block mt-1">{musterDays}</span>
+                                            <span className="text-[8px] text-blue-500 font-bold uppercase">Total In Period</span>
+                                        </div>
+                                        <div className="bg-emerald-50/70 border border-emerald-100 rounded-2xl p-3 text-center">
+                                            <span className="text-[8px] font-black uppercase tracking-wider text-emerald-600 block">2. Payable Days</span>
+                                            <span className="text-2xl font-black text-emerald-950 block mt-1">{payableDays}</span>
+                                            <span className="text-[8px] text-emerald-600 font-bold uppercase">Salary Payable</span>
+                                        </div>
+                                        <div className="bg-rose-50/70 border border-rose-100 rounded-2xl p-3 text-center">
+                                            <span className="text-[8px] font-black uppercase tracking-wider text-rose-600 block">3. LWP (Unpaid)</span>
+                                            <span className="text-2xl font-black text-rose-950 block mt-1">{lwpDays}</span>
+                                            <span className="text-[8px] text-rose-600 font-bold uppercase">Loss of Pay Days</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Approved Payroll Relationship Equation */}
+                                    <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 space-y-2">
+                                        <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider">
+                                            <span className="text-slate-500">Payroll Balance Equation:</span>
+                                            <Badge className={cn("text-[9px] font-black uppercase px-2 py-0.5", isBalanced ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")}>
+                                                {isBalanced ? "✓ Balanced (P + LWP = M)" : "⚠️ Cycle Incomplete"}
+                                            </Badge>
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs font-mono font-bold bg-white p-2.5 rounded-xl border border-slate-100 text-slate-800">
+                                            <span>Muster ({musterDays})</span>
+                                            <span className="text-slate-400">=</span>
+                                            <span className="text-emerald-700">Payable ({payableDays})</span>
+                                            <span className="text-slate-400">+</span>
+                                            <span className="text-rose-700">LWP ({lwpDays})</span>
+                                        </div>
+                                        <p className="text-[9px] text-slate-400 leading-relaxed">
+                                            Per-Day Rate: <strong className="text-slate-700">₹{fixedGross.toLocaleString('en-IN')} ÷ {musterDays} = ₹{dailyRate.toLocaleString('en-IN')}/day</strong>.
+                                        </p>
+                                    </div>
+
+                                    {/* Detailed Component Breakdown */}
+                                    <div className="space-y-2">
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block">Attendance Component Breakdown</span>
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                                            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex justify-between items-center">
+                                                <span className="text-slate-500 font-medium">Present:</span>
+                                                <span className="font-black text-slate-800">{present} days</span>
+                                            </div>
+                                            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex justify-between items-center">
+                                                <span className="text-slate-500 font-medium">Week Offs:</span>
+                                                <span className="font-black text-slate-800">{woff} days</span>
+                                            </div>
+                                            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex justify-between items-center">
+                                                <span className="text-slate-500 font-medium">Holidays:</span>
+                                                <span className="font-black text-slate-800">{holiday} days</span>
+                                            </div>
+                                            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex justify-between items-center">
+                                                <span className="text-slate-500 font-medium">Paid Leaves:</span>
+                                                <span className="font-black text-slate-800">{leave} days</span>
+                                            </div>
+                                            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex justify-between items-center">
+                                                <span className="text-slate-500 font-medium">Tours / Outdoor:</span>
+                                                <span className="font-black text-slate-800">{tour} days</span>
+                                            </div>
+                                            <div className="p-2.5 rounded-xl bg-rose-50/60 border border-rose-100 flex justify-between items-center">
+                                                <span className="text-rose-600 font-medium">LWP / Absent:</span>
+                                                <span className="font-black text-rose-900">{lwpDays} days</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Final Financial Treatment Preview */}
+                                    <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-100 flex items-center justify-between">
+                                        <div>
+                                            <span className="text-[9px] font-black uppercase tracking-widest text-indigo-600 block">Gross Salary Payable</span>
+                                            <span className="text-lg font-black text-indigo-950 block">₹{grossEarned.toLocaleString('en-IN')}</span>
+                                            <span className="text-[8px] text-slate-400 font-medium">{payableDays} days × ₹{dailyRate.toLocaleString('en-IN')}/day</span>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="text-[9px] font-black uppercase tracking-widest text-rose-600 block">LWP Deduction</span>
+                                            <span className="text-lg font-black text-rose-900 block">-₹{lwpDeduction.toLocaleString('en-IN')}</span>
+                                            <span className="text-[8px] text-slate-400 font-medium">{lwpDays} days × ₹{dailyRate.toLocaleString('en-IN')}/day</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-end gap-3 pt-2">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => setIsPayrollBreakdownOpen(false)}
+                                            className="h-10 px-5 rounded-xl border-slate-200 font-black text-[10px] uppercase tracking-wider"
+                                        >
+                                            Close
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            onClick={() => {
+                                                setIsPayrollBreakdownOpen(false);
+                                                window.location.href = `/payroll`;
+                                            }}
+                                            className="h-10 px-5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-[10px] uppercase tracking-wider shadow-md"
+                                        >
+                                            Open in Payroll Ledger <ArrowUpRight className="h-3.5 w-3.5 ml-1.5" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
+                </DialogContent>
+            </Dialog>
 
             {/* Authorized Attendance & Outdoor Duty Dialog (Req 5.1 & 5.2) */}
             <Dialog open={isManualEntryOpen} onOpenChange={setIsManualEntryOpen}>
