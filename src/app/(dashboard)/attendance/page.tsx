@@ -45,6 +45,10 @@ import {
     Plane,
     Compass,
     Sliders,
+    ChevronsLeft,
+    ChevronsRight,
+    MoveHorizontal,
+    Target,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -172,17 +176,35 @@ export default function AttendancePage() {
     const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth());
     const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
 
-    // Synchronized scrollbar refs & state (Req 7)
+    // Synchronized scrollbar refs & state (Req 7 - Usability Improvements)
     const tableContainerRef = useRef<HTMLDivElement>(null);
     const topScrollRef = useRef<HTMLDivElement>(null);
     const [scrollWidth, setScrollWidth] = useState(0);
+    const [scrollLeftPos, setScrollLeftPos] = useState(0);
+    const [maxScrollLeft, setMaxScrollLeft] = useState(1);
     const isSyncingScroll = useRef(false);
+
+    // Desktop Mouse Drag-to-Pan State (Req 7)
+    const [isPanning, setIsPanning] = useState(false);
+    const dragStartX = useRef(0);
+    const dragScrollLeft = useRef(0);
+    const hasDragged = useRef(false);
+
+    const updateScrollMetrics = useCallback(() => {
+        if (tableContainerRef.current) {
+            const { scrollLeft, scrollWidth: sw, clientWidth } = tableContainerRef.current;
+            setScrollLeftPos(scrollLeft);
+            setScrollWidth(sw);
+            setMaxScrollLeft(Math.max(1, sw - clientWidth));
+        }
+    }, []);
 
     const handleTopScroll = () => {
         if (isSyncingScroll.current) return;
         isSyncingScroll.current = true;
         if (tableContainerRef.current && topScrollRef.current) {
             tableContainerRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+            updateScrollMetrics();
         }
         requestAnimationFrame(() => { isSyncingScroll.current = false; });
     };
@@ -192,6 +214,7 @@ export default function AttendancePage() {
         isSyncingScroll.current = true;
         if (topScrollRef.current && tableContainerRef.current) {
             topScrollRef.current.scrollLeft = tableContainerRef.current.scrollLeft;
+            updateScrollMetrics();
         }
         requestAnimationFrame(() => { isSyncingScroll.current = false; });
     };
@@ -200,6 +223,53 @@ export default function AttendancePage() {
         if (tableContainerRef.current) {
             tableContainerRef.current.scrollBy({ left: offset, behavior: 'smooth' });
         }
+    };
+
+    const scrollToStart = () => {
+        if (tableContainerRef.current) {
+            tableContainerRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+        }
+    };
+
+    const scrollToEnd = () => {
+        if (tableContainerRef.current) {
+            tableContainerRef.current.scrollTo({ left: tableContainerRef.current.scrollWidth, behavior: 'smooth' });
+        }
+    };
+
+    const handleScrubberChange = (value: number) => {
+        if (tableContainerRef.current) {
+            const target = (value / 100) * maxScrollLeft;
+            tableContainerRef.current.scrollLeft = target;
+            if (topScrollRef.current) topScrollRef.current.scrollLeft = target;
+            setScrollLeftPos(target);
+        }
+    };
+
+    // Mouse Drag Panning Handlers
+    const handleMouseDown = (e: React.MouseEvent) => {
+        if (e.button !== 0) return; // Only primary mouse button
+        const target = e.target as HTMLElement;
+        if (target.closest('button') || target.closest('a') || target.closest('input') || target.closest('select')) {
+            return;
+        }
+        setIsPanning(true);
+        hasDragged.current = false;
+        dragStartX.current = e.clientX;
+        dragScrollLeft.current = tableContainerRef.current?.scrollLeft || 0;
+    };
+
+    const handleMouseMove = (e: React.MouseEvent) => {
+        if (!isPanning || !tableContainerRef.current) return;
+        const delta = e.clientX - dragStartX.current;
+        if (Math.abs(delta) > 3) {
+            hasDragged.current = true;
+        }
+        tableContainerRef.current.scrollLeft = dragScrollLeft.current - delta;
+    };
+
+    const handleMouseUp = () => {
+        setIsPanning(false);
     };
 
     // Helper to get dates dynamically based on cycle (calendar: 1st-end, payroll: 26th-25th)
@@ -235,6 +305,27 @@ export default function AttendancePage() {
         const end = cycleDates[cycleDates.length - 1];
         const options: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short', year: 'numeric' };
         return `${start.toLocaleDateString('en-GB', options)} - ${end.toLocaleDateString('en-GB', options)} (${cycleDates.length} Days)`;
+    };
+
+    const isTodayInCycle = cycleDates.some(
+        (d) =>
+            d.getDate() === currentDate.getDate() &&
+            d.getMonth() === currentDate.getMonth() &&
+            d.getFullYear() === currentDate.getFullYear()
+    );
+
+    const scrollToToday = () => {
+        const todayIdx = cycleDates.findIndex(
+            (d) =>
+                d.getDate() === currentDate.getDate() &&
+                d.getMonth() === currentDate.getMonth() &&
+                d.getFullYear() === currentDate.getFullYear()
+        );
+        if (todayIdx !== -1 && tableContainerRef.current) {
+            const colWidth = 34;
+            const targetLeft = Math.max(0, todayIdx * colWidth - (tableContainerRef.current.clientWidth / 2) + 200);
+            tableContainerRef.current.scrollTo({ left: targetLeft, behavior: "smooth" });
+        }
     };
     const dayNames = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
@@ -597,12 +688,13 @@ export default function AttendancePage() {
         }
     }, [selectedMonth, selectedYear, cycleType, selectedCompanyId, selectedOfficeId, monthlyDebouncedSearch, selectedDepartment]);
 
-    // Update scroll width when rows or dates change
+    // Update scroll metrics when rows, dates, or active tab change (Req 7)
     useEffect(() => {
-        if (tableContainerRef.current) {
-            setScrollWidth(tableContainerRef.current.scrollWidth);
-        }
-    }, [monthlyRows, cycleDates, activeTab]);
+        updateScrollMetrics();
+        const handleResize = () => updateScrollMetrics();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, [monthlyRows, cycleDates, activeTab, updateScrollMetrics]);
 
     // Load data on tab switch
     useEffect(() => { if (activeTab === "live") fetchLiveAttendance(); }, [activeTab, fetchLiveAttendance]);
@@ -1635,28 +1727,61 @@ export default function AttendancePage() {
                                         <div className="flex items-center gap-2"><div className="h-2 w-2 rounded-full bg-slate-300"></div><span className="text-[8px] font-black uppercase tracking-widest text-slate-500">WOff</span></div>
                                         <div className="flex items-center gap-2"><div className="h-2 w-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"></div><span className="text-[8px] font-black uppercase tracking-widest text-slate-500">Holiday</span></div>
                                     </div>
-                                    {/* Fast Navigation Scroll Arrows (Req 7) */}
-                                    <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
-                                        <span className="text-[8px] font-black uppercase text-slate-400">Scroll Grid:</span>
+                                    {/* Fast Navigation Scroll Controls (Req 7) */}
+                                    <div className="flex flex-wrap items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
+                                        <span className="text-[8px] font-black uppercase text-slate-400">Scroll:</span>
                                         <Button
                                             type="button"
                                             variant="outline"
                                             size="sm"
-                                            onClick={() => scrollTable(-280)}
-                                            className="h-7 w-7 p-0 rounded-lg border-slate-200 hover:bg-slate-200"
-                                            title="Scroll Left (Prev Week)"
+                                            onClick={scrollToStart}
+                                            className="h-7 w-7 p-0 rounded-lg border-slate-200 hover:bg-slate-200 text-slate-700"
+                                            title="Jump to Start (Day 1)"
                                         >
-                                            <ChevronLeft className="h-3.5 w-3.5 text-slate-700" />
+                                            <ChevronsLeft className="h-3.5 w-3.5 text-slate-700" />
                                         </Button>
                                         <Button
                                             type="button"
                                             variant="outline"
                                             size="sm"
+                                            onClick={() => scrollTable(-280)}
+                                            className="h-7 w-7 p-0 rounded-lg border-slate-200 hover:bg-slate-200 text-slate-700"
+                                            title="Scroll Left (Prev Week)"
+                                        >
+                                            <ChevronLeft className="h-3.5 w-3.5 text-slate-700" />
+                                        </Button>
+                                        {isTodayInCycle && (
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={scrollToToday}
+                                                className="h-7 px-2 rounded-lg border-emerald-300 bg-emerald-50 hover:bg-emerald-100 font-black text-[8px] uppercase tracking-wider text-emerald-800 shadow-sm"
+                                                title={`Jump to Today (${currentDate.getDate()} ${monthNames[currentDate.getMonth()].slice(0, 3)})`}
+                                            >
+                                                <Target className="h-3 w-3 mr-1 text-emerald-600" />
+                                                Today
+                                            </Button>
+                                        )}
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
                                             onClick={() => scrollTable(280)}
-                                            className="h-7 w-7 p-0 rounded-lg border-slate-200 hover:bg-slate-200"
+                                            className="h-7 w-7 p-0 rounded-lg border-slate-200 hover:bg-slate-200 text-slate-700"
                                             title="Scroll Right (Next Week)"
                                         >
                                             <ChevronRight className="h-3.5 w-3.5 text-slate-700" />
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={scrollToEnd}
+                                            className="h-7 w-7 p-0 rounded-lg border-slate-200 hover:bg-slate-200 text-slate-700"
+                                            title={`Jump to End (Day ${daysInSelectedMonth})`}
+                                        >
+                                            <ChevronsRight className="h-3.5 w-3.5 text-slate-700" />
                                         </Button>
                                     </div>
                                 </div>
@@ -1666,7 +1791,7 @@ export default function AttendancePage() {
                             <div
                                 ref={topScrollRef}
                                 onScroll={handleTopScroll}
-                                className="overflow-x-auto border-b border-slate-100 bg-slate-50/70 scrollbar-thin"
+                                className="overflow-x-auto border-b border-slate-100 bg-slate-50/70 scrollbar-thin scrollbar-thumb-slate-300"
                                 style={{ height: '14px' }}
                             >
                                 <div style={{ width: scrollWidth || '100%', height: '1px' }} />
@@ -1675,27 +1800,34 @@ export default function AttendancePage() {
                             <CardContent
                                 ref={tableContainerRef}
                                 onScroll={handleTableScroll}
-                                className="p-0 overflow-x-auto pb-4"
+                                onMouseDown={handleMouseDown}
+                                onMouseMove={handleMouseMove}
+                                onMouseUp={handleMouseUp}
+                                onMouseLeave={handleMouseUp}
+                                className={cn(
+                                    "p-0 overflow-auto max-h-[calc(100vh-270px)] min-h-[460px] scrollbar-thin select-none",
+                                    isPanning ? "cursor-grabbing" : "cursor-grab"
+                                )}
                             >
                                 <Table className="w-max min-w-full">
-                                    <TableHeader>
+                                    <TableHeader className="sticky top-0 z-30 bg-white shadow-sm">
                                         <tr className="bg-white border-b border-slate-100">
-                                            <th className="text-left py-4 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest sticky left-0 bg-white z-20 w-56 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.05)] border-r border-slate-50">
+                                            <th className="text-left py-4 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest sticky left-0 top-0 bg-white z-40 w-56 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.05)] border-r border-slate-50">
                                                 Employee Details
                                             </th>
-                                            <th className="text-center py-4 px-3 text-[9px] font-black text-slate-400 uppercase tracking-widest min-w-[70px] border-r border-slate-50">
+                                            <th className="text-center py-4 px-3 text-[9px] font-black text-slate-400 uppercase tracking-widest min-w-[70px] border-r border-slate-50 bg-white sticky top-0 z-30">
                                                 Company
                                             </th>
-                                            <th className="text-center py-4 px-3 text-[9px] font-black text-blue-600 uppercase tracking-widest min-w-[65px] bg-blue-50/20 border-r border-slate-50">
+                                            <th className="text-center py-4 px-3 text-[9px] font-black text-blue-600 uppercase tracking-widest min-w-[65px] bg-blue-50/90 border-r border-slate-50 sticky top-0 z-30">
                                                 Muster
                                             </th>
-                                            <th className="text-center py-4 px-3 text-[9px] font-black text-emerald-600 uppercase tracking-widest min-w-[65px] bg-emerald-50/20 border-r border-slate-50">
+                                            <th className="text-center py-4 px-3 text-[9px] font-black text-emerald-600 uppercase tracking-widest min-w-[65px] bg-emerald-50/90 border-r border-slate-50 sticky top-0 z-30">
                                                 Present
                                             </th>
-                                            <th className="text-center py-4 px-3 text-[9px] font-black text-emerald-700 uppercase tracking-widest min-w-[70px] bg-emerald-50/40 border-r border-slate-50">
+                                            <th className="text-center py-4 px-3 text-[9px] font-black text-emerald-700 uppercase tracking-widest min-w-[70px] bg-emerald-50/90 border-r border-slate-50 sticky top-0 z-30">
                                                 Payable
                                             </th>
-                                            <th className="text-center py-4 px-3 text-[9px] font-black text-rose-600 uppercase tracking-widest min-w-[65px] bg-rose-50/30 border-r border-slate-50">
+                                            <th className="text-center py-4 px-3 text-[9px] font-black text-rose-600 uppercase tracking-widest min-w-[65px] bg-rose-50/90 border-r border-slate-50 sticky top-0 z-30">
                                                 LWP
                                             </th>
                                             {/* Dynamic Day Columns with '01 Wed' format (Req 6.1, 6.3) */}
@@ -1707,7 +1839,7 @@ export default function AttendancePage() {
                                                 const isWeekend = dateObj.getDay() === 0;
 
                                                 return (
-                                                    <th key={i} className={cn("text-center py-3 px-1 min-w-[34px] transition-all", isToday ? "bg-indigo-50 border-b-2 border-b-indigo-500" : isWeekend ? "bg-slate-50/60" : "")}>
+                                                    <th key={i} className={cn("text-center py-3 px-1 min-w-[34px] transition-all sticky top-0 z-30 bg-white", isToday ? "bg-indigo-50 border-b-2 border-b-indigo-500" : isWeekend ? "bg-slate-50/90" : "bg-white")}>
                                                         <div className="flex flex-col items-center gap-0.5">
                                                             <span className={cn("text-[9px] font-black", isToday ? "text-indigo-700" : isWeekend ? "text-slate-400" : "text-slate-900")}>
                                                                 {String(dateObj.getDate()).padStart(2, '0')}
@@ -1802,6 +1934,100 @@ export default function AttendancePage() {
                                     </TableBody>
                                 </Table>
                             </CardContent>
+
+                            {/* Sticky Bottom Desktop Horizontal Navigation Controller (Req 7) */}
+                            <div className="sticky bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200 px-5 py-2.5 shadow-[0_-6px_20px_-4px_rgba(0,0,0,0.06)] flex flex-col md:flex-row md:items-center justify-between gap-3 select-none">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 mr-1 flex items-center gap-1">
+                                        <MoveHorizontal className="h-3 w-3 text-slate-400" />
+                                        Quick Jump:
+                                    </span>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={scrollToStart}
+                                        className="h-8 px-2.5 rounded-xl border-slate-200 hover:bg-slate-100 font-black text-[9px] uppercase tracking-wider text-slate-700 shadow-sm"
+                                        title="Jump to Start of Cycle (Day 1)"
+                                    >
+                                        <ChevronsLeft className="h-3.5 w-3.5 mr-1 text-slate-500" />
+                                        Start (01)
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => scrollTable(-280)}
+                                        className="h-8 px-2.5 rounded-xl border-slate-200 hover:bg-slate-100 font-black text-[9px] uppercase tracking-wider text-slate-700 shadow-sm"
+                                        title="Scroll 1 Week Left (-7 Days)"
+                                    >
+                                        <ChevronLeft className="h-3.5 w-3.5 mr-1 text-slate-500" />
+                                        -7 Days
+                                    </Button>
+
+                                    {isTodayInCycle && (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={scrollToToday}
+                                            className="h-8 px-3 rounded-xl border-emerald-300 bg-emerald-50/90 hover:bg-emerald-100 font-black text-[9px] uppercase tracking-wider text-emerald-800 shadow-sm transition-all hover:scale-105"
+                                            title={`Jump directly to Today (${currentDate.getDate()} ${monthNames[currentDate.getMonth()].slice(0, 3)})`}
+                                        >
+                                            <div className="h-2 w-2 rounded-full bg-emerald-500 animate-ping mr-1.5" />
+                                            <Target className="h-3.5 w-3.5 mr-1 text-emerald-600" />
+                                            Jump to Today ({String(currentDate.getDate()).padStart(2, '0')})
+                                        </Button>
+                                    )}
+
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => scrollTable(280)}
+                                        className="h-8 px-2.5 rounded-xl border-slate-200 hover:bg-slate-100 font-black text-[9px] uppercase tracking-wider text-slate-700 shadow-sm"
+                                        title="Scroll 1 Week Right (+7 Days)"
+                                    >
+                                        +7 Days
+                                        <ChevronRight className="h-3.5 w-3.5 ml-1 text-slate-500" />
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={scrollToEnd}
+                                        className="h-8 px-2.5 rounded-xl border-slate-200 hover:bg-slate-100 font-black text-[9px] uppercase tracking-wider text-slate-700 shadow-sm"
+                                        title={`Jump to End (Day ${daysInSelectedMonth})`}
+                                    >
+                                        End ({daysInSelectedMonth})
+                                        <ChevronsRight className="h-3.5 w-3.5 ml-1 text-slate-500" />
+                                    </Button>
+                                </div>
+
+                                {/* Center: Interactive Visual Scrubber Track */}
+                                <div className="flex items-center gap-3 flex-1 max-w-xs md:max-w-md">
+                                    <span className="text-[8px] font-black uppercase text-slate-400 shrink-0">Scrub Cycle:</span>
+                                    <input
+                                        type="range"
+                                        min={0}
+                                        max={100}
+                                        value={Math.round((scrollLeftPos / (maxScrollLeft || 1)) * 100)}
+                                        onChange={(e) => handleScrubberChange(Number(e.target.value))}
+                                        className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600 transition-all hover:h-2"
+                                        title="Drag to smoothly scrub across all dates in cycle"
+                                    />
+                                    <span className="text-[9px] font-bold text-slate-600 shrink-0 tabular-nums">
+                                        {Math.round((scrollLeftPos / (maxScrollLeft || 1)) * 100)}%
+                                    </span>
+                                </div>
+
+                                {/* Right Tips & Shortcuts */}
+                                <div className="hidden lg:flex items-center gap-2">
+                                    <span className="text-[8px] font-bold text-slate-400 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">
+                                        🖐️ Drag Grid to Pan • ⌨️ Shift + Wheel to Scroll
+                                    </span>
+                                </div>
+                            </div>
                         </Card>
                     </div>
                 )}
