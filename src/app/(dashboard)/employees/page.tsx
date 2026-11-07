@@ -238,9 +238,10 @@ export default function EmployeesPage() {
         try {
             await apiDelete(`/employees/${emp.employeeId}`);
             setPersonnel(prev => prev.filter(p => p.employeeId !== emp.employeeId));
-        } catch (err) {
+        } catch (err: any) {
             console.error("Failed to delete employee:", err);
-            alert("Failed to delete employee. Make sure you have admin privileges.");
+            const msg = err.response?.data?.message || err.message || "Failed to delete employee.";
+            alert(msg);
         }
     };
 
