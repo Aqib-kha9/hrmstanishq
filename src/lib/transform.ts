@@ -49,6 +49,8 @@ export interface BackendEmployee {
   emergency_contact_name: string | null;
   emergency_contact_relation: string | null;
   location: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 }
 
 export interface FrontendEmployee {
