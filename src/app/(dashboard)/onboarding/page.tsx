@@ -75,13 +75,29 @@ const DUMMY_DATA = {
     phone: "9876543210",
     dob: "1995-03-15",
     gender: "male",
+    maritalStatus: "unmarried",
+    fatherOrHusbandName: "Omprakash Sharma",
+    emergencyName: "Priya Sharma",
+    emergencyRelation: "Spouse",
+    emergencyPhone: "9876543211",
     address: "12/3, MG Road, Vijay Nagar, Indore, MP 452010",
     aadhaar: "123456789012",
+    pan: "ABCDE1234F",
+    doj: "2026-06-15",
     role: "EMPLOYEE",
     jobTitle: "Operations Manager",
     dept: "Operations",
-    doj: "2026-06-15",
+    hrManager: "Rahul Sharma (HR Manager)",
+    shiftStartTime: "09:30",
+    shiftEndTime: "18:30",
+    isRotationalShift: "No",
+    halfDayLateMinutes: "60",
     fixedGross: "45000",
+    hraApplicable: "Yes",
+    conveyance: "0",
+    medicalAllowance: "0",
+    specialAllowance: "0",
+    performanceAllowance: "0",
     bankName: "HDFC Bank",
     accountNo: "50100123456789",
     ifsc: "HDFC0001234",
@@ -89,6 +105,7 @@ const DUMMY_DATA = {
     pfApplicable: "Yes",
     pfCeiling: "Yes",
     esicApplicable: "Yes",
+    ptApplicable: "Yes",
     pfContributionMode: "shared",
     pfEmployeeRate: "0.12",
     pfEmployerRate: "0.12",
@@ -97,11 +114,7 @@ const DUMMY_DATA = {
     esicEmployerRate: "0.0325",
     pfNo: "PF/MP/IND/001234",
     uan: "101234567890",
-    pan: "ABCDE1234F",
     licDetails: "LIC/IND/987654",
-    emergencyName: "Priya Sharma",
-    emergencyRelation: "Spouse",
-    emergencyPhone: "9876543211",
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -120,9 +133,9 @@ const ACCOUNT_NO_RE = /^\d{9,18}$/;
 const validateField = (id: string, value: string): string | null => {
     const v = value.trim();
     switch (id) {
-        // ── Step 0: Personal Info ──
+        // ── Step 0: Personal Info (Req 2.3 A) ──
         case "name":
-            if (!v) return "Full name is required";
+            if (!v) return "Full name (as per Aadhaar) is required";
             if (v.length < 2) return "Name must be at least 2 characters";
             if (v.length > 100) return "Name must be under 100 characters";
             return null;
@@ -132,58 +145,101 @@ const validateField = (id: string, value: string): string | null => {
             if (v.length > 150) return "Email must be under 150 characters";
             return null;
         case "phone":
-            if (v && !PHONE_RE.test(v.replace(/\s/g, ""))) return "Enter a valid 10-digit mobile number";
+            if (!v) return "Mobile number is required";
+            if (!PHONE_RE.test(v.replace(/\s/g, ""))) return "Enter a valid 10-digit mobile number";
             return null;
         case "dob":
-            if (v) {
-                const d = new Date(v);
-                if (isNaN(d.getTime())) return "Invalid date";
-                const today = new Date();
-                const age18 = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate());
-                if (d > age18) return "Employee must be at least 18 years old";
-            }
+            if (!v) return "Date of birth is required";
+            const d = new Date(v);
+            if (isNaN(d.getTime())) return "Invalid date";
+            const today = new Date();
+            const age18 = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate());
+            if (d > age18) return "Employee must be at least 18 years old";
             return null;
         case "doj":
             if (!v) return "Date of joining is required";
             return null;
+        case "gender":
+            if (!v) return "Gender is required";
+            return null;
+        case "maritalStatus":
+            if (!v) return "Marital status is required";
+            return null;
+        case "fatherOrHusbandName":
+            if (!v) return "Father's or Husband's name is required";
+            if (v.length < 2) return "Must be at least 2 characters";
+            if (v.length > 100) return "Must be under 100 characters";
+            return null;
+        case "emergencyName":
+            if (!v) return "Emergency contact name is required";
+            if (v.length < 2) return "Must be at least 2 characters";
+            if (v.length > 100) return "Must be under 100 characters";
+            return null;
+        case "emergencyPhone":
+            if (!v) return "Emergency contact phone is required";
+            if (!PHONE_RE.test(v.replace(/\s/g, ""))) return "Enter a valid 10-digit emergency number";
+            return null;
+        case "emergencyRelation":
+            if (!v) return "Emergency relationship is required";
+            if (v.length > 50) return "Must be under 50 characters";
+            return null;
         case "aadhaar":
-            if (v && !AADHAAR_RE.test(v)) return "Aadhaar must be exactly 12 digits";
+            if (!v) return "Aadhaar number is required";
+            if (!AADHAAR_RE.test(v.replace(/\s/g, ""))) return "Aadhaar must be exactly 12 digits";
             return null;
         case "pan":
+            // Optional per Req 2.3 A! Format checked only if entered
             if (v && !PAN_RE.test(v.toUpperCase())) return "PAN must be in format ABCDE1234F";
             return null;
         case "address":
-            if (v && v.length > 500) return "Address must be under 500 characters";
+            if (!v) return "Address as per Aadhaar is required";
+            if (v.length < 5) return "Please enter complete address";
+            if (v.length > 500) return "Address must be under 500 characters";
             return null;
-        // ── Step 1: Job Details ──
+
+        // ── Step 1: Employment Information (Req 2.3 B) ──
+        case "company":
+            if (!v) return "Company Entity is required";
+            return null;
+        case "location":
+            if (!v) return "Working Location is required";
+            return null;
+        case "role":
+            if (!v) return "System Role is required";
+            return null;
         case "jobTitle":
-            if (!v) return "Job title is required";
-            if (v.length > 80) return "Job title must be under 80 characters";
+            if (!v) return "Designation is required";
+            if (v.length > 80) return "Designation must be under 80 characters";
             return null;
-        case "dept":
-            if (!v) return "Department is required";
-            if (v.length > 80) return "Department must be under 80 characters";
+        case "shiftStartTime":
+            if (!v) return "Shift start time is required";
+            if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(v)) return "Must be HH:MM format (e.g., 09:30)";
             return null;
-        case "emergencyName":
-            if (v && v.length > 100) return "Must be under 100 characters";
+        case "shiftEndTime":
+            if (!v) return "Shift end time is required";
+            if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(v)) return "Must be HH:MM format (e.g., 18:30)";
             return null;
-        case "emergencyRelation":
-            if (v && v.length > 50) return "Must be under 50 characters";
+        case "halfDayLateMinutes":
+            if (!v || isNaN(Number(v)) || Number(v) < 1 || Number(v) > 480) return "Must be 1–480 minutes";
             return null;
-        // ── Step 2: Salary & Bank ──
+
+        // ── Step 2: Salary & Bank (Req 2.4) ──
         case "fixedGross":
             if (!v || isNaN(Number(v)) || Number(v) <= 0) return "Monthly CTC is required";
             if (Number(v) < 5000) return "CTC must be at least ₹5,000";
             if (Number(v) > 10000000) return "CTC seems too high";
             return null;
         case "bankName":
-            if (v && v.length > 100) return "Bank name must be under 100 characters";
+            if (!v) return "Bank name is required";
+            if (v.length > 100) return "Bank name must be under 100 characters";
             return null;
         case "accountNo":
-            if (v && !ACCOUNT_NO_RE.test(v)) return "Account number must be 9–18 digits";
+            if (!v) return "Account number is required";
+            if (!ACCOUNT_NO_RE.test(v)) return "Account number must be 9–18 digits";
             return null;
         case "ifsc":
-            if (v && !IFSC_RE.test(v.toUpperCase())) return "IFSC must be in format HDFC0001234";
+            if (!v) return "IFSC code is required";
+            if (!IFSC_RE.test(v.toUpperCase())) return "IFSC must be in format HDFC0001234";
             return null;
         case "pfEmployeeRate":
         case "pfEmployerRate":
@@ -199,16 +255,6 @@ const validateField = (id: string, value: string): string | null => {
             return null;
         case "licDetails":
             if (v && v.length > 100) return "LIC details must be under 100 characters";
-            return null;
-        // ── Shift configuration ──
-        case "shiftStartTime":
-            if (v && !/^([01]\d|2[0-3]):[0-5]\d$/.test(v)) return "Must be HH:MM format (e.g., 09:00)";
-            return null;
-        case "shiftEndTime":
-            if (v && !/^([01]\d|2[0-3]):[0-5]\d$/.test(v)) return "Must be HH:MM format (e.g., 18:00)";
-            return null;
-        case "halfDayLateMinutes":
-            if (!v || isNaN(Number(v)) || Number(v) < 1 || Number(v) > 480) return "Must be 1–480 minutes";
             return null;
         default:
             return null;
@@ -228,15 +274,25 @@ const validateStep = (step: number, formData: Record<string, string>): FieldErro
             check("email");
             check("phone");
             check("dob");
+            check("doj");
+            check("gender");
+            check("maritalStatus");
+            check("fatherOrHusbandName");
+            check("emergencyName");
+            check("emergencyPhone");
+            check("emergencyRelation");
             check("aadhaar");
             check("pan");
             check("address");
             break;
         case 1:
+            check("company");
+            check("location");
+            check("role");
             check("jobTitle");
-            check("dept");
-            check("emergencyName");
-            check("emergencyRelation");
+            check("shiftStartTime");
+            check("shiftEndTime");
+            check("halfDayLateMinutes");
             break;
         case 2:
             check("fixedGross");
@@ -250,9 +306,6 @@ const validateStep = (step: number, formData: Record<string, string>): FieldErro
             check("pfNo");
             check("uan");
             check("licDetails");
-            check("shiftStartTime");
-            check("shiftEndTime");
-            check("halfDayLateMinutes");
             break;
     }
     return errors;
@@ -323,11 +376,13 @@ function OnboardingForm() {
                                 phone: emp.phone || "",
                                 dob: emp.date_of_birth ? emp.date_of_birth.split("T")[0] : "",
                                 gender: emp.gender || "male",
+                                maritalStatus: emp.marital_status || "unmarried",
+                                fatherOrHusbandName: emp.father_or_husband_name || "",
                                 address: emp.address || "",
                                 aadhaar: emp.aadhaar_number || "",
                                 role: emp.role ? emp.role.toUpperCase() : "EMPLOYEE",
                                 jobTitle: emp.designation || "",
-                                dept: emp.department || "",
+                                dept: emp.department || "Operations",
                                 hrManager: emp.hr_manager || "",
                                 doj: emp.date_of_joining ? emp.date_of_joining.split("T")[0] : "",
                                 company: emp.company_id ? emp.company_id.toString() : "",
@@ -350,9 +405,11 @@ function OnboardingForm() {
                                 pan: emp.pan_number || "",
                                 licDetails: emp.lic_details || "",
                                 emergencyName: emp.emergency_contact_name || "",
+                                emergencyPhone: emp.emergency_contact_phone || "",
                                 emergencyRelation: emp.emergency_contact_relation || "",
-                                shiftStartTime: emp.shift_start_time ? emp.shift_start_time.substring(0, 5) : "10:00",
-                                shiftEndTime: emp.shift_end_time ? emp.shift_end_time.substring(0, 5) : "19:00",
+                                shiftStartTime: emp.shift_start_time ? emp.shift_start_time.substring(0, 5) : "09:30",
+                                shiftEndTime: emp.shift_end_time ? emp.shift_end_time.substring(0, 5) : "18:30",
+                                isRotationalShift: emp.is_rotational_shift ? "Yes" : "No",
                                 halfDayLateMinutes: emp.half_day_late_minutes?.toString() || "60",
                                 ptApplicable: (currentSalary.pt_applicable ?? emp.pt_applicable) ? "Yes" : "No",
                                 effectiveWorkDays: currentSalary.effective_work_days?.toString() || "26",
@@ -635,24 +692,34 @@ function OnboardingForm() {
     };
 
     const [formData, setFormData] = useState({
-        // Step 0: Personal Info
+        // Step 0: Personal Info (Req 2.3 A)
         name: "",
         email: "",
         phone: "",
         dob: "",
+        doj: "",
         gender: "male",
         maritalStatus: "unmarried",
         fatherOrHusbandName: "",
-        address: "",
+        emergencyName: "",
+        emergencyPhone: "",
+        emergencyRelation: "",
         aadhaar: "",
-        // Step 1: Employment Information (renamed from Job Details)
+        pan: "",
+        address: "",
+
+        // Step 1: Employment Information (Req 2.3 B)
         company: "",
         location: "",
         role: "EMPLOYEE",
         jobTitle: "",
-        dept: "",
+        dept: "Operations",
         hrManager: "",
-        doj: "",
+        shiftStartTime: "09:30",
+        shiftEndTime: "18:30",
+        isRotationalShift: "No",
+        halfDayLateMinutes: "60",
+
         // Step 2: Salary & Bank (Req 2.4)
         fixedGross: "",
         hraApplicable: "Yes",
@@ -677,18 +744,8 @@ function OnboardingForm() {
         esicEmployerRate: "0.0325",
         pfNo: "",
         uan: "",
-        pan: "",
         licDetails: "",
         esicNumber: "",
-        // Emergency contact
-        emergencyName: "",
-        emergencyRelation: "",
-        emergencyPhone: "",
-        // Shift configuration
-        shiftStartTime: "09:30",
-        shiftEndTime: "18:30",
-        isRotationalShift: "No",
-        halfDayLateMinutes: "60",
     });
 
     // Auto-update sequential employee ID when company changes (Req 2.2)
@@ -798,8 +855,10 @@ function OnboardingForm() {
             marital_status: formData.maritalStatus || "unmarried",
             father_or_husband_name: formData.fatherOrHusbandName || null,
             address: formData.address || null,
+            aadhaar_number: formData.aadhaar ? formData.aadhaar.replace(/\s/g, "") : null,
+            pan_number: formData.pan ? formData.pan.toUpperCase() : null,
             designation: formData.jobTitle || null,
-            department: formData.dept || null,
+            department: formData.dept || "General",
             hr_manager: formData.hrManager || null,
             role: formData.role.toLowerCase().replace(/ /g, "_"),
             date_of_joining: formData.doj || null,
@@ -828,9 +887,6 @@ function OnboardingForm() {
             bank_name: formData.bankName || null,
             bank_account_number: formData.accountNo || null,
             ifsc_code: formData.ifsc || null,
-            pan_number: formData.pan || null,
-            pf_number: formData.pfNo || null,
-            uan: formData.uan || null,
             emergency_contact_name: formData.emergencyName || null,
             emergency_contact_phone: formData.emergencyPhone || null,
             emergency_contact_relation: formData.emergencyRelation || null,
@@ -1828,7 +1884,7 @@ function OnboardingForm() {
                                     </div>
                                 )}
 
-                                {/* ── STEP 0: Personal Info ── */}
+                                {/* ── STEP 0: Personal Info (Req 2.3 A) ── */}
                                 {currentStep === 0 && (
                                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
                                         {/* Req 1.2: Automatic Sequential Employee ID */}
@@ -1861,250 +1917,403 @@ function OnboardingForm() {
                                             </div>
                                         </div>
 
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8">
-                                            <div className="space-y-3">
-                                                <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                                    Full Name <span className="text-red-400">*</span>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-7">
+                                            {/* 1. Full Name, as per Aadhaar */}
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
+                                                    Full Name, as per Aadhaar <span className="text-red-500 font-bold ml-1">*</span>
                                                 </Label>
-                                            <Input
-                                                placeholder="e.g. Walt Whitman"
-                                                className={inputClass("name", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs uppercase tracking-widest")}
-                                                value={formData.name}
-                                                onChange={(e) => updateField("name", e.target.value)}
-                                                onBlur={() => handleBlur("name")}
-                                            />
-                                            {fieldErrorEl("name")}
+                                                <Input
+                                                    placeholder="e.g. Rahul Sharma"
+                                                    className={inputClass("name", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs uppercase tracking-widest")}
+                                                    value={formData.name}
+                                                    onChange={(e) => updateField("name", e.target.value)}
+                                                    onBlur={() => handleBlur("name")}
+                                                />
+                                                {fieldErrorEl("name")}
+                                            </div>
+
+                                            {/* 2. Email Address */}
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
+                                                    Email Address <span className="text-red-500 font-bold ml-1">*</span>
+                                                </Label>
+                                                <Input
+                                                    placeholder="rahul.sharma@apaarlogistics.com"
+                                                    className={inputClass("email", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs lowercase")}
+                                                    value={formData.email}
+                                                    onChange={(e) => updateField("email", e.target.value)}
+                                                    onBlur={() => handleBlur("email")}
+                                                />
+                                                {fieldErrorEl("email")}
+                                            </div>
+
+                                            {/* 3. Mobile Number */}
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
+                                                    Mobile Number <span className="text-red-500 font-bold ml-1">*</span>
+                                                </Label>
+                                                <Input
+                                                    placeholder="9876543210"
+                                                    className={inputClass("phone", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs")}
+                                                    value={formData.phone}
+                                                    onChange={(e) => updateField("phone", e.target.value)}
+                                                    onBlur={() => handleBlur("phone")}
+                                                />
+                                                {fieldErrorEl("phone")}
+                                            </div>
+
+                                            {/* 4. Gender */}
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
+                                                    Gender <span className="text-red-500 font-bold ml-1">*</span>
+                                                </Label>
+                                                <select
+                                                    className="w-full h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-[10px] uppercase tracking-widest outline-none"
+                                                    value={formData.gender}
+                                                    onChange={(e) => updateField("gender", e.target.value)}
+                                                >
+                                                    <option value="male">Male</option>
+                                                    <option value="female">Female</option>
+                                                    <option value="other">Other</option>
+                                                </select>
+                                                {fieldErrorEl("gender")}
+                                            </div>
+
+                                            {/* 5. Date of Birth */}
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
+                                                    Date of Birth <span className="text-red-500 font-bold ml-1">*</span>
+                                                </Label>
+                                                <Input
+                                                    type="date"
+                                                    className={inputClass("dob", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs")}
+                                                    value={formData.dob}
+                                                    onChange={(e) => updateField("dob", e.target.value)}
+                                                    onBlur={() => handleBlur("dob")}
+                                                />
+                                                {fieldErrorEl("dob")}
+                                            </div>
+
+                                            {/* 6. Date of Joining */}
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
+                                                    Date of Joining <span className="text-red-500 font-bold ml-1">*</span>
+                                                </Label>
+                                                <Input
+                                                    type="date"
+                                                    className={inputClass("doj", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs")}
+                                                    value={formData.doj}
+                                                    onChange={(e) => updateField("doj", e.target.value)}
+                                                    onBlur={() => handleBlur("doj")}
+                                                />
+                                                {fieldErrorEl("doj")}
+                                            </div>
+
+                                            {/* 7. Marital Status */}
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
+                                                    Marital Status <span className="text-red-500 font-bold ml-1">*</span>
+                                                </Label>
+                                                <select
+                                                    className="w-full h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-[10px] uppercase tracking-widest outline-none"
+                                                    value={formData.maritalStatus}
+                                                    onChange={(e) => updateField("maritalStatus", e.target.value)}
+                                                    onBlur={() => handleBlur("maritalStatus")}
+                                                >
+                                                    <option value="unmarried">Unmarried</option>
+                                                    <option value="married">Married</option>
+                                                </select>
+                                                {fieldErrorEl("maritalStatus")}
+                                            </div>
+
+                                            {/* 8. Father's Name / Husband's Name */}
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
+                                                    Father&apos;s Name / Husband&apos;s Name <span className="text-red-500 font-bold ml-1">*</span>
+                                                </Label>
+                                                <Input
+                                                    placeholder="e.g. Omprakash Sharma"
+                                                    className={inputClass("fatherOrHusbandName", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs uppercase tracking-widest")}
+                                                    value={formData.fatherOrHusbandName}
+                                                    onChange={(e) => updateField("fatherOrHusbandName", e.target.value)}
+                                                    onBlur={() => handleBlur("fatherOrHusbandName")}
+                                                />
+                                                {fieldErrorEl("fatherOrHusbandName")}
+                                            </div>
+
+                                            {/* 9. Emergency Contact Name */}
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
+                                                    Emergency Contact Name <span className="text-red-500 font-bold ml-1">*</span>
+                                                </Label>
+                                                <Input
+                                                    placeholder="e.g. Priya Sharma"
+                                                    className={inputClass("emergencyName", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs uppercase tracking-widest")}
+                                                    value={formData.emergencyName}
+                                                    onChange={(e) => updateField("emergencyName", e.target.value)}
+                                                    onBlur={() => handleBlur("emergencyName")}
+                                                />
+                                                {fieldErrorEl("emergencyName")}
+                                            </div>
+
+                                            {/* 10. Emergency Contact Number */}
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
+                                                    Emergency Contact Number <span className="text-red-500 font-bold ml-1">*</span>
+                                                </Label>
+                                                <Input
+                                                    placeholder="9876543211"
+                                                    className={inputClass("emergencyPhone", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs")}
+                                                    value={formData.emergencyPhone}
+                                                    onChange={(e) => updateField("emergencyPhone", e.target.value)}
+                                                    onBlur={() => handleBlur("emergencyPhone")}
+                                                />
+                                                {fieldErrorEl("emergencyPhone")}
+                                            </div>
+
+                                            {/* 11. Emergency Contact Relationship */}
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
+                                                    Emergency Contact Relationship <span className="text-red-500 font-bold ml-1">*</span>
+                                                </Label>
+                                                <Input
+                                                    placeholder="e.g. Spouse / Father / Mother"
+                                                    className={inputClass("emergencyRelation", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs uppercase tracking-widest")}
+                                                    value={formData.emergencyRelation}
+                                                    onChange={(e) => updateField("emergencyRelation", e.target.value)}
+                                                    onBlur={() => handleBlur("emergencyRelation")}
+                                                />
+                                                {fieldErrorEl("emergencyRelation")}
+                                            </div>
+
+                                            {/* 12. Aadhaar Number */}
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
+                                                    Aadhaar Number <span className="text-red-500 font-bold ml-1">*</span>
+                                                </Label>
+                                                <Input
+                                                    placeholder="123456789012"
+                                                    className={inputClass("aadhaar", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs tracking-widest")}
+                                                    value={formData.aadhaar}
+                                                    onChange={(e) => updateField("aadhaar", e.target.value)}
+                                                    onBlur={() => handleBlur("aadhaar")}
+                                                />
+                                                {fieldErrorEl("aadhaar")}
+                                            </div>
+
+                                            {/* 13. PAN Number (NOT mandatory under Req 2.3 A) */}
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                                                    PAN Number <span className="text-slate-400 font-bold normal-case text-[9px]">(Optional)</span>
+                                                </Label>
+                                                <Input
+                                                    placeholder="ABCDE1234F"
+                                                    className={inputClass("pan", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs uppercase tracking-widest")}
+                                                    value={formData.pan}
+                                                    onChange={(e) => updateField("pan", e.target.value.toUpperCase())}
+                                                    onBlur={() => handleBlur("pan")}
+                                                />
+                                                {fieldErrorEl("pan")}
+                                            </div>
+
+                                            {/* 14. Address as per Aadhaar */}
+                                            <div className="space-y-2 md:col-span-2">
+                                                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
+                                                    Address as per Aadhaar <span className="text-red-500 font-bold ml-1">*</span>
+                                                </Label>
+                                                <Input
+                                                    placeholder="Full residential address as stated on Aadhaar card..."
+                                                    className={inputClass("address", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs")}
+                                                    value={formData.address}
+                                                    onChange={(e) => updateField("address", e.target.value)}
+                                                    onBlur={() => handleBlur("address")}
+                                                />
+                                                {fieldErrorEl("address")}
+                                            </div>
                                         </div>
-                                        <div className="space-y-3">
-                                            <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                                Email Address <span className="text-red-400">*</span>
-                                            </Label>
-                                            <Input
-                                                placeholder="walt@hrms.io"
-                                                className={inputClass("email", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs lowercase")}
-                                                value={formData.email}
-                                                onChange={(e) => updateField("email", e.target.value)}
-                                                onBlur={() => handleBlur("email")}
-                                            />
-                                            {fieldErrorEl("email")}
-                                        </div>
-                                        <div className="space-y-3">
-                                            <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                                Phone Number
-                                            </Label>
-                                            <Input
-                                                placeholder="+91 00000 00000"
-                                                className={inputClass("phone", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs")}
-                                                value={formData.phone}
-                                                onChange={(e) => updateField("phone", e.target.value)}
-                                                onBlur={() => handleBlur("phone")}
-                                            />
-                                            {fieldErrorEl("phone")}
-                                        </div>
-                                        <div className="space-y-3">
-                                            <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                                Gender
-                                            </Label>
-                                            <select
-                                                className="w-full h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-[10px] uppercase tracking-widest outline-none"
-                                                value={formData.gender}
-                                                onChange={(e) => updateField("gender", e.target.value)}
-                                            >
-                                                <option value="male">Male</option>
-                                                <option value="female">Female</option>
-                                                <option value="other">Other</option>
-                                            </select>
-                                        </div>
-                                        <div className="space-y-3">
-                                            <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                                Date of Birth
-                                            </Label>
-                                            <Input
-                                                type="date"
-                                                className={inputClass("dob", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs")}
-                                                value={formData.dob}
-                                                onChange={(e) => updateField("dob", e.target.value)}
-                                                onBlur={() => handleBlur("dob")}
-                                            />
-                                            {fieldErrorEl("dob")}
-                                        </div>
-                                        <div className="space-y-3">
-                                            <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                                Date of Joining
-                                            </Label>
-                                            <Input
-                                                type="date"
-                                                className="h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs"
-                                                value={formData.doj}
-                                                onChange={(e) => updateField("doj", e.target.value)}
-                                            />
-                                        </div>
-                                        <div className="space-y-3">
-                                            <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                                Aadhaar Number
-                                            </Label>
-                                            <Input
-                                                placeholder="0000 0000 0000"
-                                                className={inputClass("aadhaar", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs tracking-widest")}
-                                                value={formData.aadhaar}
-                                                onChange={(e) => updateField("aadhaar", e.target.value)}
-                                                onBlur={() => handleBlur("aadhaar")}
-                                            />
-                                            {fieldErrorEl("aadhaar")}
-                                        </div>
-                                        <div className="space-y-3">
-                                            <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                                PAN Number
-                                            </Label>
-                                            <Input
-                                                placeholder="ABCDE1234F"
-                                                className={inputClass("pan", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs uppercase tracking-widest")}
-                                                value={formData.pan}
-                                                onChange={(e) => updateField("pan", e.target.value.toUpperCase())}
-                                                onBlur={() => handleBlur("pan")}
-                                            />
-                                            {fieldErrorEl("pan")}
-                                        </div>
-                                        <div className="space-y-3 md:col-span-2">
-                                            <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                                Address
-                                            </Label>
-                                            <Input
-                                                placeholder="Full address..."
-                                                className={inputClass("address", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs")}
-                                                value={formData.address}
-                                                onChange={(e) => updateField("address", e.target.value)}
-                                                onBlur={() => handleBlur("address")}
-                                            />
-                                            {fieldErrorEl("address")}
-                                        </div>
-                                    </div>
                                     </div>
                                 )}
 
-                                {/* ── STEP 1: Job Details ── */}
+                                {/* ── STEP 1: Employment Information (Req 2.3 B) ── */}
                                 {currentStep === 1 && (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8 animate-in fade-in slide-in-from-right-4">
-                                        <div className="space-y-3">
-                                            <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                Company Entity
-                                            </Label>
-                                            <select
-                                                className="w-full h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-[10px] uppercase tracking-widest outline-none"
-                                                value={formData.company}
-                                                onChange={(e) => updateField("company", e.target.value)}
-                                                disabled={loadingLookups}
-                                            >
-                                                {loadingLookups ? (
-                                                    <option>Loading...</option>
-                                                ) : (
-                                                    companies.map((c) => (
-                                                        <option key={c.id} value={c.id.toString()}>
-                                                            {c.name}
+                                    <div className="space-y-8 animate-in fade-in slide-in-from-right-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-7">
+                                            {/* 1. Company Entity */}
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
+                                                    Company Entity <span className="text-red-500 font-bold ml-1">*</span>
+                                                </Label>
+                                                <select
+                                                    className="w-full h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-[10px] uppercase tracking-widest outline-none"
+                                                    value={formData.company}
+                                                    onChange={(e) => updateField("company", e.target.value)}
+                                                    disabled={loadingLookups}
+                                                >
+                                                    {loadingLookups ? (
+                                                        <option>Loading...</option>
+                                                    ) : (
+                                                        companies.map((c) => (
+                                                            <option key={c.id} value={c.id.toString()}>
+                                                                {c.name}
+                                                            </option>
+                                                        ))
+                                                    )}
+                                                </select>
+                                                {fieldErrorEl("company")}
+                                            </div>
+
+                                            {/* 2. Working Location (renamed from Office Location per Req 2.3 B) */}
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
+                                                    Working Location <span className="text-red-500 font-bold ml-1">*</span>
+                                                </Label>
+                                                <select
+                                                    className="w-full h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-[10px] uppercase tracking-widest outline-none"
+                                                    value={formData.location}
+                                                    onChange={(e) => updateField("location", e.target.value)}
+                                                    disabled={loadingLookups}
+                                                >
+                                                    {loadingLookups ? (
+                                                        <option>Loading...</option>
+                                                    ) : (
+                                                        offices.map((o) => (
+                                                            <option key={o.id} value={o.id.toString()}>
+                                                                {o.name}
+                                                            </option>
+                                                        ))
+                                                    )}
+                                                </select>
+                                                {fieldErrorEl("location")}
+                                            </div>
+
+                                            {/* 3. System Role */}
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
+                                                    Role <span className="text-red-500 font-bold ml-1">*</span>
+                                                </Label>
+                                                <select
+                                                    className="w-full h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-[10px] uppercase tracking-widest outline-none"
+                                                    value={formData.role}
+                                                    onChange={(e) => updateField("role", e.target.value)}
+                                                >
+                                                    {availableRoles.map((r) => (
+                                                        <option key={r.name} value={r.name}>
+                                                            {r.name.replace(/_/g, " ")}
                                                         </option>
-                                                    ))
-                                                )}
-                                            </select>
+                                                    ))}
+                                                </select>
+                                                {fieldErrorEl("role")}
+                                            </div>
+
+                                            {/* 4. Designation (renamed from Job Role; separate Job Title & Department removed per Req 2.3 B) */}
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
+                                                    Designation <span className="text-red-500 font-bold ml-1">*</span>
+                                                </Label>
+                                                <Input
+                                                    placeholder="e.g. Operations Manager"
+                                                    className={inputClass("jobTitle", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs uppercase tracking-widest")}
+                                                    value={formData.jobTitle}
+                                                    onChange={(e) => updateField("jobTitle", e.target.value)}
+                                                    onBlur={() => handleBlur("jobTitle")}
+                                                />
+                                                {fieldErrorEl("jobTitle")}
+                                            </div>
+
+                                            {/* 5. HR Manager / Reporting Manager */}
+                                            <div className="space-y-2 md:col-span-2">
+                                                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                                                    HR Manager / Reporting Manager <span className="text-slate-400 font-bold normal-case text-[9px]">(Optional)</span>
+                                                </Label>
+                                                <Input
+                                                    placeholder="e.g. Rahul Sharma (HR Manager)"
+                                                    className={inputClass("hrManager", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs uppercase tracking-widest")}
+                                                    value={formData.hrManager || ""}
+                                                    onChange={(e) => updateField("hrManager", e.target.value)}
+                                                />
+                                            </div>
                                         </div>
-                                        <div className="space-y-3">
-                                            <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                Working Location
-                                            </Label>
-                                            <select
-                                                className="w-full h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-[10px] uppercase tracking-widest outline-none"
-                                                value={formData.location}
-                                                onChange={(e) => updateField("location", e.target.value)}
-                                                disabled={loadingLookups}
-                                            >
-                                                {loadingLookups ? (
-                                                    <option>Loading...</option>
-                                                ) : (
-                                                    offices.map((o) => (
-                                                        <option key={o.id} value={o.id.toString()}>
-                                                            {o.name}
-                                                        </option>
-                                                    ))
-                                                )}
-                                            </select>
-                                        </div>
-                                        <div className="space-y-3">
-                                            <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                Role
-                                            </Label>
-                                            <select
-                                                className="w-full h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-[10px] uppercase tracking-widest outline-none"
-                                                value={formData.role}
-                                                onChange={(e) => updateField("role", e.target.value)}
-                                            >
-                                                {availableRoles.map((r) => (
-                                                    <option key={r.name} value={r.name}>
-                                                        {r.name.replace(/_/g, " ")}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div className="space-y-3">
-                                            <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                Designation
-                                            </Label>
-                                            <Input
-                                                placeholder="e.g. Senior Manager"
-                                                className={inputClass("jobTitle", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs uppercase tracking-widest")}
-                                                value={formData.jobTitle}
-                                                onChange={(e) => updateField("jobTitle", e.target.value)}
-                                                onBlur={() => handleBlur("jobTitle")}
-                                            />
-                                            {fieldErrorEl("jobTitle")}
-                                        </div>
-                                        <div className="space-y-3">
-                                            <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                Department
-                                            </Label>
-                                            <Input
-                                                placeholder="e.g. Operations"
-                                                className={inputClass("dept", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs uppercase tracking-widest")}
-                                                value={formData.dept}
-                                                onChange={(e) => updateField("dept", e.target.value)}
-                                                onBlur={() => handleBlur("dept")}
-                                            />
-                                            {fieldErrorEl("dept")}
-                                        </div>
-                                        <div className="space-y-3">
-                                            <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                HR Manager / Reporting Manager
-                                            </Label>
-                                            <Input
-                                                placeholder="e.g. Rahul Sharma (HR Manager)"
-                                                className={inputClass("hrManager", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs uppercase tracking-widest")}
-                                                value={formData.hrManager || ""}
-                                                onChange={(e) => updateField("hrManager", e.target.value)}
-                                            />
-                                        </div>
-                                        <div className="space-y-3">
-                                            <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                Emergency Contact Name
-                                            </Label>
-                                            <Input
-                                                placeholder="e.g. John Doe"
-                                                className={inputClass("emergencyName", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs uppercase tracking-widest")}
-                                                value={formData.emergencyName}
-                                                onChange={(e) => updateField("emergencyName", e.target.value)}
-                                                onBlur={() => handleBlur("emergencyName")}
-                                            />
-                                            {fieldErrorEl("emergencyName")}
-                                        </div>
-                                        <div className="space-y-3">
-                                            <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                Emergency Contact Relation
-                                            </Label>
-                                            <Input
-                                                placeholder="e.g. Spouse"
-                                                className={inputClass("emergencyRelation", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs uppercase tracking-widest")}
-                                                value={formData.emergencyRelation}
-                                                onChange={(e) => updateField("emergencyRelation", e.target.value)}
-                                                onBlur={() => handleBlur("emergencyRelation")}
-                                            />
-                                            {fieldErrorEl("emergencyRelation")}
+
+                                        {/* ── Shift Configuration & Rotational Shift (Req 2.3 B) ── */}
+                                        <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-200/80 space-y-5">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <Clock className="h-4 w-4 text-indigo-600" />
+                                                    <p className="text-[10px] font-black text-indigo-700 uppercase tracking-widest">
+                                                        Shift & Attendance Configuration (Req 2.3 B)
+                                                    </p>
+                                                </div>
+                                                <Badge className="bg-indigo-100 text-indigo-800 text-[9px] font-bold">
+                                                    Shift Timings & Roster
+                                                </Badge>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                                                <div className="space-y-2">
+                                                    <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
+                                                        Shift Start Time <span className="text-red-500 font-bold ml-1">*</span>
+                                                    </Label>
+                                                    <Input
+                                                        type="time"
+                                                        className={inputClass("shiftStartTime", "h-12 bg-white border border-slate-200 rounded-xl px-5 font-black text-xs tracking-widest")}
+                                                        value={formData.shiftStartTime}
+                                                        onChange={(e) => updateField("shiftStartTime", e.target.value)}
+                                                        onBlur={() => handleBlur("shiftStartTime")}
+                                                    />
+                                                    {fieldErrorEl("shiftStartTime")}
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
+                                                        Shift End Time <span className="text-red-500 font-bold ml-1">*</span>
+                                                    </Label>
+                                                    <Input
+                                                        type="time"
+                                                        className={inputClass("shiftEndTime", "h-12 bg-white border border-slate-200 rounded-xl px-5 font-black text-xs tracking-widest")}
+                                                        value={formData.shiftEndTime}
+                                                        onChange={(e) => updateField("shiftEndTime", e.target.value)}
+                                                        onBlur={() => handleBlur("shiftEndTime")}
+                                                    />
+                                                    {fieldErrorEl("shiftEndTime")}
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
+                                                        Rotational Shift <span className="text-red-500 font-bold ml-1">*</span>
+                                                    </Label>
+                                                    <select
+                                                        className="w-full h-12 bg-white border border-slate-200 rounded-xl px-4 font-black text-[10px] uppercase tracking-widest outline-none"
+                                                        value={formData.isRotationalShift}
+                                                        onChange={(e) => updateField("isRotationalShift", e.target.value)}
+                                                    >
+                                                        <option value="No">No (Fixed Regular Shift)</option>
+                                                        <option value="Yes">Yes (Rotational Shift Roster)</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-3 border-t border-slate-200/60">
+                                                <div className="space-y-2">
+                                                    <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                                                        Half-Day Late Threshold (Minutes) <span className="text-slate-400 font-bold normal-case text-[9px]">(Default: 60)</span>
+                                                    </Label>
+                                                    <Input
+                                                        type="number"
+                                                        placeholder="60"
+                                                        min="1"
+                                                        max="480"
+                                                        className={inputClass("halfDayLateMinutes", "h-12 bg-white border border-slate-200 rounded-xl px-5 font-black text-xs tracking-widest")}
+                                                        value={formData.halfDayLateMinutes}
+                                                        onChange={(e) => updateField("halfDayLateMinutes", e.target.value)}
+                                                        onBlur={() => handleBlur("halfDayLateMinutes")}
+                                                    />
+                                                    {fieldErrorEl("halfDayLateMinutes")}
+                                                </div>
+                                                <div className="flex items-center">
+                                                    <p className="text-[10px] text-slate-500 italic leading-relaxed pt-4">
+                                                        * Rotational shift employees follow rotational rosters configured in Attendance Management (Req 2.5 C).
+                                                    </p>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
@@ -2114,8 +2323,8 @@ function OnboardingForm() {
                                     <>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8 animate-in fade-in slide-in-from-right-4">
                                             <div className="space-y-3">
-                                                <Label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">
-                                                    Monthly Fixed Gross (CTC) <span className="text-red-400">*</span>
+                                                <Label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center">
+                                                    Monthly Fixed Gross (CTC) <span className="text-red-500 font-bold ml-1">*</span>
                                                 </Label>
                                                 <Input
                                                     type="number"
@@ -2195,8 +2404,8 @@ function OnboardingForm() {
                                                 />
                                             </div>
                                             <div className="space-y-3">
-                                                <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                    Bank Name
+                                                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
+                                                    Bank Name <span className="text-red-500 font-bold ml-1">*</span>
                                                 </Label>
                                                 <Input
                                                     placeholder="e.g. HDFC Bank"
@@ -2208,8 +2417,8 @@ function OnboardingForm() {
                                                 {fieldErrorEl("bankName")}
                                             </div>
                                             <div className="space-y-3">
-                                                <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                    Account Number
+                                                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
+                                                    Account Number <span className="text-red-500 font-bold ml-1">*</span>
                                                 </Label>
                                                 <Input
                                                     placeholder="0000 0000 0000"
@@ -2221,8 +2430,8 @@ function OnboardingForm() {
                                                 {fieldErrorEl("accountNo")}
                                             </div>
                                             <div className="space-y-3">
-                                                <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                    IFSC Code
+                                                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
+                                                    IFSC Code <span className="text-red-500 font-bold ml-1">*</span>
                                                 </Label>
                                                 <Input
                                                     placeholder="HDFC0001234"
@@ -2457,75 +2666,6 @@ function OnboardingForm() {
                                         </div>
 
                                         {renderSalaryPreview()}
-
-
-                                        {/* ── Shift Configuration ── */}
-                                        <div className="p-6 bg-amber-50/50 rounded-[2rem] border border-amber-100 space-y-5">
-                                            <div className="flex items-center gap-2">
-                                                <Clock className="h-4 w-4 text-amber-500" />
-                                                <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">
-                                                    Shift Configuration
-                                                </p>
-                                            </div>
-                                            <p className="text-[9px] font-bold text-amber-500/70 uppercase tracking-widest">
-                                                Set employee shift timing and half-day threshold
-                                            </p>
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                                <div className="space-y-3">
-                                                    <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                        Shift Start Time
-                                                    </Label>
-                                                    <Input
-                                                        type="time"
-                                                        className={inputClass("shiftStartTime", "h-12 bg-white border-slate-100 rounded-xl px-5 font-black text-xs tracking-widest")}
-                                                        value={formData.shiftStartTime}
-                                                        onChange={(e) => updateField("shiftStartTime", e.target.value)}
-                                                        onBlur={() => handleBlur("shiftStartTime")}
-                                                    />
-                                                    {fieldErrorEl("shiftStartTime")}
-                                                </div>
-                                                <div className="space-y-3">
-                                                    <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                        Shift End Time
-                                                    </Label>
-                                                    <Input
-                                                        type="time"
-                                                        className={inputClass("shiftEndTime", "h-12 bg-white border-slate-100 rounded-xl px-5 font-black text-xs tracking-widest")}
-                                                        value={formData.shiftEndTime}
-                                                        onChange={(e) => updateField("shiftEndTime", e.target.value)}
-                                                        onBlur={() => handleBlur("shiftEndTime")}
-                                                    />
-                                                    {fieldErrorEl("shiftEndTime")}
-                                                </div>
-                                                <div className="space-y-3">
-                                                    <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                        Half-Day Late (min)
-                                                    </Label>
-                                                    <Input
-                                                        type="number"
-                                                        placeholder="60"
-                                                        min="1"
-                                                        max="480"
-                                                        className={inputClass("halfDayLateMinutes", "h-12 bg-white border-slate-100 rounded-xl px-5 font-black text-xs tracking-widest")}
-                                                        value={formData.halfDayLateMinutes}
-                                                        onChange={(e) => updateField("halfDayLateMinutes", e.target.value)}
-                                                        onBlur={() => handleBlur("halfDayLateMinutes")}
-                                                    />
-                                                    {fieldErrorEl("halfDayLateMinutes")}
-                                                </div>
-                                            </div>
-                                            <div className="pt-2 border-t border-amber-200/60">
-                                                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 bg-white p-3 rounded-xl border border-amber-200">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={formData.isRotationalShift === "Yes"}
-                                                        onChange={(e) => updateField("isRotationalShift", e.target.checked ? "Yes" : "No")}
-                                                        className="h-4 w-4 rounded text-amber-600 focus:ring-amber-500"
-                                                    />
-                                                    <span>Rotational Shift (Employee works on rotational shift roster - Req 2.3 B)</span>
-                                                </label>
-                                            </div>
-                                        </div>
                                     </>
                                 )}
 
@@ -2677,72 +2817,137 @@ function OnboardingForm() {
                                                 Check everything before adding the employee.
                                             </p>
                                         </div>
-                                        <div className="w-full max-w-2xl grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
-                                            <div className="p-8 bg-slate-50 rounded-[2rem] space-y-6">
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-white pb-3">
-                                                    Personal Details
+                                        <div className="w-full max-w-3xl grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
+                                            {/* Personal Details (Req 2.3 A) */}
+                                            <div className="p-8 bg-slate-50 rounded-[2rem] space-y-5">
+                                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] border-b border-slate-200 pb-3">
+                                                    Personal Details (Req 2.3 A)
                                                 </p>
-                                                <div className="space-y-4">
-                                                    <div>
-                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Full Name</p>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="col-span-2">
+                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Full Name (as per Aadhaar)</p>
                                                         <p className="text-sm font-black italic uppercase text-slate-900">
                                                             {formData.name || "N/A"}
                                                         </p>
                                                     </div>
                                                     <div>
                                                         <p className="text-[7px] font-black text-slate-400 uppercase">Email</p>
-                                                        <p className="text-sm font-black text-slate-900 lowercase">
+                                                        <p className="text-xs font-black text-slate-900 lowercase truncate">
                                                             {formData.email || "N/A"}
                                                         </p>
                                                     </div>
                                                     <div>
-                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Gender</p>
-                                                        <p className="text-sm font-black text-slate-900 uppercase">
-                                                            {formData.gender}
+                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Mobile Phone</p>
+                                                        <p className="text-xs font-black text-slate-900">
+                                                            {formData.phone || "N/A"}
                                                         </p>
                                                     </div>
                                                     <div>
-                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Aadhaar</p>
-                                                        <p className="text-sm font-black text-slate-900">
+                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Gender & Marital Status</p>
+                                                        <p className="text-xs font-black text-slate-900 uppercase">
+                                                            {formData.gender} • {formData.maritalStatus}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Father&apos;s / Husband&apos;s Name</p>
+                                                        <p className="text-xs font-black text-slate-900 uppercase">
+                                                            {formData.fatherOrHusbandName || "N/A"}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Date of Birth</p>
+                                                        <p className="text-xs font-black text-slate-900">
+                                                            {formData.dob || "N/A"}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Date of Joining</p>
+                                                        <p className="text-xs font-black text-slate-900">
+                                                            {formData.doj || "N/A"}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Aadhaar Number</p>
+                                                        <p className="text-xs font-black text-slate-900 font-mono">
                                                             {formData.aadhaar || "N/A"}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[7px] font-black text-slate-400 uppercase">PAN Number</p>
+                                                        <p className="text-xs font-black text-slate-900 font-mono">
+                                                            {formData.pan ? formData.pan.toUpperCase() : "N/A (Optional)"}
+                                                        </p>
+                                                    </div>
+                                                    <div className="col-span-2 pt-2 border-t border-slate-200/60">
+                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Emergency Contact</p>
+                                                        <p className="text-xs font-black text-slate-900">
+                                                            {formData.emergencyName || "N/A"} ({formData.emergencyRelation || "N/A"}) • {formData.emergencyPhone || "N/A"}
+                                                        </p>
+                                                    </div>
+                                                    <div className="col-span-2">
+                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Address as per Aadhaar</p>
+                                                        <p className="text-xs font-bold text-slate-700 leading-snug">
+                                                            {formData.address || "N/A"}
                                                         </p>
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div className="p-8 bg-slate-50 rounded-[2rem] space-y-6">
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-white pb-3">
-                                                    Job Details
+
+                                            {/* Employment Information (Req 2.3 B) */}
+                                            <div className="p-8 bg-slate-50 rounded-[2rem] space-y-5">
+                                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] border-b border-slate-200 pb-3">
+                                                    Employment Information (Req 2.3 B)
                                                 </p>
-                                                <div className="space-y-4">
-                                                    <div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="col-span-2">
                                                         <p className="text-[7px] font-black text-slate-400 uppercase">Company Entity</p>
                                                         <p className="text-sm font-black italic uppercase text-slate-900">
                                                             {companies.find((c) => c.id.toString() === formData.company)?.name || formData.company || "N/A"}
                                                         </p>
                                                     </div>
-                                                    <div>
-                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Office Location</p>
+                                                    <div className="col-span-2">
+                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Working Location</p>
                                                         <p className="text-sm font-black italic uppercase text-slate-900">
                                                             {offices.find((o) => o.id.toString() === formData.location)?.name || formData.location || "N/A"}
                                                         </p>
                                                     </div>
                                                     <div>
                                                         <p className="text-[7px] font-black text-slate-400 uppercase">Role</p>
-                                                        <p className="text-sm font-black text-slate-900 uppercase tracking-widest">
+                                                        <p className="text-xs font-black text-slate-900 uppercase tracking-widest">
                                                             {formData.role}
                                                         </p>
                                                     </div>
                                                     <div>
                                                         <p className="text-[7px] font-black text-slate-400 uppercase">Designation</p>
-                                                        <p className="text-sm font-black text-slate-900 uppercase tracking-widest">
+                                                        <p className="text-xs font-black text-slate-900 uppercase tracking-widest">
                                                             {formData.jobTitle || "N/A"}
+                                                        </p>
+                                                    </div>
+                                                    <div className="col-span-2">
+                                                        <p className="text-[7px] font-black text-slate-400 uppercase">HR / Reporting Manager</p>
+                                                        <p className="text-xs font-black text-slate-900">
+                                                            {formData.hrManager || "N/A"}
+                                                        </p>
+                                                    </div>
+                                                    <div className="col-span-2 pt-2 border-t border-slate-200/60">
+                                                        <p className="text-[7px] font-black text-indigo-600 uppercase">Shift Configuration</p>
+                                                        <p className="text-xs font-black text-slate-900">
+                                                            {formData.shiftStartTime} - {formData.shiftEndTime} (Threshold: {formData.halfDayLateMinutes}m)
+                                                        </p>
+                                                    </div>
+                                                    <div className="col-span-2">
+                                                        <p className="text-[7px] font-black text-indigo-600 uppercase">Rotational Shift</p>
+                                                        <p className="text-xs font-black text-slate-900">
+                                                            {formData.isRotationalShift === "Yes" ? "Yes (Rotational Shift Roster)" : "No (Fixed Regular Shift)"}
                                                         </p>
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div className="p-8 bg-slate-50 rounded-[2rem] space-y-6 md:col-span-2">
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-white pb-3">
-                                                    Compensation & Compliance
+
+                                            {/* Compensation & Compliance (Req 2.4) */}
+                                            <div className="p-8 bg-slate-50 rounded-[2rem] space-y-5 md:col-span-2">
+                                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] border-b border-slate-200 pb-3">
+                                                    Compensation & Compliance (Req 2.4)
                                                 </p>
                                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                                     <div>
@@ -2752,89 +2957,45 @@ function OnboardingForm() {
                                                         </p>
                                                     </div>
                                                     <div>
-                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Payment Mode</p>
+                                                        <p className="text-[7px] font-black text-slate-400 uppercase">HRA Applicable</p>
                                                         <p className="text-sm font-black text-slate-900 uppercase tracking-widest">
-                                                            {formData.paymentMode}
+                                                            {formData.hraApplicable}
                                                         </p>
                                                     </div>
                                                     <div>
-                                                        <p className="text-[7px] font-black text-indigo-400 uppercase">PF Mode</p>
-                                                        <p className="text-sm font-black text-indigo-600 uppercase tracking-widest">
-                                                            {formData.pfContributionMode.replace(/_/g, " ")}
+                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Bank Name</p>
+                                                        <p className="text-sm font-black text-slate-900 uppercase tracking-widest">
+                                                            {formData.bankName || "N/A"}
                                                         </p>
                                                     </div>
                                                     <div>
-                                                        <p className="text-[7px] font-black text-indigo-400 uppercase">PF Rate (Ee:Er)</p>
-                                                        <p className="text-sm font-black text-indigo-600 uppercase tracking-widest">
-                                                            {formData.pfEmployeeRate}:{formData.pfEmployerRate}
+                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Account & IFSC</p>
+                                                        <p className="text-xs font-black text-slate-900 font-mono">
+                                                            {formData.accountNo || "N/A"} • {formData.ifsc || "N/A"}
                                                         </p>
                                                     </div>
                                                     <div>
-                                                        <p className="text-[7px] font-black text-blue-400 uppercase">ESIC Mode</p>
-                                                        <p className="text-sm font-black text-blue-600 uppercase tracking-widest">
-                                                            {formData.esicContributionMode.replace(/_/g, " ")}
+                                                        <p className="text-[7px] font-black text-indigo-400 uppercase">PF Applicable & Mode</p>
+                                                        <p className="text-xs font-black text-indigo-600 uppercase tracking-widest">
+                                                            {formData.pfApplicable} ({formData.pfContributionMode})
                                                         </p>
                                                     </div>
                                                     <div>
-                                                        <p className="text-[7px] font-black text-blue-400 uppercase">ESIC Rate (Ee:Er)</p>
-                                                        <p className="text-sm font-black text-blue-600 uppercase tracking-widest">
-                                                            {formData.esicEmployeeRate}:{formData.esicEmployerRate}
+                                                        <p className="text-[7px] font-black text-indigo-400 uppercase">PF Ceiling Limit</p>
+                                                        <p className="text-xs font-black text-indigo-600 uppercase tracking-widest">
+                                                            {formData.pfCeiling === "Yes" ? "₹15,000 Cap" : "Actual Basic"}
                                                         </p>
                                                     </div>
                                                     <div>
-                                                        <p className="text-[7px] font-black text-indigo-400 uppercase">PF Applicable</p>
-                                                        <p className="text-sm font-black text-indigo-600 uppercase tracking-widest">
-                                                            {formData.pfApplicable}
+                                                        <p className="text-[7px] font-black text-blue-400 uppercase">ESIC Applicable & Mode</p>
+                                                        <p className="text-xs font-black text-blue-600 uppercase tracking-widest">
+                                                            {formData.esicApplicable} ({formData.esicContributionMode})
                                                         </p>
                                                     </div>
                                                     <div>
-                                                        <p className="text-[7px] font-black text-blue-400 uppercase">ESIC Applicable</p>
-                                                        <p className="text-sm font-black text-blue-600 uppercase tracking-widest">
-                                                            {formData.esicApplicable}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="p-8 bg-amber-50/30 rounded-[2rem] space-y-6 md:col-span-2 border border-amber-100">
-                                                <p className="text-[10px] font-black text-amber-500 uppercase tracking-[0.2em] border-b border-amber-100 pb-3">
-                                                    Shift Configuration
-                                                </p>
-                                                <div className="grid grid-cols-3 gap-4">
-                                                    <div>
-                                                        <p className="text-[7px] font-black text-amber-400 uppercase">Shift Start</p>
-                                                        <p className="text-sm font-black text-amber-700 uppercase tracking-widest">
-                                                            {formData.shiftStartTime}
-                                                        </p>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-[7px] font-black text-amber-400 uppercase">Shift End</p>
-                                                        <p className="text-sm font-black text-amber-700 uppercase tracking-widest">
-                                                            {formData.shiftEndTime}
-                                                        </p>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-[7px] font-black text-amber-400 uppercase">Half-Day Threshold</p>
-                                                        <p className="text-sm font-black text-amber-700 uppercase tracking-widest">
-                                                            {formData.halfDayLateMinutes} min
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="p-8 bg-slate-50 rounded-[2rem] space-y-6 md:col-span-2">
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-white pb-3">
-                                                    Emergency Contact
-                                                </p>
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    <div>
-                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Contact Name</p>
-                                                        <p className="text-sm font-black text-slate-900 uppercase">
-                                                            {formData.emergencyName || "N/A"}
-                                                        </p>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Relation</p>
-                                                        <p className="text-sm font-black text-slate-900 uppercase">
-                                                            {formData.emergencyRelation || "N/A"}
+                                                        <p className="text-[7px] font-black text-indigo-400 uppercase">PT Applicable</p>
+                                                        <p className="text-xs font-black text-indigo-600 uppercase tracking-widest">
+                                                            {formData.ptApplicable}
                                                         </p>
                                                     </div>
                                                 </div>
