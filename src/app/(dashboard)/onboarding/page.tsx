@@ -421,6 +421,11 @@ function OnboardingForm() {
         date_of_joining: new Date().toISOString().split("T")[0],
 
         fixed_gross: "45000",
+        hra_applicable: "Yes",
+        conveyance: "0",
+        medical_allowance: "0",
+        special_allowance: "0",
+        performance_allowance: "0",
         bankName: "",
         accountNo: "",
         ifsc: "",
@@ -593,6 +598,11 @@ function OnboardingForm() {
                 office_id: approvalOverrides.office_id ? Number(approvalOverrides.office_id) : undefined,
                 date_of_joining: approvalOverrides.date_of_joining || undefined,
                 fixed_gross: approvalOverrides.fixed_gross ? Number(approvalOverrides.fixed_gross) : undefined,
+                hra_applicable: approvalOverrides.hra_applicable !== "No",
+                conveyance: Number(approvalOverrides.conveyance) || 0,
+                medical_allowance: Number(approvalOverrides.medical_allowance) || 0,
+                special_allowance: Number(approvalOverrides.special_allowance) || 0,
+                performance_allowance: Number(approvalOverrides.performance_allowance) || 0,
                 payment_mode: approvalOverrides.paymentMode || undefined,
                 bank_name: approvalOverrides.bankName || undefined,
                 bank_account_number: approvalOverrides.accountNo || undefined,
@@ -643,8 +653,13 @@ function OnboardingForm() {
         dept: "",
         hrManager: "",
         doj: "",
-        // Step 2: Salary & Bank
+        // Step 2: Salary & Bank (Req 2.4)
         fixedGross: "",
+        hraApplicable: "Yes",
+        conveyance: "0",
+        medicalAllowance: "0",
+        specialAllowance: "0",
+        performanceAllowance: "0",
         bankName: "",
         accountNo: "",
         ifsc: "",
@@ -793,6 +808,11 @@ function OnboardingForm() {
             company_name: companies.find((c) => c.id.toString() === formData.company)?.name || null,
             location: offices.find((o) => o.id.toString() === formData.location)?.name || null,
             fixed_gross: formData.fixedGross ? Number(formData.fixedGross) : 0,
+            hra_applicable: formData.hraApplicable !== "No",
+            conveyance: Number(formData.conveyance) || 0,
+            medical_allowance: Number(formData.medicalAllowance) || 0,
+            special_allowance: Number(formData.specialAllowance) || 0,
+            performance_allowance: Number(formData.performanceAllowance) || 0,
             pf_applicable: formData.pfApplicable === "Yes",
             pf_ceiling: formData.pfCeiling === "Yes",
             pf_employment_date: formData.pfEmploymentDate || null,
@@ -1003,9 +1023,17 @@ function OnboardingForm() {
         const fixedGross = Number(approvalOverrides.fixed_gross) || 0;
         if (fixedGross <= 0) return null;
 
-        const basic = Math.round(fixedGross * 0.40);
-        const hra = Math.round(basic * 0.40);
-        const other = fixedGross - basic - hra;
+        // Req 2.4: 50% Basic Salary of Gross/CTC
+        const basic = Math.round(fixedGross * 0.50);
+        const hraApplicable = approvalOverrides.hra_applicable !== "No";
+        const hra = hraApplicable ? Math.round(basic * 0.40) : 0;
+        const conveyance = Number(approvalOverrides.conveyance) || 0;
+        const medicalAllowance = Number(approvalOverrides.medical_allowance) || 0;
+        const specialAllowance = Number(approvalOverrides.special_allowance) || 0;
+        const performanceAllowance = Number(approvalOverrides.performance_allowance) || 0;
+
+        const other = Math.max(0, fixedGross - (basic + hra + conveyance + medicalAllowance + specialAllowance + performanceAllowance));
+        const grossSalary = basic + hra + conveyance + medicalAllowance + specialAllowance + performanceAllowance + other;
 
         let pfBase = basic;
         if (approvalOverrides.pf_applicable === "Yes" && approvalOverrides.pf_ceiling === "Yes") {
@@ -1050,54 +1078,163 @@ function OnboardingForm() {
         }
 
         const totalDeductions = pfEmployee + esiEmployee + professionalTax;
-        const netSalary = fixedGross - totalDeductions;
-        const ctc = fixedGross + pfEmployer + esiEmployer;
+        const netSalary = grossSalary - totalDeductions;
+        const monthlyCTC = grossSalary + pfEmployer + esiEmployer;
+        const annualCTC = monthlyCTC * 12;
 
         return (
-            <div className="p-5 bg-slate-900 rounded-2xl text-white shadow-xl">
-                <div className="flex items-center gap-2 mb-4">
-                    <Calculator className="h-4 w-4 text-[#D9F99D]" />
-                    <h4 className="text-xs font-black italic uppercase tracking-widest text-[#D9F99D]">Live Salary Preview</h4>
+            <div className="p-5 bg-slate-900 rounded-2xl text-white shadow-xl space-y-5">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <div className="flex items-center gap-2">
+                        <Calculator className="h-4 w-4 text-[#D9F99D]" />
+                        <h4 className="text-xs font-black italic uppercase tracking-widest text-[#D9F99D]">
+                            Salary Preview & Structure Summary (Req 2.4)
+                        </h4>
+                    </div>
+                    <Badge className="bg-slate-800 text-slate-300 text-[9px] font-bold">
+                        Basic @ 50% of CTC
+                    </Badge>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="bg-slate-800/60 p-3 rounded-xl border border-slate-700/60">
-                        <p className="text-[8px] font-black text-white/70 uppercase tracking-widest mb-0.5">Basic Salary</p>
-                        <p className="text-base font-black text-white">₹{basic.toLocaleString('en-IN')}</p>
+
+                {/* ── Summary Metrics Grid (Req 2.4 Mandatory 6) ── */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                    <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60">
+                        <p className="text-[8px] font-black text-amber-400 uppercase tracking-widest mb-0.5">Monthly CTC</p>
+                        <p className="text-sm font-black text-white">₹{monthlyCTC.toLocaleString('en-IN')}</p>
                     </div>
-                    <div className="bg-slate-800/60 p-3 rounded-xl border border-slate-700/60">
-                        <p className="text-[8px] font-black text-white/70 uppercase tracking-widest mb-0.5">HRA</p>
-                        <p className="text-base font-black text-white">₹{hra.toLocaleString('en-IN')}</p>
+                    <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60">
+                        <p className="text-[8px] font-black text-amber-400 uppercase tracking-widest mb-0.5">Annual CTC</p>
+                        <p className="text-sm font-black text-white">₹{annualCTC.toLocaleString('en-IN')}</p>
                     </div>
-                    <div className="bg-slate-800/60 p-3 rounded-xl border border-slate-700/60">
-                        <p className="text-[8px] font-black text-white/70 uppercase tracking-widest mb-0.5">Other Allowances</p>
-                        <p className="text-base font-black text-white">₹{other.toLocaleString('en-IN')}</p>
+                    <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60">
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Basic (50%)</p>
+                        <p className="text-sm font-black text-white">₹{basic.toLocaleString('en-IN')}</p>
+                    </div>
+                    <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60">
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Gross Salary</p>
+                        <p className="text-sm font-black text-white">₹{grossSalary.toLocaleString('en-IN')}</p>
+                    </div>
+                    <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60">
+                        <p className="text-[8px] font-black text-rose-400 uppercase tracking-widest mb-0.5">Total Deductions</p>
+                        <p className="text-sm font-black text-rose-300">-₹{totalDeductions.toLocaleString('en-IN')}</p>
                     </div>
                     <div className="bg-[#D9F99D]/15 p-3 rounded-xl border border-[#D9F99D]/30">
                         <p className="text-[8px] font-black text-[#D9F99D] uppercase tracking-widest mb-0.5">Net Take Home</p>
-                        <p className="text-base font-black text-[#D9F99D]">₹{netSalary.toLocaleString('en-IN')}</p>
+                        <p className="text-sm font-black text-[#D9F99D]">₹{netSalary.toLocaleString('en-IN')}</p>
                     </div>
                 </div>
-                {(totalDeductions > 0 || pfEmployer > 0 || esiEmployer > 0) && (
-                    <div className="mt-4 pt-4 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <p className="text-[8px] font-black text-white/70 uppercase tracking-widest mb-2">Employee Deductions</p>
-                            <div className="space-y-1.5 text-[11px] font-bold text-white/90">
-                                {pfEmployee > 0 && <div className="flex justify-between items-center bg-slate-800/50 px-2 py-1 rounded"><span className="text-white/80">PF Contribution</span><span className="text-red-400">- ₹{pfEmployee.toLocaleString('en-IN')}</span></div>}
-                                {esiEmployee > 0 && <div className="flex justify-between items-center bg-slate-800/50 px-2 py-1 rounded"><span className="text-white/80">ESIC Contribution</span><span className="text-red-400">- ₹{esiEmployee.toLocaleString('en-IN')}</span></div>}
-                                {professionalTax > 0 && <div className="flex justify-between items-center bg-slate-800/50 px-2 py-1 rounded"><span className="text-white/80">PT Contribution</span><span className="text-red-400">- ₹{professionalTax.toLocaleString('en-IN')}</span></div>}
-                                <div className="flex justify-between items-center font-black text-white px-2 py-1"><span className="text-white">Total Deductions</span><span>₹{totalDeductions.toLocaleString('en-IN')}</span></div>
+
+                {/* ── Component Breakdown Columns ── */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-slate-800 text-xs">
+                    {/* Left: Earnings Components */}
+                    <div className="bg-slate-800/40 p-3.5 rounded-xl border border-slate-700/50 space-y-2">
+                        <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-2 flex items-center justify-between">
+                            <span>Earnings Breakdown</span>
+                            <span className="text-white/60 font-mono">Gross: ₹{grossSalary.toLocaleString('en-IN')}</span>
+                        </p>
+                        <div className="space-y-1.5 font-bold text-white/90 text-[11px]">
+                            <div className="flex justify-between items-center bg-slate-800/60 px-2.5 py-1.5 rounded-lg">
+                                <span className="text-white/70">Basic Salary (50% of CTC)</span>
+                                <span className="font-mono text-white">₹{basic.toLocaleString('en-IN')}</span>
                             </div>
-                        </div>
-                        <div>
-                            <p className="text-[8px] font-black text-white/70 uppercase tracking-widest mb-2">Employer Contributions</p>
-                            <div className="space-y-1.5 text-[11px] font-bold text-white/90">
-                                {pfEmployer > 0 && <div className="flex justify-between items-center bg-slate-800/50 px-2 py-1 rounded"><span className="text-white/80">PF Contribution</span><span className="text-emerald-400">+ ₹{pfEmployer.toLocaleString('en-IN')}</span></div>}
-                                {esiEmployer > 0 && <div className="flex justify-between items-center bg-slate-800/50 px-2 py-1 rounded"><span className="text-white/80">ESIC Contribution</span><span className="text-emerald-400">+ ₹{esiEmployer.toLocaleString('en-IN')}</span></div>}
-                                <div className="flex justify-between items-center font-black text-amber-400 px-2 py-1"><span className="text-amber-400">Monthly CTC</span><span>₹{ctc.toLocaleString('en-IN')}</span></div>
+                            <div className="flex justify-between items-center bg-slate-800/60 px-2.5 py-1.5 rounded-lg">
+                                <span className="text-white/70 flex items-center gap-1.5">
+                                    <span>HRA</span>
+                                    {!hraApplicable && <span className="text-[8px] text-amber-400 px-1 py-0.2 bg-amber-400/10 rounded">Opted Out</span>}
+                                </span>
+                                <span className="font-mono text-white">₹{hra.toLocaleString('en-IN')}</span>
+                            </div>
+                            {conveyance > 0 && (
+                                <div className="flex justify-between items-center bg-slate-800/60 px-2.5 py-1.5 rounded-lg">
+                                    <span className="text-white/70">Conveyance Allowance</span>
+                                    <span className="font-mono text-white">₹{conveyance.toLocaleString('en-IN')}</span>
+                                </div>
+                            )}
+                            {medicalAllowance > 0 && (
+                                <div className="flex justify-between items-center bg-slate-800/60 px-2.5 py-1.5 rounded-lg">
+                                    <span className="text-white/70">Medical Allowance</span>
+                                    <span className="font-mono text-white">₹{medicalAllowance.toLocaleString('en-IN')}</span>
+                                </div>
+                            )}
+                            {specialAllowance > 0 && (
+                                <div className="flex justify-between items-center bg-slate-800/60 px-2.5 py-1.5 rounded-lg">
+                                    <span className="text-white/70">Special Allowance</span>
+                                    <span className="font-mono text-white">₹{specialAllowance.toLocaleString('en-IN')}</span>
+                                </div>
+                            )}
+                            {performanceAllowance > 0 && (
+                                <div className="flex justify-between items-center bg-slate-800/60 px-2.5 py-1.5 rounded-lg">
+                                    <span className="text-white/70">Performance Allowance</span>
+                                    <span className="font-mono text-white">₹{performanceAllowance.toLocaleString('en-IN')}</span>
+                                </div>
+                            )}
+                            <div className="flex justify-between items-center bg-slate-800/60 px-2.5 py-1.5 rounded-lg">
+                                <span className="text-white/70">Other Allowance (Balancing)</span>
+                                <span className="font-mono text-white">₹{other.toLocaleString('en-IN')}</span>
                             </div>
                         </div>
                     </div>
-                )}
+
+                    {/* Right: Deductions & Employer Contributions */}
+                    <div className="space-y-4">
+                        <div className="bg-slate-800/40 p-3.5 rounded-xl border border-slate-700/50 space-y-2">
+                            <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest mb-2 flex items-center justify-between">
+                                <span>Employee Deductions</span>
+                                <span className="text-rose-400 font-mono">Total: -₹{totalDeductions.toLocaleString('en-IN')}</span>
+                            </p>
+                            <div className="space-y-1.5 font-bold text-[11px]">
+                                {pfEmployee > 0 ? (
+                                    <div className="flex justify-between items-center bg-slate-800/60 px-2.5 py-1.5 rounded-lg">
+                                        <span className="text-white/70">PF Contribution</span>
+                                        <span className="text-rose-400 font-mono">-₹{pfEmployee.toLocaleString('en-IN')}</span>
+                                    </div>
+                                ) : (
+                                    <div className="flex justify-between items-center bg-slate-800/30 px-2.5 py-1.5 rounded-lg text-slate-500">
+                                        <span>PF Contribution</span>
+                                        <span>Exempt / None</span>
+                                    </div>
+                                )}
+                                {esiEmployee > 0 ? (
+                                    <div className="flex justify-between items-center bg-slate-800/60 px-2.5 py-1.5 rounded-lg">
+                                        <span className="text-white/70">ESIC Contribution</span>
+                                        <span className="text-rose-400 font-mono">-₹{esiEmployee.toLocaleString('en-IN')}</span>
+                                    </div>
+                                ) : (
+                                    <div className="flex justify-between items-center bg-slate-800/30 px-2.5 py-1.5 rounded-lg text-slate-500">
+                                        <span>ESIC Contribution</span>
+                                        <span>Exempt / None</span>
+                                    </div>
+                                )}
+                                {professionalTax > 0 && (
+                                    <div className="flex justify-between items-center bg-slate-800/60 px-2.5 py-1.5 rounded-lg">
+                                        <span className="text-white/70">Professional Tax (PT)</span>
+                                        <span className="text-rose-400 font-mono">-₹{professionalTax.toLocaleString('en-IN')}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-800/40 p-3.5 rounded-xl border border-slate-700/50 space-y-2">
+                            <p className="text-[9px] font-black text-amber-400 uppercase tracking-widest mb-2">
+                                Employer Contributions (CTC Cost)
+                            </p>
+                            <div className="space-y-1.5 font-bold text-[11px]">
+                                {pfEmployer > 0 && (
+                                    <div className="flex justify-between items-center bg-slate-800/60 px-2.5 py-1.5 rounded-lg">
+                                        <span className="text-white/70">Employer PF Contribution</span>
+                                        <span className="text-emerald-400 font-mono">+₹{pfEmployer.toLocaleString('en-IN')}</span>
+                                    </div>
+                                )}
+                                {esiEmployer > 0 && (
+                                    <div className="flex justify-between items-center bg-slate-800/60 px-2.5 py-1.5 rounded-lg">
+                                        <span className="text-white/70">Employer ESIC Contribution</span>
+                                        <span className="text-emerald-400 font-mono">+₹{esiEmployer.toLocaleString('en-IN')}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         );
     };
@@ -1106,9 +1243,17 @@ function OnboardingForm() {
         const fixedGross = Number(formData.fixedGross) || 0;
         if (fixedGross <= 0) return null;
 
-        const basic = Math.round(fixedGross * 0.40);
-        const hra = Math.round(basic * 0.40);
-        const other = fixedGross - basic - hra;
+        // Req 2.4: 50% Basic Salary of Gross/CTC
+        const basic = Math.round(fixedGross * 0.50);
+        const hraApplicable = formData.hraApplicable !== "No";
+        const hra = hraApplicable ? Math.round(basic * 0.40) : 0;
+        const conveyance = Number(formData.conveyance) || 0;
+        const medicalAllowance = Number(formData.medicalAllowance) || 0;
+        const specialAllowance = Number(formData.specialAllowance) || 0;
+        const performanceAllowance = Number(formData.performanceAllowance) || 0;
+
+        const other = Math.max(0, fixedGross - (basic + hra + conveyance + medicalAllowance + specialAllowance + performanceAllowance));
+        const grossSalary = basic + hra + conveyance + medicalAllowance + specialAllowance + performanceAllowance + other;
 
         let pfBase = basic;
         if (formData.pfApplicable === "Yes" && formData.pfCeiling === "Yes") {
@@ -1153,54 +1298,163 @@ function OnboardingForm() {
         }
 
         const totalDeductions = pfEmployee + esiEmployee + professionalTax;
-        const netSalary = fixedGross - totalDeductions;
-        const ctc = fixedGross + pfEmployer + esiEmployer;
+        const netSalary = grossSalary - totalDeductions;
+        const monthlyCTC = grossSalary + pfEmployer + esiEmployer;
+        const annualCTC = monthlyCTC * 12;
 
         return (
-            <div className="mt-8 p-6 bg-slate-900 rounded-[2rem] text-white shadow-xl animate-in slide-in-from-bottom-4">
-                <div className="flex items-center gap-2 mb-6">
-                    <Calculator className="h-5 w-5 text-[#D9F99D]" />
-                    <h3 className="text-sm font-black italic uppercase tracking-widest text-[#D9F99D]">Live Salary Preview</h3>
+            <div className="mt-8 p-6 bg-slate-900 rounded-[2rem] text-white shadow-xl animate-in slide-in-from-bottom-4 space-y-6">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                    <div className="flex items-center gap-2">
+                        <Calculator className="h-5 w-5 text-[#D9F99D]" />
+                        <h3 className="text-sm font-black italic uppercase tracking-widest text-[#D9F99D]">
+                            Live Salary Preview & Structure Summary (Req 2.4)
+                        </h3>
+                    </div>
+                    <Badge className="bg-slate-800 text-slate-300 text-[10px] font-bold">
+                        Basic @ 50% of CTC
+                    </Badge>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50 hover:border-slate-600 transition-colors">
-                        <p className="text-[9px] font-black text-white/70 uppercase tracking-widest mb-1">Basic Salary</p>
-                        <p className="text-xl font-black text-white">₹{basic.toLocaleString('en-IN')}</p>
+
+                {/* ── Summary Metrics Grid (Req 2.4 Mandatory 6) ── */}
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <div className="bg-slate-800/80 p-4 rounded-2xl border border-slate-700/60">
+                        <p className="text-[9px] font-black text-amber-400 uppercase tracking-widest mb-1">Monthly CTC</p>
+                        <p className="text-base font-black text-white">₹{monthlyCTC.toLocaleString('en-IN')}</p>
                     </div>
-                    <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50 hover:border-slate-600 transition-colors">
-                        <p className="text-[9px] font-black text-white/70 uppercase tracking-widest mb-1">HRA</p>
-                        <p className="text-xl font-black text-white">₹{hra.toLocaleString('en-IN')}</p>
+                    <div className="bg-slate-800/80 p-4 rounded-2xl border border-slate-700/60">
+                        <p className="text-[9px] font-black text-amber-400 uppercase tracking-widest mb-1">Annual CTC</p>
+                        <p className="text-base font-black text-white">₹{annualCTC.toLocaleString('en-IN')}</p>
                     </div>
-                    <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50 hover:border-slate-600 transition-colors">
-                        <p className="text-[9px] font-black text-white/70 uppercase tracking-widest mb-1">Other Allowances</p>
-                        <p className="text-xl font-black text-white">₹{other.toLocaleString('en-IN')}</p>
+                    <div className="bg-slate-800/80 p-4 rounded-2xl border border-slate-700/60">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Basic (50%)</p>
+                        <p className="text-base font-black text-white">₹{basic.toLocaleString('en-IN')}</p>
                     </div>
-                    <div className="bg-[#D9F99D]/10 p-4 rounded-2xl border border-[#D9F99D]/20">
+                    <div className="bg-slate-800/80 p-4 rounded-2xl border border-slate-700/60">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Gross Salary</p>
+                        <p className="text-base font-black text-white">₹{grossSalary.toLocaleString('en-IN')}</p>
+                    </div>
+                    <div className="bg-slate-800/80 p-4 rounded-2xl border border-slate-700/60">
+                        <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest mb-1">Total Deductions</p>
+                        <p className="text-base font-black text-rose-300">-₹{totalDeductions.toLocaleString('en-IN')}</p>
+                    </div>
+                    <div className="bg-[#D9F99D]/15 p-4 rounded-2xl border border-[#D9F99D]/30">
                         <p className="text-[9px] font-black text-[#D9F99D] uppercase tracking-widest mb-1">Net Take Home</p>
-                        <p className="text-xl font-black text-[#D9F99D]">₹{netSalary.toLocaleString('en-IN')}</p>
+                        <p className="text-base font-black text-[#D9F99D]">₹{netSalary.toLocaleString('en-IN')}</p>
                     </div>
                 </div>
-                {(totalDeductions > 0 || pfEmployer > 0 || esiEmployer > 0) && (
-                    <div className="mt-6 pt-6 border-t border-slate-800/80 grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div>
-                            <p className="text-[9px] font-black text-white/70 uppercase tracking-widest mb-3">Employee Deductions</p>
-                            <div className="space-y-2 text-xs font-bold text-white/90">
-                                {pfEmployee > 0 && <div className="flex justify-between items-center bg-slate-800/50 p-2 rounded-lg"><span className="text-white/80">PF Contribution</span><span className="text-red-400">- ₹{pfEmployee.toLocaleString('en-IN')}</span></div>}
-                                {esiEmployee > 0 && <div className="flex justify-between items-center bg-slate-800/50 p-2 rounded-lg"><span className="text-white/80">ESIC Contribution</span><span className="text-red-400">- ₹{esiEmployee.toLocaleString('en-IN')}</span></div>}
-                                {professionalTax > 0 && <div className="flex justify-between items-center bg-slate-800/50 p-2 rounded-lg"><span className="text-white/80">PT Contribution</span><span className="text-red-400">- ₹{professionalTax.toLocaleString('en-IN')}</span></div>}
-                                <div className="flex justify-between items-center font-black text-white p-2"><span className="text-white">Total Deductions</span><span>₹{totalDeductions.toLocaleString('en-IN')}</span></div>
+
+                {/* ── Component Breakdown Columns ── */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-800">
+                    {/* Left: Earnings Components */}
+                    <div className="bg-slate-800/40 p-4 rounded-2xl border border-slate-700/50 space-y-3">
+                        <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-2 flex items-center justify-between">
+                            <span>Earnings Breakdown</span>
+                            <span className="text-white/60 font-mono text-xs">Gross: ₹{grossSalary.toLocaleString('en-IN')}</span>
+                        </p>
+                        <div className="space-y-2 font-bold text-white/90 text-xs">
+                            <div className="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
+                                <span className="text-white/80">Basic Salary (50% of CTC)</span>
+                                <span className="font-mono text-white">₹{basic.toLocaleString('en-IN')}</span>
                             </div>
-                        </div>
-                        <div>
-                            <p className="text-[9px] font-black text-white/70 uppercase tracking-widest mb-3">Employer Contributions</p>
-                            <div className="space-y-2 text-xs font-bold text-white/90">
-                                {pfEmployer > 0 && <div className="flex justify-between items-center bg-slate-800/50 p-2 rounded-lg"><span className="text-white/80">PF Contribution</span><span className="text-emerald-400">+ ₹{pfEmployer.toLocaleString('en-IN')}</span></div>}
-                                {esiEmployer > 0 && <div className="flex justify-between items-center bg-slate-800/50 p-2 rounded-lg"><span className="text-white/80">ESIC Contribution</span><span className="text-emerald-400">+ ₹{esiEmployer.toLocaleString('en-IN')}</span></div>}
-                                <div className="flex justify-between items-center font-black text-amber-400 p-2"><span className="text-amber-400">Monthly CTC</span><span>₹{ctc.toLocaleString('en-IN')}</span></div>
+                            <div className="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
+                                <span className="text-white/80 flex items-center gap-2">
+                                    <span>House Rent Allowance (HRA)</span>
+                                    {!hraApplicable && <span className="text-[9px] text-amber-400 px-1.5 py-0.5 bg-amber-400/10 rounded">Disabled</span>}
+                                </span>
+                                <span className="font-mono text-white">₹{hra.toLocaleString('en-IN')}</span>
+                            </div>
+                            {conveyance > 0 && (
+                                <div className="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
+                                    <span className="text-white/80">Conveyance Allowance</span>
+                                    <span className="font-mono text-white">₹{conveyance.toLocaleString('en-IN')}</span>
+                                </div>
+                            )}
+                            {medicalAllowance > 0 && (
+                                <div className="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
+                                    <span className="text-white/80">Medical Allowance</span>
+                                    <span className="font-mono text-white">₹{medicalAllowance.toLocaleString('en-IN')}</span>
+                                </div>
+                            )}
+                            {specialAllowance > 0 && (
+                                <div className="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
+                                    <span className="text-white/80">Special Allowance</span>
+                                    <span className="font-mono text-white">₹{specialAllowance.toLocaleString('en-IN')}</span>
+                                </div>
+                            )}
+                            {performanceAllowance > 0 && (
+                                <div className="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
+                                    <span className="text-white/80">Performance Allowance</span>
+                                    <span className="font-mono text-white">₹{performanceAllowance.toLocaleString('en-IN')}</span>
+                                </div>
+                            )}
+                            <div className="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
+                                <span className="text-white/80">Other Allowance (Balancing)</span>
+                                <span className="font-mono text-white">₹{other.toLocaleString('en-IN')}</span>
                             </div>
                         </div>
                     </div>
-                )}
+
+                    {/* Right: Deductions & Employer Contributions */}
+                    <div className="space-y-4">
+                        <div className="bg-slate-800/40 p-4 rounded-2xl border border-slate-700/50 space-y-3">
+                            <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-2 flex items-center justify-between">
+                                <span>Employee Deductions</span>
+                                <span className="text-rose-400 font-mono text-xs">Total: -₹{totalDeductions.toLocaleString('en-IN')}</span>
+                            </p>
+                            <div className="space-y-2 font-bold text-xs">
+                                {pfEmployee > 0 ? (
+                                    <div className="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
+                                        <span className="text-white/80">PF Contribution</span>
+                                        <span className="text-rose-400 font-mono">-₹{pfEmployee.toLocaleString('en-IN')}</span>
+                                    </div>
+                                ) : (
+                                    <div className="flex justify-between items-center bg-slate-800/30 p-2.5 rounded-xl text-slate-500">
+                                        <span>PF Contribution</span>
+                                        <span>Exempt / None</span>
+                                    </div>
+                                )}
+                                {esiEmployee > 0 ? (
+                                    <div className="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
+                                        <span className="text-white/80">ESIC Contribution</span>
+                                        <span className="text-rose-400 font-mono">-₹{esiEmployee.toLocaleString('en-IN')}</span>
+                                    </div>
+                                ) : (
+                                    <div className="flex justify-between items-center bg-slate-800/30 p-2.5 rounded-xl text-slate-500">
+                                        <span>ESIC Contribution</span>
+                                        <span>Exempt / None</span>
+                                    </div>
+                                )}
+                                {professionalTax > 0 && (
+                                    <div className="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
+                                        <span className="text-white/80">Professional Tax (PT)</span>
+                                        <span className="text-rose-400 font-mono">-₹{professionalTax.toLocaleString('en-IN')}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-800/40 p-4 rounded-2xl border border-slate-700/50 space-y-3">
+                            <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-2">
+                                Employer Contributions (CTC Cost)
+                            </p>
+                            <div className="space-y-2 font-bold text-xs">
+                                {pfEmployer > 0 && (
+                                    <div className="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
+                                        <span className="text-white/80">Employer PF Contribution</span>
+                                        <span className="text-emerald-400 font-mono">+₹{pfEmployer.toLocaleString('en-IN')}</span>
+                                    </div>
+                                )}
+                                {esiEmployer > 0 && (
+                                    <div className="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
+                                        <span className="text-white/80">Employer ESIC Contribution</span>
+                                        <span className="text-emerald-400 font-mono">+₹{esiEmployer.toLocaleString('en-IN')}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         );
     };
@@ -1443,6 +1697,11 @@ function OnboardingForm() {
                                                                         date_of_joining: sub.date_of_joining || new Date().toISOString().split("T")[0],
 
                                                                         fixed_gross: gross.toString(),
+                                                                        hra_applicable: sub.hra_applicable !== false ? "Yes" : "No",
+                                                                        conveyance: sub.conveyance?.toString() || "0",
+                                                                        medical_allowance: sub.medical_allowance?.toString() || "0",
+                                                                        special_allowance: sub.special_allowance?.toString() || "0",
+                                                                        performance_allowance: sub.performance_allowance?.toString() || "0",
 
                                                                         pf_applicable: sub.pf_applicable !== false ? "Yes" : "No",
                                                                         pf_ceiling: sub.pf_ceiling ? "Yes" : "No",
@@ -1867,6 +2126,73 @@ function OnboardingForm() {
                                                     onBlur={() => handleBlur("fixedGross")}
                                                 />
                                                 {fieldErrorEl("fixedGross")}
+                                            </div>
+                                            <div className="space-y-3">
+                                                <div className="flex items-center justify-between">
+                                                    <Label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">
+                                                        HRA Applicable (Optional)
+                                                    </Label>
+                                                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Req 2.4</span>
+                                                </div>
+                                                <select
+                                                    className="w-full h-12 bg-emerald-50 border-none rounded-xl px-5 font-black text-[10px] uppercase tracking-widest outline-none text-emerald-900"
+                                                    value={formData.hraApplicable}
+                                                    onChange={(e) => updateField("hraApplicable", e.target.value)}
+                                                >
+                                                    <option value="Yes">Yes (Enabled)</option>
+                                                    <option value="No">No (Disabled / Exempt)</option>
+                                                </select>
+                                            </div>
+                                            <div className="space-y-3">
+                                                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                                    Conveyance Allowance (₹)
+                                                </Label>
+                                                <Input
+                                                    type="number"
+                                                    placeholder="0"
+                                                    className="h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs uppercase tracking-widest text-slate-900"
+                                                    value={formData.conveyance}
+                                                    onChange={(e) => updateField("conveyance", e.target.value)}
+                                                />
+                                            </div>
+                                            <div className="space-y-3">
+                                                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                                    Medical Allowance (₹)
+                                                </Label>
+                                                <Input
+                                                    type="number"
+                                                    placeholder="0"
+                                                    className="h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs uppercase tracking-widest text-slate-900"
+                                                    value={formData.medicalAllowance}
+                                                    onChange={(e) => updateField("medicalAllowance", e.target.value)}
+                                                />
+                                            </div>
+                                            <div className="space-y-3">
+                                                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                                    Special Allowance (₹)
+                                                </Label>
+                                                <Input
+                                                    type="number"
+                                                    placeholder="0"
+                                                    className="h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs uppercase tracking-widest text-slate-900"
+                                                    value={formData.specialAllowance}
+                                                    onChange={(e) => updateField("specialAllowance", e.target.value)}
+                                                />
+                                            </div>
+                                            <div className="space-y-3">
+                                                <div className="flex items-center justify-between">
+                                                    <Label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">
+                                                        Performance Allowance (₹)
+                                                    </Label>
+                                                    <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-wider">Req 2.4</span>
+                                                </div>
+                                                <Input
+                                                    type="number"
+                                                    placeholder="0"
+                                                    className="h-12 bg-indigo-50 border-none rounded-xl px-5 font-black text-xs uppercase tracking-widest text-indigo-900"
+                                                    value={formData.performanceAllowance}
+                                                    onChange={(e) => updateField("performanceAllowance", e.target.value)}
+                                                />
                                             </div>
                                             <div className="space-y-3">
                                                 <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
@@ -2950,6 +3276,60 @@ function OnboardingForm() {
                                             <option value="Bank Transfer">Bank Transfer</option>
                                             <option value="Cash">Cash</option>
                                         </select>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 pt-1">
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-emerald-700 mb-1 block">HRA (Optional)</Label>
+                                        <select
+                                            value={approvalOverrides.hra_applicable}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, hra_applicable: e.target.value }))}
+                                            className="w-full h-10 rounded-xl bg-emerald-50/60 border border-emerald-200 px-3 text-xs font-bold text-emerald-900 outline-none"
+                                        >
+                                            <option value="Yes">Enabled</option>
+                                            <option value="No">Disabled</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Performance (₹)</Label>
+                                        <Input
+                                            type="number"
+                                            value={approvalOverrides.performance_allowance}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, performance_allowance: e.target.value }))}
+                                            placeholder="0"
+                                            className="h-10 rounded-xl bg-slate-50 font-bold text-xs"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Conveyance (₹)</Label>
+                                        <Input
+                                            type="number"
+                                            value={approvalOverrides.conveyance}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, conveyance: e.target.value }))}
+                                            placeholder="0"
+                                            className="h-10 rounded-xl bg-slate-50 font-bold text-xs"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Medical (₹)</Label>
+                                        <Input
+                                            type="number"
+                                            value={approvalOverrides.medical_allowance}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, medical_allowance: e.target.value }))}
+                                            placeholder="0"
+                                            className="h-10 rounded-xl bg-slate-50 font-bold text-xs"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Special (₹)</Label>
+                                        <Input
+                                            type="number"
+                                            value={approvalOverrides.special_allowance}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, special_allowance: e.target.value }))}
+                                            placeholder="0"
+                                            className="h-10 rounded-xl bg-slate-50 font-bold text-xs"
+                                        />
                                     </div>
                                 </div>
 

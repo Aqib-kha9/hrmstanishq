@@ -59,6 +59,9 @@ interface SalaryStructure {
     other_allowance: number | string;
     conveyance: number | string;
     medical_allowance: number | string;
+    performance_allowance?: number | string;
+    annual_ctc?: number | string;
+    hra_applicable?: boolean;
     pf_applicable: boolean;
     pf_ceiling: boolean;
     pf_contribution_mode: string | null;
@@ -235,26 +238,30 @@ function computeSalaryMetrics(
     const gross = Number(salary?.fixed_gross ?? rawEmp?.fixed_gross ?? 0);
     if (!gross || gross <= 0) return null;
 
-    // 1. Earnings Breakdown
-    const basic = Number(salary?.basic_salary ?? rawEmp?.basic_salary ?? Math.round(gross * 0.4));
-    const hra = Number(salary?.hra ?? Math.round(basic * 0.4));
+    // 1. Earnings Breakdown (Req 2.4: 50% Basic Salary, Optional HRA, Allowances)
+    const basic = Number(salary?.basic_salary ?? rawEmp?.basic_salary ?? Math.round(gross * 0.5));
+    const hraApplicable = salary?.hra_applicable !== false && (rawEmp as any)?.hra_applicable !== false;
+    const hra = hraApplicable ? Number(salary?.hra ?? Math.round(basic * 0.4)) : 0;
     const special = Number(salary?.special_allowance ?? 0);
     const conveyance = Number(salary?.conveyance ?? 0);
     const medical = Number(salary?.medical_allowance ?? 0);
+    const performance = Number(salary?.performance_allowance ?? (rawEmp as any)?.performance_allowance ?? 0);
 
     let other = Number(salary?.other_allowance ?? 0);
-    const remaining = gross - (basic + hra + special + conveyance + medical);
+    const remaining = gross - (basic + hra + special + conveyance + medical + performance);
     if (!salary?.other_allowance && remaining > 0) {
         other = remaining;
     }
 
     const earnings = [
-        { component: "Basic Salary", amount: basic, description: "Core base wage (approx 40% of Gross CTC)" },
-        { component: "House Rent Allowance (HRA)", amount: hra, description: "Housing allowance (40% of Basic Salary)" },
-        ...(special > 0 ? [{ component: "Special Allowance", amount: special, description: "Role / competency incentive" }] : []),
-        ...(other > 0 ? [{ component: "Other Allowances", amount: other, description: "Flexible balancing allowance" }] : []),
+        { component: "Basic Salary", amount: basic, description: "Core base wage (50% of Gross CTC per Req 2.4)" },
+        ...(hraApplicable ? [{ component: "House Rent Allowance (HRA)", amount: hra, description: "Housing allowance (40% of Basic Salary)" }] : []),
+        ...(!hraApplicable ? [{ component: "House Rent Allowance (HRA)", amount: 0, description: "Exempt / Disabled for this profile (Req 2.4)" }] : []),
         ...(conveyance > 0 ? [{ component: "Conveyance Allowance", amount: conveyance, description: "Commute & transit allowance" }] : []),
         ...(medical > 0 ? [{ component: "Medical Allowance", amount: medical, description: "Healthcare allowance" }] : []),
+        ...(special > 0 ? [{ component: "Special Allowance", amount: special, description: "Role / competency incentive" }] : []),
+        ...(performance > 0 ? [{ component: "Performance Allowance", amount: performance, description: "Performance incentive (Req 2.4)" }] : []),
+        ...(other > 0 ? [{ component: "Other Allowances", amount: other, description: "Flexible balancing allowance" }] : []),
     ];
 
     // 2. Statutory Employee Deductions

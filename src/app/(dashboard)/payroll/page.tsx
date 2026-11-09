@@ -261,14 +261,24 @@ export default function PayrollPage() {
             : Math.max(0, elapsedDays - effectiveAbsentDays);
 
         const fixedGross = Number(row.fixedGross ?? row.fixed_gross) || 0;
-        const fixedBasic = Math.round(fixedGross * 0.40);
-        const fixedHra = Math.round(fixedBasic * 0.40);
-        const fixedOther = fixedGross - fixedBasic - fixedHra;
+        // Req 2.4: 50% Basic Salary of CTC/Gross
+        const fixedBasic = Math.round(fixedGross * 0.50);
+        const hraApplicable = (row.hraApplicable ?? row.hra_applicable) !== false && (row.hraApplicable ?? row.hra_applicable) !== "No";
+        const fixedHra = hraApplicable ? Math.round(fixedBasic * 0.40) : 0;
+        const fixedConv = Number(row.conveyance) || 0;
+        const fixedMed = Number(row.medicalAllowance ?? row.medical_allowance) || 0;
+        const fixedSpec = Number(row.specialAllowance ?? row.special_allowance) || 0;
+        const fixedPerf = Number(row.performanceAllowance ?? row.performance_allowance) || 0;
+        const fixedOther = Math.max(0, fixedGross - (fixedBasic + fixedHra + fixedConv + fixedMed + fixedSpec + fixedPerf));
 
         const basic = Math.round((fixedBasic / daysInMonth) * payableDays);
         const hra = Math.round((fixedHra / daysInMonth) * payableDays);
+        const conveyance = Math.round((fixedConv / daysInMonth) * payableDays);
+        const medicalAllowance = Math.round((fixedMed / daysInMonth) * payableDays);
+        const specialAllowance = Math.round((fixedSpec / daysInMonth) * payableDays);
+        const performanceAllowance = Math.round((fixedPerf / daysInMonth) * payableDays);
         const other = Math.round((fixedOther / daysInMonth) * payableDays);
-        const proratedGross = basic + hra + other;
+        const proratedGross = basic + hra + conveyance + medicalAllowance + specialAllowance + performanceAllowance + other;
 
         const totalEarnings = proratedGross
             + (Number(row.previousArrears ?? row.previous_arrears) || 0)
@@ -301,15 +311,17 @@ export default function PayrollPage() {
         const pfEmployer = pf;
         const esiEmployer = (row.esicApplicable ?? row.esic_applicable) ? Math.ceil(totalEarnings * 0.0325) : 0;
         const totalMonthlyCTC = totalEarnings + pfEmployer + esiEmployer;
+        const annualCTC = totalMonthlyCTC * 12;
         const lop = fixedGross - proratedGross;
 
         return {
-            fixedGross, fixedBasic, fixedHra, fixedOther,
-            basic, hra, other, proratedGross, totalEarnings,
+            fixedGross, fixedBasic, fixedHra, fixedConv, fixedMed, fixedSpec, fixedPerf, fixedOther,
+            basic, hra, conveyance, medicalAllowance, specialAllowance, performanceAllowance, other,
+            proratedGross, totalEarnings,
             payableDays, effectiveAbsentDays,
             hasManualOverride,
             pf, esi, pt, grossDeductions, net,
-            pfEmployer, esiEmployer, totalMonthlyCTC, lop
+            pfEmployer, esiEmployer, totalMonthlyCTC, annualCTC, lop
         };
     };
 
