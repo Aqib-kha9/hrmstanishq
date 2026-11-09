@@ -32,7 +32,7 @@ export function BulkImportModal({ open, onOpenChange, companies, offices, onSucc
         // 1. Employee Data Sheet
         const employeeData = [
             {
-                "Emp Code (Optional)": "",
+                "Emp Code (Optional)": "APA001",
                 "Name (Required)": "John Doe",
                 "Email (Required)": "john@company.com",
                 "Phone": "9876543210",
@@ -53,7 +53,7 @@ export function BulkImportModal({ open, onOpenChange, companies, offices, onSucc
 
         // 2. Instructions Sheet
         const instructions = [
-            { Column: "Emp Code (Optional)", Description: "Unique ID. Left blank, it auto-generates." },
+            { Column: "Emp Code (Optional)", Description: "Company-specific ID (e.g. APA001). Left blank, it auto-generates with company prefix." },
             { Column: "Name (Required)", Description: "Full name. Max 100 chars." },
             { Column: "Email (Required)", Description: "Valid email address." },
             { Column: "Phone", Description: "Phone number." },
@@ -129,11 +129,9 @@ export function BulkImportModal({ open, onOpenChange, companies, offices, onSucc
         for (let i = 0; i < parsedData.length; i++) {
             const row = parsedData[i];
 
-            // Auto-generate emp_code if missing
-            let empCode = String(row["Emp Code (Optional)"] || "").trim();
-            if (!empCode) {
-                empCode = `EMP${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 1000)}`;
-            }
+            // Company-specific emp_code (e.g. APA001) or null for backend auto-generation (Req 2.2)
+            const rawCode = String(row["Emp Code (Optional)"] || "").trim().toUpperCase();
+            const empCode = rawCode || null;
 
             // Build payload exactly as required by the backend
             const payload = {
@@ -179,7 +177,7 @@ export function BulkImportModal({ open, onOpenChange, companies, offices, onSucc
                 await apiPost("/auth/register", payload);
                 newResults.push({
                     row: i + 2, // Accounting for header row
-                    emp_code: payload.emp_code,
+                    emp_code: payload.emp_code || "Auto",
                     name: payload.name,
                     success: true
                 });
@@ -187,7 +185,7 @@ export function BulkImportModal({ open, onOpenChange, companies, offices, onSucc
                 const msg = err.response?.data?.message || err.response?.data?.errors?.[0] || err.message || "Failed";
                 newResults.push({
                     row: i + 2,
-                    emp_code: payload.emp_code,
+                    emp_code: payload.emp_code || "Auto",
                     name: payload.name,
                     success: false,
                     error: typeof msg === 'object' ? JSON.stringify(msg) : msg

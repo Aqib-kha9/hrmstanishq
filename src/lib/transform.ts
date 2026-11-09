@@ -48,6 +48,7 @@ export interface BackendEmployee {
   company_name: string | null;
   emergency_contact_name: string | null;
   emergency_contact_relation: string | null;
+  hr_manager?: string | null;
   location: string | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -65,6 +66,7 @@ export interface FrontendEmployee {
   status: string;
   location: string;
   company: string;
+  hr_manager?: string;
   color: string;
   employeeId: number; // numeric DB id for API calls
 }
@@ -114,7 +116,8 @@ export function toFrontendEmployee(be: BackendEmployee): FrontendEmployee {
     phone: be.phone || "",
     status: mapStatus(be.status),
     location: be.office?.name || "Unknown",
-    company: be.company?.name || "Unknown",
+    company: be.company?.name || be.company_name || "Apaar Logistics",
+    hr_manager: be.hr_manager || "HR Operations",
     color: ROLE_COLORS[role] || "blue",
     employeeId: be.id,
   };

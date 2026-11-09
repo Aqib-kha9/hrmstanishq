@@ -491,21 +491,22 @@ export default function EmployeesPage() {
                                 <table className="w-full border-collapse min-w-[800px]">
                                     <thead>
                                         <tr className="bg-slate-50/50 border-b border-slate-100">
-                                            <th className="text-left py-5 px-8 text-[9px] font-black text-slate-400 uppercase tracking-widest">Employee</th>
-                                            <th className="text-left py-5 px-8 text-[9px] font-black text-slate-400 uppercase tracking-widest">Contact Info</th>
-                                            <th className="text-left py-5 px-8 text-[9px] font-black text-slate-400 uppercase tracking-widest">Job Details</th>
-                                            <th className="text-left py-5 px-8 text-[9px] font-black text-slate-400 uppercase tracking-widest">Company</th>
-                                            <th className="text-left py-5 px-8 text-[9px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-                                            <th className="text-right py-5 px-8 text-[9px] font-black text-slate-400 uppercase tracking-widest">Actions</th>
+                                            <th className="text-left py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest">Employee</th>
+                                            <th className="text-left py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest">Email & Contact</th>
+                                            <th className="text-left py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest">Designation & Role</th>
+                                            <th className="text-left py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest">HR Manager</th>
+                                            <th className="text-left py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest">Company</th>
+                                            <th className="text-left py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                                            <th className="text-right py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {paginatedPersonnel.map((emp) => (
                                             <tr key={emp.employeeId} className="border-b border-slate-50 hover:bg-slate-50/30 transition-colors group">
-                                                <td className="py-5 px-8">
-                                                    <div className="flex items-center gap-4">
+                                                <td className="py-5 px-6">
+                                                    <div className="flex items-center gap-3">
                                                         <div className={cn(
-                                                            "h-10 w-10 rounded-xl flex items-center justify-center font-black italic text-sm shadow-sm border border-white",
+                                                            "h-10 w-10 rounded-xl flex items-center justify-center font-black italic text-sm shadow-sm border border-white shrink-0",
                                                             emp.color === 'blue' ? "bg-blue-50 text-blue-500" : emp.color === 'amber' ? "bg-amber-50 text-amber-500" : emp.color === 'indigo' ? "bg-indigo-50 text-indigo-500" : "bg-emerald-50 text-emerald-500"
                                                         )}>
                                                             {emp.name.charAt(0)}
@@ -514,34 +515,44 @@ export default function EmployeesPage() {
                                                             <Link href={`/employees/${emp.employeeId}`} className="hover:underline">
                                                                 <span className="text-xs font-black text-slate-900 italic uppercase tracking-tighter cursor-pointer">{emp.name}</span>
                                                             </Link>
-                                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">ID: {emp.id}</span>
+                                                            <div className="flex items-center gap-1.5 mt-1">
+                                                                <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded uppercase tracking-wider">{emp.id}</span>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td className="py-5 px-8">
+                                                <td className="py-5 px-6">
                                                     <div className="space-y-1">
-                                                        <p className="text-[10px] font-bold text-slate-700 lowercase flex items-center gap-2"><Mail className="h-3 w-3 text-slate-300" /> {emp.email}</p>
-                                                        <p className="text-[10px] font-bold text-slate-400 flex items-center gap-2"><Phone className="h-3 w-3 text-slate-300" /> {emp.phone}</p>
+                                                        <p className="text-[10px] font-bold text-slate-700 lowercase flex items-center gap-1.5"><Mail className="h-3 w-3 text-slate-300" /> {emp.email}</p>
+                                                        <p className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5"><Phone className="h-3 w-3 text-slate-300" /> {emp.phone || "—"}</p>
                                                     </div>
                                                 </td>
-                                                <td className="py-5 px-8">
+                                                <td className="py-5 px-6">
                                                     <div className="space-y-1">
-                                                        <p className="text-[10px] font-black text-slate-700 uppercase tracking-widest">{emp.jobTitle || "Team Member"}</p>
-                                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2"><MapPin className="h-3 w-3 text-slate-300" /> {emp.location}</p>
+                                                        <p className="text-[10px] font-black text-slate-800 uppercase tracking-wider">{emp.jobTitle || "Team Member"}</p>
+                                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Briefcase className="h-2.5 w-2.5 text-slate-300" /> {emp.dept || "General"}</p>
                                                     </div>
                                                 </td>
-                                                <td className="py-5 px-8">
-                                                    <p className="text-[10px] font-black text-slate-700 uppercase tracking-widest">{emp.company}</p>
+                                                <td className="py-5 px-6">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <User className="h-3 w-3 text-indigo-400 shrink-0" />
+                                                        <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">{emp.hr_manager || "HR Operations"}</span>
+                                                    </div>
                                                 </td>
-                                                <td className="py-5 px-8">
+                                                <td className="py-5 px-6">
+                                                    <Badge variant="outline" className="text-[9px] font-black text-slate-700 bg-slate-50 border-slate-200 uppercase tracking-wider px-2 py-0.5">
+                                                        {emp.company}
+                                                    </Badge>
+                                                </td>
+                                                <td className="py-5 px-6">
                                                     <Badge className={cn(
-                                                        "font-black text-[8px] uppercase tracking-widest px-3 py-1 rounded-lg border-none",
+                                                        "font-black text-[8px] uppercase tracking-widest px-2.5 py-1 rounded-lg border-none",
                                                         emp.status === 'Active' ? "bg-emerald-50 text-emerald-600" : emp.status === 'Resigned' ? "bg-rose-50 text-rose-600" : "bg-amber-50 text-amber-600"
                                                     )}>
                                                         {emp.status}
                                                     </Badge>
                                                 </td>
-                                                <td className="py-5 px-8 text-right">
+                                                <td className="py-5 px-6 text-right">
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild>
                                                             <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl hover:bg-slate-100">

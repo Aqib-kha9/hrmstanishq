@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
     UserPlus,
     Clock,
@@ -328,6 +328,7 @@ function OnboardingForm() {
                                 role: emp.role ? emp.role.toUpperCase() : "EMPLOYEE",
                                 jobTitle: emp.designation || "",
                                 dept: emp.department || "",
+                                hrManager: emp.hr_manager || "",
                                 doj: emp.date_of_joining ? emp.date_of_joining.split("T")[0] : "",
                                 company: emp.company_id ? emp.company_id.toString() : "",
                                 location: emp.office_id ? emp.office_id.toString() : (emp.location ? of.find((o) => o.name === emp.location)?.id?.toString() : "") || "",
@@ -471,23 +472,22 @@ function OnboardingForm() {
     // ── Resigned Conflict Warning State (Req 23) ──
     const [isResignedError, setIsResignedError] = useState(false);
 
-    // Fetch next sequential code
-    useEffect(() => {
-        async function loadNextCode() {
-            if (!editId) {
-                try {
-                    const res = await apiGet<{ nextCode?: string; next_emp_code?: string }>("/employees/next-code");
-                    const code = res?.nextCode || res?.next_emp_code;
-                    if (code) {
-                        setSuggestedEmpCode(code);
-                        setCustomEmpCode(code);
-                    }
-                } catch (err) {
-                    console.error("Failed to load next sequential code:", err);
+    // Fetch next sequential code according to company-specific format (Req 2.2)
+    const loadNextCode = useCallback(async (companyId?: string) => {
+        if (!editId) {
+            try {
+                const params: Record<string, string> = {};
+                if (companyId) params.company_id = companyId;
+                const res = await apiGet<{ nextCode?: string; next_emp_code?: string }>("/employees/next-code", params);
+                const code = res?.nextCode || res?.next_emp_code;
+                if (code) {
+                    setSuggestedEmpCode(code);
+                    setCustomEmpCode(code);
                 }
+            } catch (err) {
+                console.error("Failed to load next sequential code:", err);
             }
         }
-        loadNextCode();
     }, [editId]);
 
     // Fetch candidate invitations
@@ -599,6 +599,7 @@ function OnboardingForm() {
         role: "EMPLOYEE",
         jobTitle: "",
         dept: "",
+        hrManager: "",
         doj: "",
         // Step 2: Salary & Bank
         fixedGross: "",
@@ -629,6 +630,11 @@ function OnboardingForm() {
         shiftEndTime: "19:00",
         halfDayLateMinutes: "60",
     });
+
+    // Auto-update sequential employee ID when company changes (Req 2.2)
+    useEffect(() => {
+        loadNextCode(formData.company);
+    }, [formData.company, loadNextCode]);
 
     // ── Field helpers ──
     const updateField = (id: string, value: string) => {
@@ -732,6 +738,7 @@ function OnboardingForm() {
             address: formData.address || null,
             designation: formData.jobTitle || null,
             department: formData.dept || null,
+            hr_manager: formData.hrManager || null,
             role: formData.role.toLowerCase().replace(/ /g, "_"),
             date_of_joining: formData.doj || null,
             office_id: formData.location ? parseInt(formData.location) : null,
@@ -1517,14 +1524,14 @@ function OnboardingForm() {
                                                 <div>
                                                     <div className="flex items-center gap-2">
                                                         <h4 className="text-xs font-black uppercase tracking-wider text-indigo-950">
-                                                            Assigned Employee ID (Req 1.2)
+                                                            Company-Specific Employee ID (Req 2.2)
                                                         </h4>
                                                         <Badge className="bg-indigo-600 text-white text-[9px] font-bold">
-                                                            Sequential Auto-Assigned
+                                                            Company Prefix Format
                                                         </Badge>
                                                     </div>
                                                     <p className="text-[10px] text-indigo-700 font-medium mt-0.5">
-                                                        Strictly sequential continuing from company database (e.g. EMP456 → EMP457)
+                                                        Company prefix followed by unique sequential identifier (e.g. APA001)
                                                     </p>
                                                 </div>
                                             </div>
@@ -1532,7 +1539,7 @@ function OnboardingForm() {
                                                 <Input
                                                     value={customEmpCode}
                                                     onChange={(e) => setCustomEmpCode(e.target.value.toUpperCase())}
-                                                    placeholder={suggestedEmpCode || "EMP..."}
+                                                    placeholder={suggestedEmpCode || "APA001"}
                                                     className="h-10 bg-white border border-indigo-200 rounded-xl font-mono font-black text-xs text-indigo-950 uppercase"
                                                 />
                                             </div>
@@ -1745,6 +1752,17 @@ function OnboardingForm() {
                                                 onBlur={() => handleBlur("dept")}
                                             />
                                             {fieldErrorEl("dept")}
+                                        </div>
+                                        <div className="space-y-3">
+                                            <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                                HR Manager / Reporting Manager
+                                            </Label>
+                                            <Input
+                                                placeholder="e.g. Rahul Sharma (HR Manager)"
+                                                className={inputClass("hrManager", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs uppercase tracking-widest")}
+                                                value={formData.hrManager || ""}
+                                                onChange={(e) => updateField("hrManager", e.target.value)}
+                                            />
                                         </div>
                                         <div className="space-y-3">
                                             <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
