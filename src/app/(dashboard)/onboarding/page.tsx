@@ -26,6 +26,12 @@ import {
     ExternalLink,
     Briefcase,
     Banknote,
+    CreditCard,
+    Camera,
+    Building2,
+    GraduationCap,
+    FileSpreadsheet,
+    CheckSquare,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -47,6 +53,82 @@ import { cn } from "@/lib/utils";
 import { apiGet, apiPost, apiPatch, apiPut, getApiErrorMessage } from "@/lib/api-client";
 
 const steps = ["Personal Info", "Employment Information", "Salary & Bank", "Documentation", "Review"];
+
+// ── 8 Verification Documents per SOW Req 2.3 D ──
+const SOW_ONBOARDING_DOCUMENTS = [
+    {
+        key: "aadhaar",
+        title: "Aadhaar Card Front & Back (Combined)",
+        shortName: "Aadhaar Card",
+        mandatory: true,
+        description: "Front & back copy showing 12-digit UID & residential address",
+        accept: ".pdf,.png,.jpg,.jpeg",
+        icon: FileText,
+    },
+    {
+        key: "pan",
+        title: "PAN Card",
+        shortName: "PAN Card",
+        mandatory: true,
+        description: "10-digit PAN card copy with photograph and signature",
+        accept: ".pdf,.png,.jpg,.jpeg",
+        icon: CreditCard,
+    },
+    {
+        key: "photo",
+        title: "Passport Size Photograph",
+        shortName: "Passport Photo",
+        mandatory: true,
+        description: "Recent formal passport photograph with plain background",
+        accept: ".png,.jpg,.jpeg",
+        icon: Camera,
+    },
+    {
+        key: "passbook_cheque",
+        title: "Cancelled Cheque / Passbook Copy",
+        shortName: "Passbook / Cheque",
+        mandatory: true,
+        description: "Bank proof showing account holder name, A/C number & IFSC",
+        accept: ".pdf,.png,.jpg,.jpeg",
+        icon: Building2,
+    },
+    {
+        key: "education_certificate",
+        title: "Highest Educational Qualification Certificate",
+        shortName: "Education Certificate",
+        mandatory: true,
+        description: "Degree / Diploma / Highest educational certificate or marksheet",
+        accept: ".pdf,.png,.jpg,.jpeg",
+        icon: GraduationCap,
+    },
+    {
+        key: "relieving_letter",
+        title: "Previous Employer Relieving Letter / Experience Letter",
+        shortName: "Relieving / Exp Letter",
+        mandatory: false,
+        description: "Relieving letter or service certificate (Optional for freshers)",
+        accept: ".pdf,.png,.jpg,.jpeg",
+        icon: Briefcase,
+    },
+    {
+        key: "salary_slips_statement",
+        title: "Last 3 Months' Salary Slips / Bank Statement",
+        shortName: "Salary Slips / Statement",
+        mandatory: false,
+        description: "Last 3 months salary slips or bank statements (Optional for freshers)",
+        accept: ".pdf,.png,.jpg,.jpeg",
+        icon: FileSpreadsheet,
+    },
+    {
+        key: "signed_offer_letter",
+        title: "Signed Offer Letter / Appointment Letter Acceptance",
+        shortName: "Signed Offer / Acceptance",
+        mandatory: true,
+        description: "Signed & accepted copy of offer letter or appointment letter",
+        accept: ".pdf,.png,.jpg,.jpeg",
+        icon: CheckSquare,
+    },
+];
 
 // ── Types for dynamically fetched data ──
 interface OfficeItem {
@@ -329,6 +411,8 @@ function OnboardingForm() {
     const [error, setError] = useState<string | null>(null);
     const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const singleFileInputRef = useRef<HTMLInputElement>(null);
+    const [targetSingleDoc, setTargetSingleDoc] = useState<string | null>(null);
     const [uploadedFiles, setUploadedFiles] = useState<{ file: File; docType: string }[]>([]);
 
     // ── Post-creation offer letter state ──
@@ -783,23 +867,59 @@ function OnboardingForm() {
         setFormData((prev) => ({ ...prev, ...DUMMY_DATA }));
         setFieldErrors({});
         setError(null);
+
+        // Pre-populate mock dummy files for all 8 SOW documents so HR can test end-to-end
+        const dummyMockFiles = SOW_ONBOARDING_DOCUMENTS.map((doc, idx) => {
+            const ext = doc.key === "photo" ? "png" : "pdf";
+            const mime = doc.key === "photo" ? "image/png" : "application/pdf";
+            const mockBlob = new Blob([`Mock verification document content for ${doc.title}`], { type: mime });
+            const mockFile = new File([mockBlob], `${doc.key}_verification_doc_${idx + 1}.${ext}`, { type: mime });
+            return {
+                file: mockFile,
+                docType: doc.title,
+            };
+        });
+        setUploadedFiles(dummyMockFiles);
     };
 
-    /** Trigger the hidden file input */
+    /** Trigger the hidden bulk file input */
     const handleSelectFiles = () => {
         fileInputRef.current?.click();
+    };
+
+    /** Trigger single file upload for a specific SOW document */
+    const handleTriggerSingleUpload = (docTitle: string) => {
+        setTargetSingleDoc(docTitle);
+        singleFileInputRef.current?.click();
+    };
+
+    /** Handle single file selected for a specific document card */
+    const handleSingleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file && targetSingleDoc) {
+            setUploadedFiles((prev) => [
+                ...prev.filter((f) => f.docType !== targetSingleDoc),
+                { file, docType: targetSingleDoc },
+            ]);
+        }
+        e.target.value = "";
+        setTargetSingleDoc(null);
     };
 
     /** Handle files selected via the hidden input */
     const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
-        // Auto-detect doc type from filename, default to "other"
+        // Auto-detect doc type from filename among all 8 SOW categories
         const detectType = (name: string): string => {
             const n = name.toLowerCase();
-            if (n.includes("aadhar")) return "Aadhar";
-            if (n.includes("pan")) return "PAN";
-            if (n.includes("bank") || n.includes("passbook")) return "Passbook";
-            if (n.includes("photo") || n.includes("image") || n.includes("pic")) return "Photo";
+            if (n.includes("aadhar") || n.includes("adhaar") || n.includes("uid")) return "Aadhaar Card Front & Back (Combined)";
+            if (n.includes("pan")) return "PAN Card";
+            if (n.includes("photo") || n.includes("image") || n.includes("pic") || n.includes("passport")) return "Passport Size Photograph";
+            if (n.includes("passbook") || n.includes("cheque") || (n.includes("bank") && !n.includes("statement"))) return "Cancelled Cheque / Passbook Copy";
+            if (n.includes("education") || n.includes("degree") || n.includes("qualification") || n.includes("marksheet") || n.includes("diploma")) return "Highest Educational Qualification Certificate";
+            if (n.includes("relieving") || n.includes("experience") || n.includes("service")) return "Previous Employer Relieving Letter / Experience Letter";
+            if (n.includes("salary") || n.includes("payslip") || n.includes("statement")) return "Last 3 Months' Salary Slips / Bank Statement";
+            if (n.includes("offer") || n.includes("appointment") || n.includes("contract") || n.includes("acceptance")) return "Signed Offer Letter / Appointment Letter Acceptance";
             return "other";
         };
         setUploadedFiles((prev) => [...prev, ...files.map((f) => ({ file: f, docType: detectType(f.name) }))]);
@@ -952,10 +1072,14 @@ function OnboardingForm() {
 
                 const typeByFilename = (name: string): string => {
                     const n = name.toLowerCase();
-                    if (n.includes("aadhar")) return "aadhar";
-                    if (n.includes("pan")) return "pan";
-                    if (n.includes("bank") || n.includes("passbook")) return "passbook";
-                    if (n.includes("photo") || n.includes("image")) return "photo";
+                    if (n.includes("aadhar") || n.includes("adhaar") || n.includes("uid")) return "id_proof";
+                    if (n.includes("pan")) return "id_proof";
+                    if (n.includes("photo") || n.includes("image") || n.includes("passport")) return "other";
+                    if (n.includes("bank") || n.includes("passbook") || n.includes("cheque")) return "address_proof";
+                    if (n.includes("education") || n.includes("degree") || n.includes("qualification") || n.includes("marksheet")) return "certificate";
+                    if (n.includes("relieving") || n.includes("experience")) return "certificate";
+                    if (n.includes("salary") || n.includes("slip") || n.includes("statement")) return "other";
+                    if (n.includes("offer") || n.includes("appointment") || n.includes("signed")) return "offer_letter";
                     return "other";
                 };
 
@@ -2669,10 +2793,10 @@ function OnboardingForm() {
                                     </>
                                 )}
 
-                                {/* ── STEP 3: Documentation ── */}
+                                {/* ── STEP 3: Documentation (Req 2.3 D: 8 Documents) ── */}
                                 {currentStep === 3 && (
                                     <div className="space-y-8 animate-in fade-in slide-in-from-right-4">
-                                        {/* Hidden file input */}
+                                        {/* Hidden bulk file input */}
                                         <input
                                             ref={fileInputRef}
                                             type="file"
@@ -2682,72 +2806,109 @@ function OnboardingForm() {
                                             onChange={handleFilesSelected}
                                         />
 
-                                        {/* Drop zone */}
+                                        {/* Hidden single file input for individual card upload */}
+                                        <input
+                                            ref={singleFileInputRef}
+                                            type="file"
+                                            accept="image/*,.pdf"
+                                            className="hidden"
+                                            onChange={handleSingleFileSelected}
+                                        />
+
+                                        {/* Top Header & Overview */}
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
+                                            <div>
+                                                <h3 className="text-xl font-black text-slate-900 italic uppercase">
+                                                    Employee Verification Documents (Req 2.3 D)
+                                                </h3>
+                                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                                    8 Document Categories per Client SOW • Mandatory & Statutory Verification
+                                                </p>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 font-black text-[10px] px-3.5 py-1 uppercase tracking-wider">
+                                                    {uploadedFiles.length} of {SOW_ONBOARDING_DOCUMENTS.length} Attached
+                                                </Badge>
+                                            </div>
+                                        </div>
+
+                                        {/* Bulk Drop zone */}
                                         <div
                                             onClick={handleSelectFiles}
-                                            className="border-4 border-dashed border-slate-200 rounded-[2rem] p-16 text-center space-y-6 bg-slate-50/20 hover:bg-slate-50 hover:border-slate-400 transition-all group flex flex-col items-center cursor-pointer"
+                                            className="border-4 border-dashed border-slate-200 rounded-[2rem] p-8 text-center space-y-4 bg-slate-50/20 hover:bg-slate-50 hover:border-slate-400 transition-all group flex flex-col items-center cursor-pointer"
                                         >
-                                            <div className="h-16 w-16 bg-white rounded-[1.2rem] shadow-sm flex items-center justify-center group-hover:scale-110 transition-transform">
-                                                <Upload className="h-8 w-8 text-slate-300 group-hover:text-slate-500 transition-colors" />
+                                            <div className="h-14 w-14 bg-white rounded-2xl shadow-sm flex items-center justify-center group-hover:scale-110 transition-transform">
+                                                <Upload className="h-7 w-7 text-slate-300 group-hover:text-slate-500 transition-colors" />
                                             </div>
-                                            <div className="space-y-2">
-                                                <h3 className="text-xl font-black text-slate-900 italic uppercase">
-                                                    Upload Documents
-                                                </h3>
-                                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">
-                                                    Aadhar • PAN • Bank Proof • Photos
+                                            <div className="space-y-1">
+                                                <h4 className="text-sm font-black text-slate-900 uppercase tracking-wider">
+                                                    Bulk Upload / Drag & Drop
+                                                </h4>
+                                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest max-w-xl mx-auto">
+                                                    Select one or multiple files. The system automatically categorizes files based on name across all 8 SOW categories.
                                                 </p>
                                             </div>
                                             <Button
                                                 type="button"
-                                                className="bg-slate-900 text-white font-black hover:bg-black px-12 h-12 rounded-xl shadow-xl uppercase text-[10px] tracking-widest pointer-events-none"
+                                                className="bg-slate-900 text-white font-black hover:bg-black px-8 h-10 rounded-xl shadow-lg uppercase text-[9px] tracking-widest pointer-events-none"
                                             >
-                                                Select Files
+                                                Select Files from Device
                                             </Button>
                                         </div>
 
-                                        {/* Uploaded files list */}
+                                        {/* Uploaded files list with assignment selector */}
                                         {uploadedFiles.length > 0 && (
-                                            <div className="space-y-4">
-                                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                                    Uploaded Files ({uploadedFiles.length})
-                                                </p>
+                                            <div className="space-y-3 p-5 bg-slate-50/60 rounded-2xl border border-slate-100">
+                                                <div className="flex items-center justify-between">
+                                                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                                                        Attached Upload Queue ({uploadedFiles.length} Files)
+                                                    </p>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setUploadedFiles([])}
+                                                        className="text-red-500 hover:text-red-700 text-[10px] font-bold hover:underline"
+                                                    >
+                                                        Clear All Files
+                                                    </button>
+                                                </div>
                                                 <div className="space-y-2">
                                                     {uploadedFiles.map((entry, i) => (
                                                         <div
                                                             key={`${entry.file.name}-${i}`}
-                                                            className="flex items-center justify-between p-4 bg-white border-2 border-slate-50 rounded-2xl hover:border-emerald-200 transition-all shadow-sm gap-3"
+                                                            className="flex items-center justify-between p-3.5 bg-white border border-slate-100 rounded-xl hover:border-emerald-200 transition-all shadow-xs gap-3"
                                                         >
-                                                            <div className="flex items-center gap-4 flex-1 min-w-0">
-                                                                <div className="h-10 w-10 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
-                                                                    <FileCheck className="h-5 w-5 text-emerald-500" />
+                                                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                                <div className="h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                                                                    <FileCheck className="h-4 w-4 text-emerald-600" />
                                                                 </div>
                                                                 <div className="text-left min-w-0 flex-1">
-                                                                    <p className="text-[10px] font-black text-slate-900 uppercase tracking-widest truncate max-w-[180px] md:max-w-[360px]">
+                                                                    <p className="text-[10px] font-black text-slate-900 uppercase tracking-widest truncate max-w-[200px] md:max-w-[360px]">
                                                                         {entry.file.name}
                                                                     </p>
-                                                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
-                                                                        {(entry.file.size / 1024).toFixed(1)} KB
+                                                                    <p className="text-[8px] font-bold text-slate-400">
+                                                                        {(entry.file.size / 1024).toFixed(1)} KB • Assigned: <span className="text-emerald-700 font-bold">{entry.docType}</span>
                                                                     </p>
                                                                 </div>
                                                             </div>
                                                             <select
                                                                 value={entry.docType}
                                                                 onChange={(e) => updateFileDocType(i, e.target.value)}
-                                                                className="h-9 rounded-xl border-2 border-slate-100 bg-slate-50 px-3 text-[9px] font-black uppercase tracking-widest text-slate-600 focus:outline-none focus:border-emerald-300 flex-shrink-0"
+                                                                className="h-8 rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-[9px] font-bold text-slate-700 focus:outline-none focus:border-emerald-400 flex-shrink-0 max-w-[260px]"
                                                             >
-                                                                <option value="other">Type</option>
-                                                                <option value="Aadhar">Aadhar</option>
-                                                                <option value="PAN">PAN</option>
-                                                                <option value="Passbook">Passbook</option>
-                                                                <option value="Photo">Photo</option>
+                                                                <option value="other">Assign Document Type</option>
+                                                                {SOW_ONBOARDING_DOCUMENTS.map((d) => (
+                                                                    <option key={d.key} value={d.title}>
+                                                                        {d.shortName} {d.mandatory ? "*" : "(Optional)"}
+                                                                    </option>
+                                                                ))}
                                                             </select>
                                                             <button
                                                                 type="button"
                                                                 onClick={() => removeFile(i)}
-                                                                className="h-8 w-8 rounded-xl bg-red-50 flex items-center justify-center hover:bg-red-100 transition-colors flex-shrink-0"
+                                                                className="h-8 w-8 rounded-lg bg-red-50 flex items-center justify-center hover:bg-red-100 text-red-500 transition-colors flex-shrink-0"
+                                                                title="Remove file"
                                                             >
-                                                                <X className="h-4 w-4 text-red-400" />
+                                                                <X className="h-4 w-4" />
                                                             </button>
                                                         </div>
                                                     ))}
@@ -2755,50 +2916,126 @@ function OnboardingForm() {
                                             </div>
                                         )}
 
-                                        {/* Required document placeholders */}
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                                            {["Aadhar", "PAN", "Passbook", "Photo"].map((doc, i) => {
-                                                const hasFile = uploadedFiles.some((f) => f.docType === doc);
-                                                return (
-                                                    <div
-                                                        key={i}
-                                                        className={cn(
-                                                            "flex flex-col items-center gap-4 p-6 bg-white border-2 rounded-2xl group shadow-sm transition-all text-center",
-                                                            hasFile
-                                                                ? "border-emerald-200 bg-emerald-50/30"
-                                                                : "border-slate-50 hover:border-slate-900",
-                                                        )}
-                                                    >
+                                        {/* 8 Required SOW Document Slots (Req 2.3 D) */}
+                                        <div className="space-y-4">
+                                            <div className="flex items-center justify-between">
+                                                <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                                                    Required Document Slots (8 Categories per SOW Req 2.3 D)
+                                                </h4>
+                                                <span className="text-[9px] text-slate-400 font-bold">
+                                                    * Marked items are mandatory
+                                                </span>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                {SOW_ONBOARDING_DOCUMENTS.map((doc, idx) => {
+                                                    const uploadedEntry = uploadedFiles.find((f) => {
+                                                        const dt = (f.docType || "").toLowerCase();
+                                                        const t = doc.title.toLowerCase();
+                                                        const s = doc.shortName.toLowerCase();
+                                                        return dt === t || dt === s ||
+                                                            (doc.key === "aadhaar" && (dt.includes("aadhaar") || dt.includes("aadhar"))) ||
+                                                            (doc.key === "pan" && dt.includes("pan")) ||
+                                                            (doc.key === "photo" && (dt.includes("photo") || dt.includes("photograph") || dt.includes("image"))) ||
+                                                            (doc.key === "passbook_cheque" && (dt.includes("passbook") || dt.includes("cheque") || dt.includes("bank"))) ||
+                                                            (doc.key === "education_certificate" && (dt.includes("education") || dt.includes("degree") || dt.includes("qualification") || dt.includes("marksheet"))) ||
+                                                            (doc.key === "relieving_letter" && (dt.includes("relieving") || dt.includes("experience"))) ||
+                                                            (doc.key === "salary_slips_statement" && (dt.includes("salary") || dt.includes("slip") || dt.includes("statement"))) ||
+                                                            (doc.key === "signed_offer_letter" && (dt.includes("offer") || dt.includes("appointment") || dt.includes("signed") || dt.includes("acceptance")));
+                                                    });
+                                                    const hasFile = !!uploadedEntry;
+                                                    const IconComponent = doc.icon;
+
+                                                    return (
                                                         <div
+                                                            key={doc.key}
                                                             className={cn(
-                                                                "h-10 w-10 rounded-xl flex items-center justify-center transition-colors",
+                                                                "flex flex-col justify-between p-5 bg-white border-2 rounded-2xl transition-all shadow-xs gap-3.5",
                                                                 hasFile
-                                                                    ? "bg-emerald-500"
-                                                                    : "bg-slate-50 group-hover:bg-slate-900",
+                                                                    ? "border-emerald-300 bg-emerald-50/20"
+                                                                    : doc.mandatory
+                                                                    ? "border-slate-100 hover:border-slate-300"
+                                                                    : "border-slate-100/70 bg-slate-50/30"
                                                             )}
                                                         >
-                                                            {hasFile ? (
-                                                                <CheckCircle className="h-5 w-5 text-white" />
-                                                            ) : (
-                                                                <FileText className="h-5 w-5 text-slate-200 group-hover:text-[#D9F99D]" />
-                                                            )}
+                                                            <div className="flex items-start justify-between gap-3">
+                                                                <div className="flex items-start gap-3">
+                                                                    <div
+                                                                        className={cn(
+                                                                            "h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors mt-0.5",
+                                                                            hasFile
+                                                                                ? "bg-emerald-600 text-white shadow-sm"
+                                                                                : "bg-slate-100 text-slate-500"
+                                                                        )}
+                                                                    >
+                                                                        <IconComponent className="h-5 w-5" />
+                                                                    </div>
+                                                                    <div className="space-y-0.5">
+                                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                                            <span className="text-[11px] font-black text-slate-900 tracking-tight">
+                                                                                {idx + 1}. {doc.title}
+                                                                            </span>
+                                                                            {doc.mandatory ? (
+                                                                                <span className="text-red-500 font-black text-xs">*</span>
+                                                                            ) : (
+                                                                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">(Optional)</span>
+                                                                            )}
+                                                                        </div>
+                                                                        <p className="text-[9px] font-medium text-slate-500 leading-tight">
+                                                                            {doc.description}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                                <Badge
+                                                                    className={cn(
+                                                                        "border-none font-black text-[8px] h-5 tracking-widest px-2.5 flex-shrink-0",
+                                                                        hasFile
+                                                                            ? "bg-emerald-100 text-emerald-800"
+                                                                            : doc.mandatory
+                                                                            ? "bg-amber-100 text-amber-800"
+                                                                            : "bg-slate-100 text-slate-500"
+                                                                    )}
+                                                                >
+                                                                    {hasFile ? "UPLOADED" : doc.mandatory ? "PENDING" : "OPTIONAL"}
+                                                                </Badge>
+                                                            </div>
+
+                                                            {/* Bottom actions & uploaded file info */}
+                                                            <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
+                                                                {hasFile ? (
+                                                                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                                        <FileCheck className="h-3.5 w-3.5 text-emerald-600 flex-shrink-0" />
+                                                                        <span className="text-[9px] font-bold text-slate-700 truncate">
+                                                                            {uploadedEntry.file.name} ({(uploadedEntry.file.size / 1024).toFixed(1)} KB)
+                                                                        </span>
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">
+                                                                        Formats: PDF, PNG, JPG (Max 10MB)
+                                                                    </span>
+                                                                )}
+
+                                                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                                                    <Button
+                                                                        type="button"
+                                                                        size="sm"
+                                                                        variant={hasFile ? "outline" : "default"}
+                                                                        onClick={() => handleTriggerSingleUpload(doc.title)}
+                                                                        className={cn(
+                                                                            "h-7 px-3 rounded-lg text-[9px] font-black uppercase tracking-wider",
+                                                                            hasFile
+                                                                                ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                                                                                : "bg-slate-900 text-white hover:bg-black"
+                                                                        )}
+                                                                    >
+                                                                        {hasFile ? "Replace" : "Upload"}
+                                                                    </Button>
+                                                                </div>
+                                                            </div>
                                                         </div>
-                                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 group-hover:text-slate-900">
-                                                            {doc}
-                                                        </span>
-                                                        <Badge
-                                                            className={cn(
-                                                                "border-none font-black text-[7px] h-5 tracking-widest px-3",
-                                                                hasFile
-                                                                    ? "bg-emerald-100 text-emerald-700"
-                                                                    : "bg-slate-50 text-slate-300",
-                                                            )}
-                                                        >
-                                                            {hasFile ? "UPLOADED" : "PENDING"}
-                                                        </Badge>
-                                                    </div>
-                                                );
-                                            })}
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
                                     </div>
                                 )}
@@ -2998,6 +3235,49 @@ function OnboardingForm() {
                                                             {formData.ptApplicable}
                                                         </p>
                                                     </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Attached Verification Documents (Req 2.3 D) */}
+                                            <div className="p-8 bg-slate-50 rounded-[2rem] space-y-5 md:col-span-2">
+                                                <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">
+                                                        Attached Verification Documents (Req 2.3 D)
+                                                    </p>
+                                                    <Badge className="bg-emerald-100 text-emerald-800 font-black text-[8px] px-2.5 py-0.5 uppercase tracking-wider">
+                                                        {uploadedFiles.length} of {SOW_ONBOARDING_DOCUMENTS.length} Attached
+                                                    </Badge>
+                                                </div>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                    {SOW_ONBOARDING_DOCUMENTS.map((doc, idx) => {
+                                                        const up = uploadedFiles.find((f) => {
+                                                            const dt = (f.docType || "").toLowerCase();
+                                                            const t = doc.title.toLowerCase();
+                                                            const s = doc.shortName.toLowerCase();
+                                                            return dt === t || dt === s ||
+                                                                (doc.key === "aadhaar" && (dt.includes("aadhaar") || dt.includes("aadhar"))) ||
+                                                                (doc.key === "pan" && dt.includes("pan")) ||
+                                                                (doc.key === "photo" && (dt.includes("photo") || dt.includes("photograph") || dt.includes("image"))) ||
+                                                                (doc.key === "passbook_cheque" && (dt.includes("passbook") || dt.includes("cheque") || dt.includes("bank"))) ||
+                                                                (doc.key === "education_certificate" && (dt.includes("education") || dt.includes("degree") || dt.includes("qualification") || dt.includes("marksheet"))) ||
+                                                                (doc.key === "relieving_letter" && (dt.includes("relieving") || dt.includes("experience"))) ||
+                                                                (doc.key === "salary_slips_statement" && (dt.includes("salary") || dt.includes("slip") || dt.includes("statement"))) ||
+                                                                (doc.key === "signed_offer_letter" && (dt.includes("offer") || dt.includes("appointment") || dt.includes("signed") || dt.includes("acceptance")));
+                                                        });
+                                                        return (
+                                                            <div key={doc.key} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200/70 text-xs">
+                                                                <span className="font-bold text-slate-700 truncate max-w-[240px]">
+                                                                    {idx + 1}. {doc.shortName} {doc.mandatory ? "*" : "(Opt)"}
+                                                                </span>
+                                                                <span className={cn(
+                                                                    "text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded",
+                                                                    up ? "bg-emerald-100 text-emerald-800" : doc.mandatory ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-500"
+                                                                )}>
+                                                                    {up ? "Attached" : doc.mandatory ? "Pending" : "Not Provided"}
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
                                         </div>

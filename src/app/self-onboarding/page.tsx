@@ -45,58 +45,58 @@ const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 const DOCUMENT_DEFINITIONS = [
     {
         id: "aadhaar_card",
-        title: "1. Aadhaar Card",
-        description: "Front & back copy showing complete 12-digit number and address.",
+        title: "1. Aadhaar Card Front & Back (Combined)",
+        description: "Front & back copy showing complete 12-digit UID number and residential address.",
         mandatory: true,
         accept: ".pdf,.png,.jpg,.jpeg",
     },
     {
-        id: "bank_proof",
-        title: "2. Bank Passbook / Cancelled Cheque",
-        description: "Clear copy displaying your account holder name, account number & IFSC.",
+        id: "pan_card",
+        title: "2. PAN Card",
+        description: "Permanent Account Number card copy with clear photograph and signature.",
         mandatory: true,
         accept: ".pdf,.png,.jpg,.jpeg",
     },
     {
         id: "photo",
-        title: "3. Employee Photograph",
-        description: "Recent formal passport-size photo with plain background.",
+        title: "3. Passport Size Photograph",
+        description: "Recent formal passport-size photo with plain white/light background.",
         mandatory: true,
         accept: ".png,.jpg,.jpeg",
     },
     {
+        id: "passbook_cheque",
+        title: "4. Cancelled Cheque / Passbook Copy",
+        description: "Clear copy displaying your account holder name, account number & IFSC.",
+        mandatory: true,
+        accept: ".pdf,.png,.jpg,.jpeg",
+    },
+    {
+        id: "education_certificate",
+        title: "5. Highest Educational Qualification Certificate",
+        description: "Degree, diploma, or highest qualification certificate / marksheet.",
+        mandatory: true,
+        accept: ".pdf,.png,.jpg,.jpeg",
+    },
+    {
         id: "relieving_letter",
-        title: "4. Relieving Letter from Previous Employer",
-        description: "Official relieving / experience certificate from your last organization.",
+        title: "6. Previous Employer Relieving Letter / Experience Letter",
+        description: "Official relieving / experience certificate from your last organization (Optional for freshers).",
         mandatory: false,
         accept: ".pdf,.png,.jpg,.jpeg",
     },
     {
-        id: "appointment_letter",
-        title: "5. Previous Appointment Letter",
-        description: "Appointment or offer letter from your previous employer.",
+        id: "salary_slips_statement",
+        title: "7. Last 3 Months' Salary Slips / Bank Statement",
+        description: "Payslips or bank statement showing salary credits for last 3 months (Optional for freshers).",
         mandatory: false,
         accept: ".pdf,.png,.jpg,.jpeg",
     },
     {
-        id: "salary_slips",
-        title: "6. Salary Slips for the Previous Three Months",
-        description: "Payslips for the last 3 consecutive months from your previous company.",
-        mandatory: false,
-        accept: ".pdf,.png,.jpg,.jpeg",
-    },
-    {
-        id: "bank_statements",
-        title: "7. Bank Statements for the Previous Three Months",
-        description: "Bank statement showing salary credits for the last 3 months.",
-        mandatory: false,
-        accept: ".pdf,.png,.jpg,.jpeg",
-    },
-    {
-        id: "form_16",
-        title: "8. Form 16 / Tax Certificate",
-        description: "Part A & B of Form 16 or tax deduction certificate from prior employer.",
-        mandatory: false,
+        id: "signed_offer_letter",
+        title: "8. Signed Offer Letter / Appointment Letter Acceptance",
+        description: "Signed & accepted copy of the company offer letter or appointment letter.",
+        mandatory: true,
         accept: ".pdf,.png,.jpg,.jpeg",
     },
 ];
@@ -335,13 +335,18 @@ function CandidateOnboardingContent() {
 
         // ── STEP 3: Mandatory Document Uploads (Page D) ──
         if (step === 3) {
-            // Require primary identity proofs: Aadhaar and Bank Proof
             if (!uploadedDocs.aadhaar_card) {
                 errors.docs = "Please upload your Aadhaar Card (mandatory verification document)";
-            } else if (!uploadedDocs.bank_proof) {
-                errors.docs = "Please upload your Bank Passbook or Cancelled Cheque (mandatory for salary credit)";
+            } else if (!uploadedDocs.pan_card) {
+                errors.docs = "Please upload your PAN Card";
             } else if (!uploadedDocs.photo) {
-                errors.docs = "Please upload your recent Employee Photograph";
+                errors.docs = "Please upload your recent Passport Size Photograph";
+            } else if (!uploadedDocs.passbook_cheque && !uploadedDocs.bank_proof) {
+                errors.docs = "Please upload your Cancelled Cheque / Bank Passbook Copy (mandatory for salary credit)";
+            } else if (!uploadedDocs.education_certificate) {
+                errors.docs = "Please upload your Highest Educational Qualification Certificate";
+            } else if (!uploadedDocs.signed_offer_letter) {
+                errors.docs = "Please upload your Signed Offer Letter / Appointment Letter Acceptance";
             }
         }
 
