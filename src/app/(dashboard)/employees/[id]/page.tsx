@@ -848,14 +848,28 @@ export default function EmployeeProfilePage() {
                                     <p className="text-xs font-bold text-slate-800">{rawEmployee?.date_of_birth ? formatDate(rawEmployee.date_of_birth) : <span className="text-slate-400 font-normal italic">Not Provided</span>}</p>
                                 </div>
                                 <div>
-                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Gender</span>
-                                    <p className="text-xs font-bold text-slate-800 capitalize">{rawEmployee?.gender || "Not Specified"}</p>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Gender & Marital Status</span>
+                                    <p className="text-xs font-bold text-slate-800 capitalize">
+                                        {rawEmployee?.gender || "Not Specified"} • {rawEmployee?.marital_status ? (rawEmployee.marital_status.charAt(0).toUpperCase() + rawEmployee.marital_status.slice(1)) : "Unmarried"}
+                                    </p>
+                                </div>
+                                <div>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Father&apos;s / Husband&apos;s Name</span>
+                                    <p className="text-xs font-bold text-slate-800 uppercase">
+                                        {rawEmployee?.father_or_husband_name || <span className="text-slate-400 font-normal italic">Not Provided</span>}
+                                    </p>
+                                </div>
+                                <div>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Shift Schedule & Rotation</span>
+                                    <p className="text-xs font-bold text-slate-800">
+                                        {rawEmployee?.shift_start_time ? rawEmployee.shift_start_time.slice(0, 5) : "09:30"} - {rawEmployee?.shift_end_time ? rawEmployee.shift_end_time.slice(0, 5) : "18:30"} • {rawEmployee?.is_rotational_shift ? <span className="text-purple-600 font-black">Rotational Roster</span> : <span className="text-slate-500 font-bold">Fixed Shift</span>}
+                                    </p>
                                 </div>
                                 <div>
                                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Emergency Contact</span>
                                     <p className="text-xs font-bold text-slate-800">
                                         {rawEmployee?.emergency_contact_name
-                                            ? `${rawEmployee.emergency_contact_name} (${rawEmployee.emergency_contact_relation || "Relation"})`
+                                            ? `${rawEmployee.emergency_contact_name} (${rawEmployee.emergency_contact_relation || "Relation"})${rawEmployee.emergency_contact_phone ? ` • ${rawEmployee.emergency_contact_phone}` : ""}`
                                             : <span className="text-slate-400 font-normal italic">Not Provided</span>
                                         }
                                     </p>
@@ -921,6 +935,24 @@ export default function EmployeeProfilePage() {
                                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">PF Number</span>
                                     <p className="text-xs font-mono font-bold text-slate-900 uppercase tracking-wider">
                                         {rawEmployee?.pf_number || <span className="text-slate-400 font-normal italic font-sans">Not Assigned</span>}
+                                    </p>
+                                </div>
+                                <div>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">ESIC IP / Insured Person</span>
+                                    <p className="text-xs font-mono font-bold text-slate-900">
+                                        {rawEmployee?.esic_number || rawEmployee?.lic_details || (rawEmployee?.esic_applicable ? "Applicable" : <span className="text-slate-400 font-normal italic font-sans">Not Applicable</span>)}
+                                    </p>
+                                </div>
+                                <div>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Payment Mode</span>
+                                    <p className="text-xs font-bold text-slate-900">
+                                        {rawEmployee?.payment_mode || "Bank Transfer"}
+                                    </p>
+                                </div>
+                                <div>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">PF Employment Date</span>
+                                    <p className="text-xs font-bold text-slate-900">
+                                        {rawEmployee?.pf_employment_date ? formatDate(rawEmployee.pf_employment_date) : (rawEmployee?.pf_applicable ? "With Joining Date" : "—")}
                                     </p>
                                 </div>
                                 <div>

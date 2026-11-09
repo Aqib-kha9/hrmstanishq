@@ -42,12 +42,23 @@ export interface BackendEmployee {
   pf_applicable: boolean | null;
   pf_ceiling: boolean | null;
   pf_contribution_mode: string | null;
+  pf_employment_date?: string | null;
   esic_applicable: boolean | null;
   esic_contribution_mode: string | null;
+  esic_number?: string | null;
+  payment_mode?: string | null;
+  // Personal & Shifts (Req 2.3)
+  marital_status?: string | null;
+  father_or_husband_name?: string | null;
+  shift_start_time?: string | null;
+  shift_end_time?: string | null;
+  is_rotational_shift?: boolean | null;
+  half_day_late_minutes?: number | null;
   // Additional
   company_name: string | null;
   emergency_contact_name: string | null;
   emergency_contact_relation: string | null;
+  emergency_contact_phone?: string | null;
   hr_manager?: string | null;
   location: string | null;
   created_at?: string | null;
