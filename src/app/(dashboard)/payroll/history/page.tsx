@@ -30,6 +30,8 @@ import { apiGetPaginated } from "@/lib/api-client";
 export default function PayrollHistoryPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedYear, setSelectedYear] = useState("All");
+    const [selectedCompany, setSelectedCompany] = useState("All");
+    const [companies, setCompanies] = useState<string[]>(["All"]);
     const [loading, setLoading] = useState(true);
 
     // Monthly Aggregated Data — loaded from backend
@@ -40,8 +42,19 @@ export default function PayrollHistoryPage() {
             try {
                 const params: Record<string, unknown> = { limit: 50 };
                 if (selectedYear !== "All") params.year = parseInt(selectedYear);
+                if (selectedCompany !== "All") params.company = selectedCompany;
                 const data = await apiGetPaginated<any>("/payroll/history", params);
-                setHistoryData(data.data || []);
+                const items = data.data || [];
+                setHistoryData(items);
+
+                // Collect companies across items
+                const compSet = new Set<string>();
+                items.forEach((item: any) => {
+                    (item.companies || []).forEach((c: any) => {
+                        if (c.name) compSet.add(c.name);
+                    });
+                });
+                setCompanies(["All", ...Array.from(compSet)]);
             } catch (e) {
                 console.error("Failed to load history:", e);
             } finally {
@@ -49,16 +62,17 @@ export default function PayrollHistoryPage() {
             }
         };
         load();
-    }, [selectedYear]);
+    }, [selectedYear, selectedCompany]);
 
     const filteredHistory = historyData.filter(item => {
         const matchesSearch = item.monthName.toLowerCase().includes(searchQuery.toLowerCase()) ||
             item.monthId.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesYear = selectedYear === "All" || item.monthId.includes(selectedYear);
-        return matchesSearch && matchesYear;
+        const matchesCompany = selectedCompany === "All" || (item.companies || []).some((c: any) => c.name === selectedCompany || c.code === selectedCompany);
+        return matchesSearch && matchesYear && matchesCompany;
     });
 
-    const completedHistory = historyData.filter(h => h.status === "Completed");
+    const completedHistory = filteredHistory.filter(h => h.status === "Completed");
 
     const handleExport = () => {
         const rows = completedHistory.map(item => ({
@@ -68,13 +82,15 @@ export default function PayrollHistoryPage() {
             "Total Staff Paid": item.totalStaff,
             "Total Disbursement": item.totalPayout,
             "Disbursement Date": item.disbursementDate,
-            "Branches Paid": item.branches.length
+            "Branches Paid": (item.branches || []).length,
+            "Company Breakdown": (item.companies || []).map((c: any) => `${c.name || c.code}: ₹${c.payout || 0} (${c.staff || 0} staff)`).join('; ')
         }));
         
         const worksheet = XLSX.utils.json_to_sheet(rows);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Audit Ledger");
-        XLSX.writeFile(workbook, `Master_Audit_Ledger_${selectedYear === "All" ? "All_Years" : selectedYear}.xlsx`);
+        const compTag = selectedCompany !== "All" ? `_${selectedCompany.replace(/[^a-zA-Z0-9]/g, '_')}` : "";
+        XLSX.writeFile(workbook, `Master_Audit_Ledger_${selectedYear === "All" ? "All_Years" : selectedYear}${compTag}.xlsx`);
     };
 
     return (
@@ -161,8 +177,21 @@ export default function PayrollHistoryPage() {
                         />
                     </div>
                     <div className="flex items-center gap-2">
+                        <Select value={selectedCompany} onValueChange={setSelectedCompany}>
+                            <SelectTrigger className="h-12 w-[180px] rounded-xl bg-slate-50 border-none font-black text-[9px] uppercase tracking-widest">
+                                <Building2 className="h-3.5 w-3.5 mr-1.5 text-indigo-500" />
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="border-none shadow-xl rounded-2xl max-h-60">
+                                {companies.map(c => (
+                                    <SelectItem key={c} value={c} className="text-[10px] font-bold uppercase truncate max-w-[220px]">
+                                        {c === "All" ? "All Companies" : c}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                         <Select value={selectedYear} onValueChange={setSelectedYear}>
-                            <SelectTrigger className="h-12 w-[160px] rounded-xl bg-slate-50 border-none font-black text-[9px] uppercase tracking-widest">
+                            <SelectTrigger className="h-12 w-[140px] rounded-xl bg-slate-50 border-none font-black text-[9px] uppercase tracking-widest">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent className="border-none shadow-xl rounded-2xl">
@@ -171,9 +200,6 @@ export default function PayrollHistoryPage() {
                                 <SelectItem value="2025" className="text-[10px] font-bold uppercase">2025</SelectItem>
                             </SelectContent>
                         </Select>
-                        <Button variant="outline" className="h-12 w-12 rounded-xl bg-slate-50 border-none p-0 hover:bg-slate-100">
-                            <Filter className="h-4 w-4 text-slate-900" />
-                        </Button>
                     </div>
                 </div>
 
@@ -187,7 +213,7 @@ export default function PayrollHistoryPage() {
                             <TableRow className="border-none bg-slate-50/50 hover:bg-slate-50/50">
                                 <TableHead className="pl-8 h-16 text-[9px] font-black uppercase tracking-widest text-slate-400">Payroll Month</TableHead>
                                 <TableHead className="h-16 text-[9px] font-black uppercase tracking-widest text-slate-400">Total Disbursement</TableHead>
-                                <TableHead className="h-16 text-[9px] font-black uppercase tracking-widest text-slate-400 w-[300px]">Branch Breakdown</TableHead>
+                                <TableHead className="h-16 text-[9px] font-black uppercase tracking-widest text-slate-400 w-[340px]">Company & Branch Breakdown</TableHead>
                                 <TableHead className="h-16 text-[9px] font-black uppercase tracking-widest text-slate-400">Status & Date</TableHead>
                                 <TableHead className="h-16 text-[9px] font-black uppercase tracking-widest text-slate-400 text-right pr-8">Actions</TableHead>
                             </TableRow>
@@ -216,7 +242,16 @@ export default function PayrollHistoryPage() {
 
                                     <TableCell className="py-6 pr-8">
                                         <div className="flex flex-col gap-2 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                                            {item.branches.map((b: { name: string; payout: number; staff: number }, idx: number) => (
+                                            {item.companies && item.companies.length > 0 && (
+                                                <div className="flex flex-wrap gap-1 pb-1.5 border-b border-slate-200/60">
+                                                    {item.companies.map((c: any, cidx: number) => (
+                                                        <Badge key={cidx} className="bg-slate-900 text-white font-black text-[7px] px-1.5 h-4 uppercase tracking-wider">
+                                                            {c.code || (c.name ? c.name.split(' ')[0] : 'APA')}: ₹{(Number(c.payout) / 1000).toFixed(0)}k ({c.staff})
+                                                        </Badge>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            {(item.branches || []).map((b: { name: string; payout: number; staff: number }, idx: number) => (
                                                 <div key={idx} className="flex items-center justify-between">
                                                     <div className="flex items-center gap-2">
                                                         <Building2 className="h-3 w-3 text-slate-400" />

@@ -38,6 +38,16 @@ export function GlobalRulesSheet({
                         <SheetTitle className="text-2xl font-black italic uppercase text-slate-900 tracking-tighter">
                             {selectedEmployee ? `Configure: ${selectedEmployee.name}` : "Global Salary Rules"}
                         </SheetTitle>
+                        {selectedEmployee && (
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                <Badge className="bg-slate-900 text-white font-bold text-[8px] uppercase tracking-wider px-2 py-0.5">
+                                    {selectedEmployee.company || 'Apaar Logistics & Cold Supply Chain Pvt Ltd'}
+                                </Badge>
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                                    {selectedEmployee.employeeCode} • {selectedEmployee.designation || 'Employee'} • {selectedEmployee.location || 'Location'}
+                                </span>
+                            </div>
+                        )}
                         <SheetDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-loose">
                             Define CTC components, PF rules, and Tax overrides for this employee.
                         </SheetDescription>

@@ -40,7 +40,8 @@ import {
     ChevronRight,
     ChevronLeft,
     Mail,
-    Send
+    Send,
+    Building2
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -136,6 +137,9 @@ export default function PayrollPage() {
     });
 
     const [pastCycles, setPastCycles] = useState<any[]>([]);
+    const [selectedCompany, setSelectedCompany] = useState("All Companies");
+    const [companies, setCompanies] = useState(["All Companies"]);
+    const [companyBreakdown, setCompanyBreakdown] = useState<any[]>([]);
     const [selectedBranch, setSelectedBranch] = useState("All Branches");
     const [branches, setBranches] = useState(["All Branches"]);
 
@@ -199,13 +203,13 @@ export default function PayrollPage() {
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchQuery, selectedBranch, statusFilter]);
+    }, [searchQuery, selectedCompany, selectedBranch, statusFilter]);
 
     // ── Fetch data from backend ──
     const loadLedger = async () => {
         setLoading(true);
         try {
-            const data = await apiGet<{ cycle: any; rows: any[] }>("/payroll/ledger");
+            const data = await apiGet<{ cycle: any; rows: any[]; companies?: any[]; companyBreakdown?: any[] }>("/payroll/ledger");
             setLedger(data.rows || []);
             if (data.cycle) {
                 setCycleId(data.cycle.id);
@@ -216,6 +220,19 @@ export default function PayrollPage() {
             // Extract unique branches
             const br = [...new Set((data.rows || []).map((r: any) => r.location).filter(Boolean))] as string[];
             setBranches(["All Branches", ...br]);
+
+            // Extract unique companies from returned metadata + rows
+            const compSet = new Set<string>();
+            if (data.companies && Array.isArray(data.companies)) {
+                data.companies.forEach((c: any) => { if (c.name) compSet.add(c.name); });
+            }
+            (data.rows || []).forEach((r: any) => {
+                if (r.company) compSet.add(r.company);
+            });
+            setCompanies(["All Companies", ...Array.from(compSet)]);
+            if (data.companyBreakdown) {
+                setCompanyBreakdown(data.companyBreakdown);
+            }
         } catch (e) {
             console.error("Failed to load payroll ledger:", e);
         } finally {
@@ -357,56 +374,71 @@ export default function PayrollPage() {
         }
     };
 
+    const filteredLedger = ledger.filter(emp => {
+        const matchesCompany = selectedCompany === "All Companies" || emp.company === selectedCompany || emp.companyCode === selectedCompany;
+        const matchesBranch = selectedBranch === "All Branches" || emp.location === selectedBranch;
+        const matchesSearch = emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            emp.employeeCode.toString().includes(searchQuery) ||
+            (emp.company && emp.company.toLowerCase().includes(searchQuery.toLowerCase()));
+        const matchesStatus = statusFilter === "ALL" || emp.status === statusFilter;
+        return matchesCompany && matchesBranch && matchesSearch && matchesStatus;
+    });
+
+    const totalFilteredGross = filteredLedger.reduce((sum, emp) => sum + (calculateProductionNet(emp).totalEarnings || 0), 0);
+    const totalFilteredNet = filteredLedger.reduce((sum, emp) => sum + (calculateProductionNet(emp).net || 0), 0);
+    const totalFilteredDeductions = filteredLedger.reduce((sum, emp) => sum + (calculateProductionNet(emp).grossDeductions || 0), 0);
+    const totalFilteredEmployees = filteredLedger.length;
+
     const handleExportExcel = () => {
-        const rows = ledger.map(emp => {
+        const targetList = filteredLedger.length > 0 ? filteredLedger : ledger;
+        const rows = targetList.map(emp => {
             const res = calculateProductionNet(emp);
-            const daysInMonth = 28;
-            const payable = daysInMonth - emp.absentDays;
+            const daysInMonth = Number(emp.dynamicDays) || 30;
+            const payable = res.payableDays;
             return {
                 "Employee Code": emp.employeeCode,
                 "Employee Name": emp.name,
+                "Company": emp.company || "Apaar Logistics & Cold Supply Chain Pvt Ltd",
                 "Location": emp.location,
-                "Company": emp.company,
-                "Gross Salary": emp.fixedGross,
                 "Designation": emp.designation,
-                "PF Applicable": emp.pfApplicable ? "Yes" : "No",
-                "PF Ceiling": emp.pfCeiling ? "Yes" : "No",
-                "ESIC Applicable": emp.esicApplicable ? "Yes" : "No",
-                "Days In Month": daysInMonth,
-                "Payable Days": payable,
-                "Absent Days": emp.absentDays,
+                "Gross Salary": emp.fixedGross,
                 "Basic": res.basic,
                 "HRA": res.hra,
+                "Conveyance": res.conveyance,
+                "Medical Allowance": res.medicalAllowance,
+                "Special Allowance": res.specialAllowance,
+                "Performance Allowance": res.performanceAllowance,
                 "Other Allowance": res.other,
                 "Previous Month Arrears": emp.previousArrears,
                 "Bonus": emp.bonus,
                 "Incentive": emp.incentive,
                 "Gross Earnings": res.totalEarnings,
-                "Provident Fund": res.pf,
+                "Days In Month": daysInMonth,
+                "Payable Days": payable,
+                "Absent / LWP Days": res.effectiveAbsentDays,
+                "PF Applicable": emp.pfApplicable ? "Yes" : "No",
+                "PF Ceiling": emp.pfCeiling ? "Yes" : "No",
+                "ESIC Applicable": emp.esicApplicable ? "Yes" : "No",
+                "Provident Fund (PF)": res.pf,
                 "ESIC": res.esi,
-                "Professional Tax": res.pt,
-                "Advance/Loan/TDS": emp.loanDeduction || 0,
+                "Professional Tax (PT)": res.pt,
+                "Advance/Loan EMI": emp.loanDeduction || 0,
                 "Other Deduction": emp.otherDeduction || 0,
                 "Gross Deductions": res.grossDeductions,
                 "Net Salary": res.net,
                 "PF Employer": res.pfEmployer,
                 "ESIC Employer": res.esiEmployer,
-                "Total Monthly CTC": res.totalMonthlyCTC
+                "Total Monthly CTC": res.totalMonthlyCTC,
+                "Annual CTC": res.annualCTC
             };
         });
 
         const worksheet = XLSX.utils.json_to_sheet(rows);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Payroll Data");
-        XLSX.writeFile(workbook, `Payroll_Export_${globalRules.cycle.replace(" ", "_")}.xlsx`);
+        const companyTag = selectedCompany !== "All Companies" ? `_${selectedCompany.replace(/[^a-zA-Z0-9]/g, '_')}` : "";
+        XLSX.writeFile(workbook, `Payroll_Export_${globalRules.cycle.replace(" ", "_")}${companyTag}.xlsx`);
     };
-
-    const filteredLedger = ledger.filter(emp => {
-        const matchesBranch = selectedBranch === "All Branches" || emp.location === selectedBranch;
-        const matchesSearch = emp.name.toLowerCase().includes(searchQuery.toLowerCase()) || emp.employeeCode.toString().includes(searchQuery);
-        const matchesStatus = statusFilter === "ALL" || emp.status === statusFilter;
-        return matchesBranch && matchesSearch && matchesStatus;
-    });
 
     const totalPages = Math.ceil(filteredLedger.length / itemsPerPage);
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -687,9 +719,20 @@ export default function PayrollPage() {
                         />
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap md:flex-nowrap">
+                        <Select value={selectedCompany} onValueChange={setSelectedCompany}>
+                            <SelectTrigger className="h-12 w-[190px] rounded-xl border-2 border-slate-50 font-black uppercase text-[9px] tracking-widest text-slate-900 bg-white shadow-sm">
+                                <Building2 className="h-3.5 w-3.5 mr-1.5 text-indigo-500" />
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="border-none shadow-2xl rounded-2xl max-h-72">
+                                {companies.map(c => (
+                                    <SelectItem key={c} value={c} className="font-bold text-[10px] uppercase truncate max-w-[260px]">{c}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                         <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                            <SelectTrigger className="h-12 w-[180px] rounded-xl border-2 border-slate-50 font-black uppercase text-[9px] tracking-widest text-slate-900 bg-white shadow-sm">
+                            <SelectTrigger className="h-12 w-[170px] rounded-xl border-2 border-slate-50 font-black uppercase text-[9px] tracking-widest text-slate-900 bg-white shadow-sm">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent className="border-none shadow-2xl rounded-2xl">
@@ -699,7 +742,7 @@ export default function PayrollPage() {
                             </SelectContent>
                         </Select>
                         <Select value={statusFilter} onValueChange={setStatusFilter}>
-                            <SelectTrigger className="h-12 w-[160px] rounded-2xl bg-white border-none shadow-sm font-black text-[9px] uppercase tracking-widest">
+                            <SelectTrigger className="h-12 w-[150px] rounded-2xl bg-white border-none shadow-sm font-black text-[9px] uppercase tracking-widest">
                                 <Filter className="h-3.5 w-3.5 mr-2 text-slate-400" /> <SelectValue />
                             </SelectTrigger>
                             <SelectContent className="border-none shadow-xl rounded-2xl">
@@ -717,6 +760,52 @@ export default function PayrollPage() {
                         >
                             <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-500" /> Export Excel
                         </Button>
+                    </div>
+                </div>
+
+                {/* Company-Specific & Filter-Aware KPI Summary */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-1">
+                    <div className="p-4 rounded-2xl bg-white border border-slate-100 shadow-xs flex items-center justify-between">
+                        <div>
+                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Total Employees</p>
+                            <p className="text-xl font-black text-slate-900 mt-1">{totalFilteredEmployees} <span className="text-[9px] font-bold text-slate-400">Staff</span></p>
+                            {selectedCompany !== "All Companies" && (
+                                <p className="text-[8px] font-bold text-indigo-600 truncate max-w-[140px] mt-0.5">{selectedCompany}</p>
+                            )}
+                        </div>
+                        <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center">
+                            <Building2 className="h-5 w-5 text-indigo-600" />
+                        </div>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-white border border-slate-100 shadow-xs flex items-center justify-between">
+                        <div>
+                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Total Gross</p>
+                            <p className="text-xl font-black text-slate-900 mt-1">₹{totalFilteredGross.toLocaleString()}</p>
+                            <p className="text-[8px] font-bold text-slate-400 mt-0.5">Prorated Base</p>
+                        </div>
+                        <div className="h-10 w-10 rounded-xl bg-indigo-50 flex items-center justify-center">
+                            <TrendingUp className="h-5 w-5 text-indigo-600" />
+                        </div>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-white border border-slate-100 shadow-xs flex items-center justify-between">
+                        <div>
+                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Total Deductions</p>
+                            <p className="text-xl font-black text-rose-600 mt-1">₹{totalFilteredDeductions.toLocaleString()}</p>
+                            <p className="text-[8px] font-bold text-slate-400 mt-0.5">PF, ESI, PT & Loan</p>
+                        </div>
+                        <div className="h-10 w-10 rounded-xl bg-rose-50 flex items-center justify-center">
+                            <ArrowDownRight className="h-5 w-5 text-rose-600" />
+                        </div>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-100 shadow-xs flex items-center justify-between">
+                        <div>
+                            <p className="text-[9px] font-black uppercase tracking-widest text-emerald-800">Net Disbursement</p>
+                            <p className="text-xl font-black text-emerald-700 mt-1">₹{totalFilteredNet.toLocaleString()}</p>
+                            <p className="text-[8px] font-bold text-emerald-600 mt-0.5">Ready for Payout</p>
+                        </div>
+                        <div className="h-10 w-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+                            <Wallet className="h-5 w-5 text-emerald-700" />
+                        </div>
                     </div>
                 </div>
 
@@ -790,7 +879,10 @@ export default function PayrollPage() {
                                                 )}
                                                 <div className="flex flex-col">
                                                     <p className="text-sm font-black text-slate-900 italic tracking-tight uppercase group-hover:translate-x-1 transition-transform">{row.name}</p>
-                                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                                        <Badge className="bg-slate-900 text-white border-none font-black text-[7px] h-4 px-1.5 rounded uppercase tracking-widest" title={row.company || "Company"}>
+                                                            {row.companyCode || (row.company ? String(row.company).split(' ')[0] : 'APA')}
+                                                        </Badge>
                                                         <Badge className="bg-slate-50 text-slate-400 border-none font-black text-[7px] h-4 px-1.5 rounded uppercase tracking-widest">{row.designation}</Badge>
                                                         <Badge className="bg-indigo-50 text-indigo-500 border-none font-black text-[7px] h-4 px-1.5 rounded uppercase tracking-widest">{row.location}</Badge>
                                                         <span className="text-[7px] font-bold text-rose-500 uppercase tracking-widest">{row.absentDays > 0 ? `${row.absentDays} LWP` : 'Full Present'}</span>

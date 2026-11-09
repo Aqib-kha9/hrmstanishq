@@ -33,6 +33,8 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ id: str
     const cycleId = resolvedParams.id;
 
     const [searchQuery, setSearchQuery] = useState("");
+    const [selectedCompany, setSelectedCompany] = useState("All Companies");
+    const [companies, setCompanies] = useState<string[]>(["All Companies"]);
     const [selectedBranch, setSelectedBranch] = useState("All Branches");
     const [loading, setLoading] = useState(true);
     const [cycleName, setCycleName] = useState("Loading...");
@@ -44,24 +46,37 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ id: str
     useEffect(() => {
         const load = async () => {
             try {
-                const data = await apiGet<{ cycle: any; rows: any[] }>(`/payroll/ledger/${cycleId}`);
+                const data = await apiGet<{ cycle: any; rows: any[]; companies?: any[] }>(`/payroll/ledger/${cycleId}`);
                 const cycle = data.cycle;
                 const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
                 setCycleName(`${(monthNames[cycle.month_index] || cycle.month)?.substring(0, 3).toUpperCase()}-${cycle.year}`);
 
-                const rows = (data.rows || []).map((r: any) => ({
-                    id: r.employeeCode || r.id,
-                    name: r.name,
-                    role: r.designation || '',
-                    branch: r.location || 'Unknown',
-                    base: r.proratedGross || 0,
-                    bonus: (r.bonus || 0) + (r.incentive || 0) + (r.previousArrears || 0),
-                    pf: r.pf || 0,
-                    pt: r.pt || 0,
-                    net: r.net || 0,
-                    status: (r.status === 'Paid' || r.status === 'Verified') ? 'Transferred' : 'Pending',
-                }));
+                const compSet = new Set<string>();
+                if (data.companies && Array.isArray(data.companies)) {
+                    data.companies.forEach((c: any) => { if (c.name) compSet.add(c.name); });
+                }
+
+                const rows = (data.rows || []).map((r: any) => {
+                    const cName = r.company || 'Apaar Logistics & Cold Supply Chain Pvt Ltd';
+                    const cCode = r.companyCode || (r.company ? String(r.company).split(' ')[0] : 'APA');
+                    if (cName) compSet.add(cName);
+                    return {
+                        id: r.employeeCode || r.id,
+                        name: r.name,
+                        role: r.designation || '',
+                        branch: r.location || 'Unknown',
+                        company: cName,
+                        companyCode: cCode,
+                        base: r.proratedGross || 0,
+                        bonus: (r.bonus || 0) + (r.incentive || 0) + (r.previousArrears || 0),
+                        pf: r.pf || 0,
+                        pt: r.pt || 0,
+                        net: r.net || 0,
+                        status: (r.status === 'Paid' || r.status === 'Verified') ? 'Transferred' : 'Pending',
+                    };
+                });
                 setTransactions(rows);
+                setCompanies(["All Companies", ...Array.from(compSet)]);
                 setRawRows(data.rows || []);
             } catch (e) {
                 console.error("Failed to load cycle details:", e);
@@ -73,11 +88,13 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ id: str
     }, [cycleId]);
 
     const filteredTransactions = transactions.filter(t => {
+        const matchesCompany = selectedCompany === "All Companies" || t.company === selectedCompany || t.companyCode === selectedCompany;
         const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             String(t.id).toLowerCase().includes(searchQuery.toLowerCase()) ||
-            t.branch.toLowerCase().includes(searchQuery.toLowerCase());
+            t.branch.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (t.company && t.company.toLowerCase().includes(searchQuery.toLowerCase()));
         const matchesBranch = selectedBranch === "All Branches" || t.branch === selectedBranch;
-        return matchesSearch && matchesBranch;
+        return matchesCompany && matchesSearch && matchesBranch;
     });
 
     const totalBase = filteredTransactions.reduce((acc, curr) => acc + curr.base, 0);
@@ -89,6 +106,7 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ id: str
         const rows = filteredTransactions.map(t => ({
             "Employee ID": t.id,
             "Employee Name": t.name,
+            "Company": t.company,
             "Designation": t.role,
             "Location": t.branch,
             "Base Salary": t.base,
@@ -102,7 +120,8 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ id: str
         const worksheet = XLSX.utils.json_to_sheet(rows);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Cycle Audit");
-        XLSX.writeFile(workbook, `Cycle_Audit_${cycleName}.xlsx`);
+        const compTag = selectedCompany !== "All Companies" ? `_${selectedCompany.replace(/[^a-zA-Z0-9]/g, '_')}` : "";
+        XLSX.writeFile(workbook, `Cycle_Audit_${cycleName}${compTag}.xlsx`);
     };
 
     const handleViewPayslips = async () => {
@@ -549,7 +568,7 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ id: str
                 <Card className="border-none shadow-sm rounded-[2.5rem] bg-white overflow-hidden p-1 mx-2">
                     <CardHeader className="p-6 pb-4 border-none flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <CardTitle className="text-lg font-black italic text-slate-900 uppercase tracking-tighter">Beneficiary Ledger</CardTitle>
-                        <div className="flex items-center gap-4 bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
+                        <div className="flex items-center gap-3 bg-slate-50 p-1.5 rounded-2xl border border-slate-100 flex-wrap">
                             <div className="relative min-w-[200px] group">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
                                 <Input
@@ -559,6 +578,17 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ id: str
                                     className="h-10 pl-10 pr-4 rounded-xl bg-white border-none shadow-sm font-bold text-[10px] focus:ring-2 ring-indigo-100"
                                 />
                             </div>
+                            <Select value={selectedCompany} onValueChange={setSelectedCompany}>
+                                <SelectTrigger className="h-10 w-[150px] rounded-xl bg-white border-none shadow-sm font-black text-[9px] uppercase tracking-widest text-slate-900">
+                                    <Building2 className="h-3.5 w-3.5 mr-1 text-indigo-500" />
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="border-none shadow-xl rounded-2xl max-h-60">
+                                    {companies.map(c => (
+                                        <SelectItem key={c} value={c} className="text-[10px] font-bold uppercase truncate max-w-[200px]">{c}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                             <Select value={selectedBranch} onValueChange={setSelectedBranch}>
                                 <SelectTrigger className="h-10 w-[140px] rounded-xl bg-white border-none shadow-sm font-black text-[9px] uppercase tracking-widest text-slate-900">
                                     <SelectValue />
@@ -569,9 +599,6 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ id: str
                                     ))}
                                 </SelectContent>
                             </Select>
-                            <Button variant="outline" className="h-10 px-4 rounded-xl border-none bg-white shadow-sm font-black uppercase text-[9px] tracking-widest text-slate-900 hover:bg-slate-100 transition-colors">
-                                <Filter className="h-3.5 w-3.5 mr-2" /> Filter
-                            </Button>
                         </div>
                     </CardHeader>
 
@@ -592,7 +619,10 @@ export default function CycleDetailsPage({ params }: { params: Promise<{ id: str
                                     <TableCell className="pl-8 py-5">
                                         <div className="flex flex-col">
                                             <span className="text-sm font-black text-slate-900 italic tracking-tight uppercase group-hover:translate-x-1 transition-transform">{t.name}</span>
-                                            <div className="flex items-center gap-2 mt-1.5">
+                                            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                                <Badge className="bg-slate-900 text-white border-none font-black text-[7px] h-4 px-1.5 rounded uppercase tracking-widest" title={t.company}>
+                                                    {t.companyCode || 'APA'}
+                                                </Badge>
                                                 <Badge className="bg-slate-100 text-slate-500 border-none font-black text-[7px] h-4 px-1.5 rounded uppercase tracking-widest">{t.id}</Badge>
                                                 <div className="flex items-center gap-1 text-[8px] font-bold text-indigo-500 uppercase tracking-widest">
                                                     <Building2 className="h-3 w-3" />
