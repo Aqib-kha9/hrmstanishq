@@ -118,6 +118,7 @@ const TYPE_LABEL_MAP: Record<string, string> = {
   experience: "Experience Certificate",
   relieving: "Relieving Letter",
   warning: "Warning Letter",
+  form16: "Form 16 (TDS Certificate)",
   "non-performance": "Non-Performance Letter",
   absenteeism: "Absenteeism Warning",
 };
@@ -131,6 +132,7 @@ const TYPE_BADGE_STYLE: Record<string, string> = {
   resignation: "bg-slate-100 text-slate-700 border-slate-200",
   experience: "bg-cyan-50 text-cyan-700 border-cyan-200",
   relieving: "bg-teal-50 text-teal-700 border-teal-200",
+  form16: "bg-sky-50 text-sky-700 border-sky-200",
 };
 
 const variantMeta = [
@@ -149,6 +151,7 @@ const AVAILABLE_PLACEHOLDERS = [
   { tag: "[Company_Name]", desc: "Company Legal Name" },
   { tag: "[Start_Date]", desc: "Effective / Start Date" },
   { tag: "[Joining_Date]", desc: "Date of Joining" },
+  { tag: "[Relieving_Date]", desc: "Relieving Date" },
   { tag: "[Salary]", desc: "Monthly Gross" },
   { tag: "[Salary_Annual]", desc: "Annual Gross" },
   { tag: "[CTC]", desc: "Monthly CTC" },
@@ -163,6 +166,12 @@ const AVAILABLE_PLACEHOLDERS = [
   { tag: "[Net_Take_Home]", desc: "Net Take-Home Pay" },
   { tag: "[PF_Employer]", desc: "Employer PF Contribution" },
   { tag: "[ESI_Employer]", desc: "Employer ESIC Contribution" },
+  { tag: "[Company_PAN]", desc: "Employer PAN" },
+  { tag: "[Company_TAN]", desc: "Employer TAN" },
+  { tag: "[Financial_Year]", desc: "Financial Year (e.g. 2025-26)" },
+  { tag: "[Assessment_Year]", desc: "Assessment Year (e.g. 2026-27)" },
+  { tag: "[Total_Taxable_Income]", desc: "Taxable Income after 80C" },
+  { tag: "[Total_TDS_Deposited]", desc: "Annual Tax Deposited" },
   { tag: "[Signatory_Name]", desc: "Signatory Name" },
   { tag: "[Signatory_Designation]", desc: "Signatory Role" },
 ];
@@ -224,6 +233,9 @@ export default function LettersPage() {
   const [issueSuccess, setIssueSuccess] = useState("");
   const [sending, setSending] = useState(false);
   const [seeding, setSeeding] = useState(false);
+  const [emailingLetterId, setEmailingLetterId] = useState<number | null>(null);
+  const [viewingLetter, setViewingLetter] = useState<IssuedLetter | null>(null);
+  const [downloadingLetterId, setDownloadingLetterId] = useState<number | null>(null);
 
   // Template Editor Modal state (Req 12.3)
   const [editorOpen, setEditorOpen] = useState(false);
@@ -585,6 +597,82 @@ export default function LettersPage() {
     }
   };
 
+  // ── Dispatch Email for Existing Letter in History (Req 2.10) ──
+  const handleSendExistingEmail = async (letter: IssuedLetter) => {
+    const targetEmail = letter.issuedTo?.email || letter.candidate_email;
+    const targetName = letter.issuedTo?.name || letter.candidate_name || "Employee";
+
+    if (!targetEmail) {
+      alert("This recipient does not have a registered email address on file.");
+      return;
+    }
+
+    if (!window.confirm(`Send official ${letter.title} directly to ${targetName}'s registered email (${targetEmail})?`)) {
+      return;
+    }
+
+    setEmailingLetterId(letter.id);
+    setIssueError("");
+    setIssueSuccess("");
+    try {
+      const res: any = await apiPost(`/letters/${letter.id}/send-email`, {});
+      const successMsg = res?.message || `Document successfully dispatched to registered email (${targetEmail})!`;
+      setIssueSuccess(successMsg);
+      await fetchLetters();
+    } catch (err: any) {
+      setIssueError(err?.message || `Failed to dispatch email to ${targetEmail}`);
+    } finally {
+      setEmailingLetterId(null);
+    }
+  };
+
+  // ── Download PDF for Existing Letter in History ──
+  const handleDownloadHistoryPDF = async (letter: IssuedLetter) => {
+    setDownloadingLetterId(letter.id);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("hrms_auth_token") : null;
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.apaarpulse.com/api/v1";
+      const recipientCode = letter.issuedTo?.emp_code || (letter.candidate_name ? letter.candidate_name.replace(/\s+/g, "_") : "recipient");
+
+      const response = await fetch(`${baseUrl}/letters/generate-pdf`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          employee_id: letter.employee_id || undefined,
+          candidateData: !letter.employee_id ? {
+            name: letter.candidate_name || "Candidate",
+            email: letter.candidate_email || "",
+            phone: letter.candidate_phone || "",
+          } : undefined,
+          title: letter.title,
+          type: letter.type,
+          content: letter.content || "",
+          signatory_id: letter.signatory_id || undefined,
+          recordLetter: false,
+        }),
+      });
+
+      if (!response.ok) throw new Error("Failed to generate PDF");
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${letter.type}-${recipientCode}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert(err?.message || "Failed to download PDF");
+    } finally {
+      setDownloadingLetterId(null);
+    }
+  };
+
   // ── Open Template Editor (Req 12.3) ──
   const handleOpenEditor = (template?: TemplateItem) => {
     if (template) {
@@ -798,7 +886,7 @@ export default function LettersPage() {
 
               {/* Category Pills */}
               <div className="flex items-center gap-2 pt-4 overflow-x-auto">
-                {["all", "Hiring", "Disciplinary", "Exit", "General"].map((cat) => (
+                {["all", "Hiring", "Disciplinary", "Exit", "General", "Tax & Statutory"].map((cat) => (
                   <button
                     key={cat}
                     onClick={() => setSelectedCategory(cat)}
@@ -838,6 +926,8 @@ export default function LettersPage() {
                   {filteredTemplates.map((template) => {
                     const isOffer = template.type === "offer";
                     const isAppointment = template.type === "appointment";
+                    const isRelieving = template.type === "relieving";
+                    const isForm16 = template.type === "form16";
                     return (
                       <Card
                         key={template.id}
@@ -845,6 +935,8 @@ export default function LettersPage() {
                           "border-2 rounded-2xl p-5 transition-all group relative overflow-hidden flex flex-col justify-between",
                           isAppointment ? "border-blue-100 bg-blue-50/20 hover:border-blue-400" :
                           isOffer ? "border-emerald-100 bg-emerald-50/20 hover:border-emerald-400" :
+                          isRelieving ? "border-teal-100 bg-teal-50/20 hover:border-teal-400" :
+                          isForm16 ? "border-sky-100 bg-sky-50/20 hover:border-sky-400" :
                           "border-slate-100 bg-white hover:border-[#D9F99D] hover:bg-slate-50/40"
                         )}
                       >
@@ -867,7 +959,7 @@ export default function LettersPage() {
                             </p>
                           </div>
 
-                          {/* Specific callout pill for Req 12.2 */}
+                          {/* Specific callout pill for Req 12.2 & Req 2.10 */}
                           {isAppointment && (
                             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-100/70 text-blue-800 text-[8px] font-black uppercase tracking-wider">
                               <Sparkles className="h-3 w-3 text-blue-600" />
@@ -878,6 +970,18 @@ export default function LettersPage() {
                             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-100/70 text-emerald-800 text-[8px] font-black uppercase tracking-wider">
                               <Briefcase className="h-3 w-3 text-emerald-600" />
                               Offered CTC & Joining Terms
+                            </div>
+                          )}
+                          {isRelieving && (
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-100/70 text-teal-800 text-[8px] font-black uppercase tracking-wider">
+                              <UserCheck className="h-3 w-3 text-teal-600" />
+                              Clearance & Exit Handover
+                            </div>
+                          )}
+                          {isForm16 && (
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-100/70 text-sky-800 text-[8px] font-black uppercase tracking-wider">
+                              <FileText className="h-3 w-3 text-sky-600" />
+                              Section 203 TDS Certificate (Part A & B)
                             </div>
                           )}
                         </div>
@@ -948,11 +1052,12 @@ export default function LettersPage() {
                     <option value="all">All Letter Types</option>
                     <option value="offer">Offer Letters</option>
                     <option value="appointment">Appointment Letters</option>
+                    <option value="relieving">Relieving Letters</option>
+                    <option value="form16">Form 16 (TDS Certificate)</option>
                     <option value="warning">Warning Letters</option>
                     <option value="promotion">Promotion Letters</option>
                     <option value="transfer">Transfer Letters</option>
                     <option value="experience">Experience Letters</option>
-                    <option value="relieving">Relieving Letters</option>
                   </select>
 
                   <select
@@ -1066,13 +1171,53 @@ export default function LettersPage() {
                             </td>
 
                             <td className="py-3.5 px-4 text-right">
-                              <div className="flex items-center justify-end gap-1.5">
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  title="Send to Registered Email"
+                                  onClick={() => handleSendExistingEmail(item)}
+                                  disabled={emailingLetterId === item.id || (!item.issuedTo?.email && !item.candidate_email)}
+                                  className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                                >
+                                  {emailingLetterId === item.id ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600" />
+                                  ) : (
+                                    <Mail className="h-3.5 w-3.5" />
+                                  )}
+                                </Button>
+
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  title="Download Official PDF"
+                                  onClick={() => handleDownloadHistoryPDF(item)}
+                                  disabled={downloadingLetterId === item.id}
+                                  className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                                >
+                                  {downloadingLetterId === item.id ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
+                                  ) : (
+                                    <Download className="h-3.5 w-3.5" />
+                                  )}
+                                </Button>
+
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  title="View Letter Content"
+                                  onClick={() => setViewingLetter(item)}
+                                  className="h-8 w-8 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+                                >
+                                  <Eye className="h-3.5 w-3.5" />
+                                </Button>
+
                                 <Button
                                   variant="ghost"
                                   size="icon"
                                   title="Delete Record"
                                   onClick={() => handleDeleteLetter(item.id)}
-                                  className="h-8 w-8 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
+                                  className="h-8 w-8 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
@@ -1088,6 +1233,86 @@ export default function LettersPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* ── VIEW ISSUED LETTER MODAL (Req 2.10) ── */}
+        <Dialog open={!!viewingLetter} onOpenChange={(val) => { if (!val) setViewingLetter(null); }}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl p-6 bg-white shadow-2xl border-none">
+            {viewingLetter && (
+              <div>
+                <DialogHeader>
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <div>
+                      <Badge className={cn("border text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md", TYPE_BADGE_STYLE[viewingLetter.type] || "bg-slate-100 text-slate-700")}>
+                        {TYPE_LABEL_MAP[viewingLetter.type] || viewingLetter.type}
+                      </Badge>
+                      <DialogTitle className="text-lg font-black text-slate-900 mt-2">
+                        {viewingLetter.title}
+                      </DialogTitle>
+                      <DialogDescription className="text-xs text-slate-500">
+                        Recipient: <strong className="text-slate-800">{viewingLetter.issuedTo?.name || viewingLetter.candidate_name || "Employee"}</strong> ({viewingLetter.issuedTo?.email || viewingLetter.candidate_email || "No registered email"})
+                      </DialogDescription>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] font-mono text-slate-400 block">
+                        Issued: {viewingLetter.issued_date ? new Date(viewingLetter.issued_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "N/A"}
+                      </span>
+                      <Badge className={cn("mt-1 text-[8px] font-black uppercase", viewingLetter.status === "issued" ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700")}>
+                        {viewingLetter.status}
+                      </Badge>
+                    </div>
+                  </div>
+                </DialogHeader>
+
+                {/* Letter Content Preview */}
+                <div className="my-5 p-6 bg-slate-50 rounded-xl border border-slate-200 max-h-[55vh] overflow-y-auto text-xs leading-relaxed text-slate-800">
+                  <div dangerouslySetInnerHTML={{ __html: viewingLetter.content || "<p>No content recorded</p>" }} />
+                </div>
+
+                <DialogFooter className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                  <div className="text-xs text-slate-500">
+                    {viewingLetter.signatory?.name && (
+                      <span>Signatory: <strong>{viewingLetter.signatory.name}</strong> ({viewingLetter.signatory.designation})</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      onClick={() => handleSendExistingEmail(viewingLetter)}
+                      disabled={emailingLetterId === viewingLetter.id || !(viewingLetter.issuedTo?.email || viewingLetter.candidate_email)}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 rounded-xl px-4"
+                    >
+                      {emailingLetterId === viewingLetter.id ? (
+                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                      ) : (
+                        <Mail className="h-3.5 w-3.5 mr-1.5" />
+                      )}
+                      Send to Registered Email
+                    </Button>
+                    <Button
+                      onClick={() => handleDownloadHistoryPDF(viewingLetter)}
+                      disabled={downloadingLetterId === viewingLetter.id}
+                      variant="outline"
+                      className="text-xs font-bold h-9 rounded-xl border-slate-200"
+                    >
+                      {downloadingLetterId === viewingLetter.id ? (
+                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                      ) : (
+                        <Download className="h-3.5 w-3.5 mr-1.5" />
+                      )}
+                      Download PDF
+                    </Button>
+                    <Button
+                      onClick={() => setViewingLetter(null)}
+                      variant="ghost"
+                      className="text-xs h-9 rounded-xl"
+                    >
+                      Close
+                    </Button>
+                  </div>
+                </DialogFooter>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {/* ── GENERATE & CUSTOMIZE LETTER DIALOG ── */}
         <Dialog open={!!selectedTemplate} onOpenChange={(val) => { if (!val) { setSelectedTemplate(null); setPreviewData(null); setIsEditing(false); } }}>
@@ -1474,12 +1699,13 @@ export default function LettersPage() {
                   >
                     <option value="offer">Offer Letter</option>
                     <option value="appointment">Appointment Letter</option>
+                    <option value="relieving">Relieving Letter</option>
+                    <option value="form16">Form 16 (TDS Certificate)</option>
                     <option value="warning">Warning Letter</option>
                     <option value="promotion">Promotion Letter</option>
                     <option value="transfer">Transfer Letter</option>
                     <option value="resignation">Resignation Acceptance</option>
                     <option value="experience">Experience Certificate</option>
-                    <option value="relieving">Relieving Letter</option>
                   </select>
                 </div>
               </div>
@@ -1490,7 +1716,7 @@ export default function LettersPage() {
                   <Input
                     value={templateForm.category}
                     onChange={(e) => setTemplateForm({ ...templateForm, category: e.target.value })}
-                    placeholder="e.g. Hiring, Disciplinary, Exit"
+                    placeholder="e.g. Hiring, Disciplinary, Exit, Tax & Statutory"
                     className="h-9 mt-1 text-xs"
                   />
                 </div>

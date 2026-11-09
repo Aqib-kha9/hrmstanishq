@@ -180,6 +180,8 @@ const typeAccent: Record<string, string> = {
   resignation: '#dc2626',
   experience: '#0891b2',
   relieving: '#059669',
+  warning: '#e11d48',
+  form16: '#0284c7',
 };
 
 /* ================================================================
