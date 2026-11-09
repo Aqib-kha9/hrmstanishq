@@ -54,6 +54,7 @@ interface OfficeDetail {
     updatedAt?: string;
     company?: { id: number; name: string } | null;
     employee_count?: number;
+    active_employee_count?: number;
 }
 
 interface LiveLogEntry {
@@ -170,7 +171,7 @@ export default function LocationDetailPage() {
         : "---";
 
     const lateIncidents = liveData?.stats.late ?? 0;
-    const totalEmployees = office?.employee_count ?? 0;
+    const totalActiveEmployees = office?.active_employee_count ?? office?.employee_count ?? 0;
 
     // ── Loading state ───────────────────────────────────────────
     if (loading) {
@@ -241,11 +242,11 @@ export default function LocationDetailPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         {[
                             {
-                                label: "Total Staff",
-                                value: liveData ? liveData.stats.total : totalEmployees,
+                                label: "Total Active Employees",
+                                value: totalActiveEmployees,
                                 icon: Users,
                                 color: "blue",
-                                trend: liveData ? "Today" : "",
+                                trend: "Assigned",
                             },
                             {
                                 label: "Attendance",

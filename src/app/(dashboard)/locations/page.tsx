@@ -124,6 +124,7 @@ interface OfficeRecord {
     updatedAt?: string;
     company?: CompanyRecord | null;
     employee_count?: number;
+    active_employee_count?: number;
 }
 
 interface OfficeStats {
@@ -131,6 +132,7 @@ interface OfficeStats {
     active_offices: number;
     inactive_offices: number;
     total_employees: number;
+    total_active_employees?: number;
     per_office: Array<{
         office_id: number;
         office_name: string;
@@ -611,8 +613,8 @@ export default function LocationsPage() {
             color: "emerald",
         },
         {
-            label: "Total Employees",
-            value: statsLoading ? "…" : stats?.total_employees ?? 0,
+            label: "Total Active Employees",
+            value: statsLoading ? "…" : stats?.total_active_employees ?? stats?.total_employees ?? 0,
             icon: Users,
             color: "blue",
         },
@@ -1243,13 +1245,13 @@ export default function LocationsPage() {
                                     )}
                                 </div>
 
-                                {/* Footer: employee count + actions */}
+                                {/* Footer: active employee count + actions (Req 2.7) */}
                                 <div className="pt-4 flex items-center justify-between border-t border-slate-50">
                                     <div className="flex items-center gap-2">
-                                        <Users className="h-4 w-4 text-slate-400" />
-                                        <span className="text-xs font-bold text-slate-600">
-                                            {office.employee_count ?? 0}{" "}
-                                            <span className="font-medium text-slate-400">employees</span>
+                                        <Users className="h-4 w-4 text-emerald-600" />
+                                        <span className="text-xs font-bold text-slate-700">
+                                            {office.active_employee_count ?? office.employee_count ?? 0}{" "}
+                                            <span className="font-medium text-slate-400">active employees</span>
                                         </span>
                                     </div>
 
