@@ -46,7 +46,7 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { apiGet, apiPost, apiPatch, apiPut, getApiErrorMessage } from "@/lib/api-client";
 
-const steps = ["Personal Info", "Job Details", "Salary & Bank", "Documentation", "Review"];
+const steps = ["Personal Info", "Employment Information", "Salary & Bank", "Documentation", "Review"];
 
 // ── Types for dynamically fetched data ──
 interface OfficeItem {
@@ -403,6 +403,8 @@ function OnboardingForm() {
         phone: "",
         dob: "",
         gender: "male",
+        marital_status: "unmarried",
+        father_or_husband_name: "",
         address: "",
         pan: "",
         aadhaar: "",
@@ -412,6 +414,7 @@ function OnboardingForm() {
 
         company_id: "",
         office_id: "",
+        working_location: "",
         designation: "Executive",
         department: "Operations",
         role: "EMPLOYEE",
@@ -425,6 +428,7 @@ function OnboardingForm() {
 
         pf_applicable: "Yes",
         pf_ceiling: "Yes",
+        pf_employment_date: "",
         pf_contribution_mode: "shared",
         pf_employee_rate: "0.12",
         pf_employer_rate: "0.12",
@@ -435,10 +439,12 @@ function OnboardingForm() {
         pt_applicable: "Yes",
         pf_number: "PF/IND/001",
         uan: "",
+        esic_number: "",
         lic_details: "",
 
-        shift_start_time: "10:00",
-        shift_end_time: "19:00",
+        shift_start_time: "09:30",
+        shift_end_time: "18:30",
+        is_rotational_shift: false,
         half_day_late_minutes: "60",
     });
 
@@ -448,6 +454,7 @@ function OnboardingForm() {
         filename: string;
         size?: number;
         file_url?: string;
+        data_url?: string;
         candidate_name?: string;
         aadhaar_number?: string;
         pan_number?: string;
@@ -566,11 +573,44 @@ function OnboardingForm() {
         setApproveLoading(true);
         try {
             const result = await apiPost<any>(`/onboarding/approve/${invitationId}`, {
+                name: approvalOverrides.name || undefined,
+                email: approvalOverrides.email || undefined,
+                phone: approvalOverrides.phone || undefined,
+                date_of_birth: approvalOverrides.dob || undefined,
+                gender: approvalOverrides.gender || undefined,
+                marital_status: approvalOverrides.marital_status || undefined,
+                father_or_husband_name: approvalOverrides.father_or_husband_name || undefined,
+                address: approvalOverrides.address || undefined,
+                pan_number: approvalOverrides.pan || undefined,
+                aadhaar_number: approvalOverrides.aadhaar || undefined,
+                emergency_contact_name: approvalOverrides.emergencyName || undefined,
+                emergency_contact_phone: approvalOverrides.emergencyPhone || undefined,
+                emergency_contact_relation: approvalOverrides.emergencyRelation || undefined,
                 designation: approvalOverrides.designation || undefined,
                 department: approvalOverrides.department || undefined,
-                fixed_gross: approvalOverrides.fixed_gross ? Number(approvalOverrides.fixed_gross) : undefined,
+                role: approvalOverrides.role || undefined,
                 company_id: approvalOverrides.company_id ? Number(approvalOverrides.company_id) : undefined,
                 office_id: approvalOverrides.office_id ? Number(approvalOverrides.office_id) : undefined,
+                date_of_joining: approvalOverrides.date_of_joining || undefined,
+                fixed_gross: approvalOverrides.fixed_gross ? Number(approvalOverrides.fixed_gross) : undefined,
+                payment_mode: approvalOverrides.paymentMode || undefined,
+                bank_name: approvalOverrides.bankName || undefined,
+                bank_account_number: approvalOverrides.accountNo || undefined,
+                ifsc_code: approvalOverrides.ifsc || undefined,
+                pf_applicable: approvalOverrides.pf_applicable === "Yes",
+                pf_ceiling: approvalOverrides.pf_ceiling === "Yes",
+                pf_employment_date: approvalOverrides.pf_employment_date || undefined,
+                pf_contribution_mode: approvalOverrides.pf_contribution_mode,
+                pf_number: approvalOverrides.pf_number || undefined,
+                uan: approvalOverrides.uan || undefined,
+                esic_applicable: approvalOverrides.esic_applicable === "Yes",
+                esic_contribution_mode: approvalOverrides.esic_contribution_mode,
+                esic_number: approvalOverrides.esic_number || undefined,
+                pt_applicable: approvalOverrides.pt_applicable === "Yes",
+                shift_start_time: approvalOverrides.shift_start_time || undefined,
+                shift_end_time: approvalOverrides.shift_end_time || undefined,
+                is_rotational_shift: Boolean(approvalOverrides.is_rotational_shift),
+                half_day_late_minutes: Number(approvalOverrides.half_day_late_minutes) || 60,
             });
             alert(`Candidate approved successfully! Created Employee ${result.employee.name} with ID ${result.employee.emp_code}`);
             setReviewCandidate(null);
@@ -591,9 +631,11 @@ function OnboardingForm() {
         phone: "",
         dob: "",
         gender: "male",
+        maritalStatus: "unmarried",
+        fatherOrHusbandName: "",
         address: "",
         aadhaar: "",
-        // Step 1: Job Details
+        // Step 1: Employment Information (renamed from Job Details)
         company: "",
         location: "",
         role: "EMPLOYEE",
@@ -609,6 +651,7 @@ function OnboardingForm() {
         paymentMode: "Bank Transfer",
         pfApplicable: "Yes",
         pfCeiling: "Yes",
+        pfEmploymentDate: "",
         esicApplicable: "Yes",
         ptApplicable: "Yes",
         pfContributionMode: "shared",
@@ -621,13 +664,15 @@ function OnboardingForm() {
         uan: "",
         pan: "",
         licDetails: "",
+        esicNumber: "",
         // Emergency contact
         emergencyName: "",
         emergencyRelation: "",
         emergencyPhone: "",
         // Shift configuration
-        shiftStartTime: "10:00",
-        shiftEndTime: "19:00",
+        shiftStartTime: "09:30",
+        shiftEndTime: "18:30",
+        isRotationalShift: "No",
         halfDayLateMinutes: "60",
     });
 
@@ -735,6 +780,8 @@ function OnboardingForm() {
             password,
             date_of_birth: formData.dob || null,
             gender: formData.gender,
+            marital_status: formData.maritalStatus || "unmarried",
+            father_or_husband_name: formData.fatherOrHusbandName || null,
             address: formData.address || null,
             designation: formData.jobTitle || null,
             department: formData.dept || null,
@@ -748,11 +795,13 @@ function OnboardingForm() {
             fixed_gross: formData.fixedGross ? Number(formData.fixedGross) : 0,
             pf_applicable: formData.pfApplicable === "Yes",
             pf_ceiling: formData.pfCeiling === "Yes",
+            pf_employment_date: formData.pfEmploymentDate || null,
             pf_contribution_mode: formData.pfContributionMode,
             pf_employee_rate: parseFloat(formData.pfEmployeeRate) || 0.12,
             pf_employer_rate: parseFloat(formData.pfEmployerRate) || 0.12,
             esic_applicable: formData.esicApplicable === "Yes",
             esic_contribution_mode: formData.esicContributionMode,
+            esic_number: formData.esicNumber || formData.licDetails || null,
             esic_employee_rate: parseFloat(formData.esicEmployeeRate) || 0.0075,
             esic_employer_rate: parseFloat(formData.esicEmployerRate) || 0.0325,
             pt_applicable: formData.ptApplicable === "Yes",
@@ -763,9 +812,11 @@ function OnboardingForm() {
             pf_number: formData.pfNo || null,
             uan: formData.uan || null,
             emergency_contact_name: formData.emergencyName || null,
+            emergency_contact_phone: formData.emergencyPhone || null,
             emergency_contact_relation: formData.emergencyRelation || null,
             shift_start_time: formData.shiftStartTime || null,
             shift_end_time: formData.shiftEndTime || null,
+            is_rotational_shift: formData.isRotationalShift === "Yes",
             half_day_late_minutes: formData.halfDayLateMinutes ? Number(formData.halfDayLateMinutes) : 60,
             send_offer_letter: false,
         };
@@ -1370,42 +1421,48 @@ function OnboardingForm() {
                                                                         phone: sub.phone || inv.phone || "",
                                                                         dob: sub.date_of_birth || "",
                                                                         gender: sub.gender || "male",
+                                                                        marital_status: sub.marital_status || "unmarried",
+                                                                        father_or_husband_name: sub.father_or_husband_name || sub.father_husband_name || "",
                                                                         address: sub.address || "",
-                                                                        pan: sub.pan_number || "",
-                                                                        aadhaar: sub.aadhaar_number || "",
+                                                                        pan: sub.pan_number || sub.pan || "",
+                                                                        aadhaar: sub.aadhaar_number || sub.aadhaar || "",
                                                                         bankName: sub.bank_name || "",
                                                                         accountNo: sub.bank_account_number || "",
                                                                         ifsc: sub.ifsc_code || "",
-                                                                        paymentMode: "Bank Transfer",
+                                                                        paymentMode: sub.payment_mode || "Bank Transfer",
                                                                         emergencyName: sub.emergency_contact_name || "",
                                                                         emergencyRelation: sub.emergency_contact_relation || "",
-                                                                        emergencyPhone: sub.emergency_phone || "",
+                                                                        emergencyPhone: sub.emergency_contact_phone || sub.emergency_phone || "",
 
+                                                                        working_location: sub.working_location || inv.office?.name || "",
                                                                         designation: sub.designation || inv.designation || "Executive",
                                                                         department: sub.department || inv.department || "Operations",
                                                                         role: "EMPLOYEE",
                                                                         company_id: (inv.company_id || sub.company_id || (companies[0]?.id?.toString()) || "").toString(),
                                                                         office_id: (inv.office_id || sub.office_id || (offices[0]?.id?.toString()) || "").toString(),
-                                                                        date_of_joining: new Date().toISOString().split("T")[0],
+                                                                        date_of_joining: sub.date_of_joining || new Date().toISOString().split("T")[0],
 
                                                                         fixed_gross: gross.toString(),
 
-                                                                        pf_applicable: "Yes",
-                                                                        pf_ceiling: "Yes",
+                                                                        pf_applicable: sub.pf_applicable !== false ? "Yes" : "No",
+                                                                        pf_ceiling: sub.pf_ceiling ? "Yes" : "No",
+                                                                        pf_employment_date: sub.pf_employment_date || "",
                                                                         pf_contribution_mode: "shared",
                                                                         pf_employee_rate: "0.12",
                                                                         pf_employer_rate: "0.12",
-                                                                        esic_applicable: "Yes",
+                                                                        esic_applicable: sub.esic_applicable ? "Yes" : "No",
                                                                         esic_contribution_mode: "shared",
                                                                         esic_employee_rate: "0.0075",
                                                                         esic_employer_rate: "0.0325",
                                                                         pt_applicable: "Yes",
-                                                                        pf_number: "PF/IND/001",
+                                                                        pf_number: sub.pf_number || "PF/IND/001",
                                                                         uan: sub.uan || "",
+                                                                        esic_number: sub.esic_number || "",
                                                                         lic_details: "",
 
-                                                                        shift_start_time: "10:00",
-                                                                        shift_end_time: "19:00",
+                                                                        shift_start_time: sub.shift_start_time || "09:30",
+                                                                        shift_end_time: sub.shift_end_time || "18:30",
+                                                                        is_rotational_shift: Boolean(sub.is_rotational_shift),
                                                                         half_day_late_minutes: "60",
                                                                     });
                                                                 }}
@@ -1692,7 +1749,7 @@ function OnboardingForm() {
                                         </div>
                                         <div className="space-y-3">
                                             <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                Office Location
+                                                Working Location
                                             </Label>
                                             <select
                                                 className="w-full h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-[10px] uppercase tracking-widest outline-none"
@@ -1729,7 +1786,7 @@ function OnboardingForm() {
                                         </div>
                                         <div className="space-y-3">
                                             <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                Job Title
+                                                Designation
                                             </Label>
                                             <Input
                                                 placeholder="e.g. Senior Manager"
@@ -2049,10 +2106,21 @@ function OnboardingForm() {
                                             </div>
                                             <div className="space-y-3">
                                                 <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                    LIC Policy
+                                                    PF Employment Date
                                                 </Label>
                                                 <Input
-                                                    placeholder="e.g. Policy No: 12345"
+                                                    type="date"
+                                                    className={inputClass("pfEmploymentDate", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs uppercase tracking-widest")}
+                                                    value={formData.pfEmploymentDate}
+                                                    onChange={(e) => updateField("pfEmploymentDate", e.target.value)}
+                                                />
+                                            </div>
+                                            <div className="space-y-3">
+                                                <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                                    ESIC IP / Registration Number
+                                                </Label>
+                                                <Input
+                                                    placeholder="e.g. ESIC IP: 1234567890"
                                                     className={inputClass("licDetails", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs uppercase tracking-widest")}
                                                     value={formData.licDetails}
                                                     onChange={(e) => updateField("licDetails", e.target.value)}
@@ -2119,6 +2187,17 @@ function OnboardingForm() {
                                                     />
                                                     {fieldErrorEl("halfDayLateMinutes")}
                                                 </div>
+                                            </div>
+                                            <div className="pt-2 border-t border-amber-200/60">
+                                                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 bg-white p-3 rounded-xl border border-amber-200">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={formData.isRotationalShift === "Yes"}
+                                                        onChange={(e) => updateField("isRotationalShift", e.target.checked ? "Yes" : "No")}
+                                                        className="h-4 w-4 rounded text-amber-600 focus:ring-amber-500"
+                                                    />
+                                                    <span>Rotational Shift (Employee works on rotational shift roster - Req 2.3 B)</span>
+                                                </label>
                                             </div>
                                         </div>
                                     </>
@@ -2668,19 +2747,29 @@ function OnboardingForm() {
                                         <span className="font-black text-slate-900">{approvalOverrides.name} ({approvalOverrides.gender})</span>
                                     </div>
                                     <div>
+                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">Marital Status & Guardian</span>
+                                        <span className="font-bold text-slate-800">
+                                            {approvalOverrides.marital_status?.toUpperCase() || "UNMARRIED"} {approvalOverrides.father_or_husband_name && `• ${approvalOverrides.father_or_husband_name}`}
+                                        </span>
+                                    </div>
+                                    <div>
                                         <span className="text-slate-400 font-bold uppercase text-[9px] block">Email & Phone</span>
                                         <span className="font-bold text-slate-800">{approvalOverrides.email} • {approvalOverrides.phone || "N/A"}</span>
                                     </div>
                                     <div>
-                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">Date of Birth</span>
-                                        <span className="font-bold text-slate-800">{approvalOverrides.dob || "N/A"}</span>
+                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">Date of Birth & Joining</span>
+                                        <span className="font-bold text-slate-800">DOB: {approvalOverrides.dob || "N/A"} • DOJ: {approvalOverrides.date_of_joining || "N/A"}</span>
                                     </div>
                                     <div>
                                         <span className="text-slate-400 font-bold uppercase text-[9px] block">PAN & Aadhaar</span>
-                                        <span className="font-bold text-slate-800">{approvalOverrides.pan || "N/A"} • Aadhaar: {approvalOverrides.aadhaar || "N/A"}</span>
+                                        <span className="font-bold text-slate-800">{approvalOverrides.pan || "N/A (Optional)"} • Aadhaar: {approvalOverrides.aadhaar || "N/A"}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">Candidate Working Location</span>
+                                        <span className="font-bold text-slate-800">{approvalOverrides.working_location || "N/A"}</span>
                                     </div>
                                     <div className="md:col-span-2">
-                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">Address</span>
+                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">Address (as per Aadhaar)</span>
                                         <span className="font-medium text-slate-700">{approvalOverrides.address || "N/A"}</span>
                                     </div>
                                     <div className="md:col-span-2">
@@ -2692,7 +2781,7 @@ function OnboardingForm() {
                                     </div>
                                 </div>
 
-                                {/* Uploaded Documents */}
+                                {/* Uploaded Documents (Req 2.3 D - 8 Documents Support) */}
                                 <div className="pt-2 border-t border-slate-200/60">
                                     <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">Attached Verification Documents</span>
                                     {reviewCandidate.submitted_data?.uploaded_docs?.length > 0 ? (
@@ -2741,6 +2830,7 @@ function OnboardingForm() {
                                                                     bank_account_number: reviewCandidate.submitted_data?.bank_account_number,
                                                                     bank_name: reviewCandidate.submitted_data?.bank_name,
                                                                     ifsc_code: reviewCandidate.submitted_data?.ifsc_code,
+                                                                    data_url: doc.data_url || doc.file_url,
                                                                 });
                                                             }}
                                                             className="h-7 px-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200 font-bold text-xs flex items-center gap-1 shadow-none transition-all cursor-pointer"
@@ -2758,10 +2848,10 @@ function OnboardingForm() {
                                 </div>
                             </div>
 
-                            {/* ── CARD 2: Job Assignment ── */}
+                            {/* ── CARD 2: Employment Information (Req 2.3 B) ── */}
                             <div className="space-y-3 p-4 rounded-2xl bg-white border border-slate-200 shadow-sm">
                                 <span className="text-[11px] font-black uppercase tracking-wider text-indigo-700 flex items-center gap-1.5">
-                                    <Briefcase className="h-4 w-4 text-indigo-600" /> 1. Job Details & Assignment
+                                    <Briefcase className="h-4 w-4 text-indigo-600" /> 1. Employment Information
                                 </span>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -2777,7 +2867,7 @@ function OnboardingForm() {
                                         </select>
                                     </div>
                                     <div>
-                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Office Location *</Label>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Working Location *</Label>
                                         <select
                                             value={approvalOverrides.office_id}
                                             onChange={(e) => setApprovalOverrides(a => ({ ...a, office_id: e.target.value }))}
@@ -2791,7 +2881,7 @@ function OnboardingForm() {
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     <div>
-                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Designation / Job Title *</Label>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Designation *</Label>
                                         <Input
                                             value={approvalOverrides.designation}
                                             onChange={(e) => setApprovalOverrides(a => ({ ...a, designation: e.target.value }))}
@@ -2976,7 +3066,7 @@ function OnboardingForm() {
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                                     <div>
                                         <Label className="text-[10px] font-bold text-slate-600 mb-1 block">PF Number</Label>
                                         <Input
@@ -2984,6 +3074,15 @@ function OnboardingForm() {
                                             onChange={(e) => setApprovalOverrides(a => ({ ...a, pf_number: e.target.value.toUpperCase() }))}
                                             placeholder="PF/MP/IND/001234"
                                             className="h-10 rounded-xl bg-slate-50 font-bold text-xs uppercase"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">PF Employment Date</Label>
+                                        <Input
+                                            type="date"
+                                            value={approvalOverrides.pf_employment_date}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, pf_employment_date: e.target.value }))}
+                                            className="h-10 rounded-xl bg-slate-50 font-bold text-xs"
                                         />
                                     </div>
                                     <div>
@@ -2996,11 +3095,11 @@ function OnboardingForm() {
                                         />
                                     </div>
                                     <div>
-                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">LIC Policy Details</Label>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">ESIC IP / Registration Number</Label>
                                         <Input
-                                            value={approvalOverrides.lic_details}
-                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, lic_details: e.target.value }))}
-                                            placeholder="LIC/IND/987654"
+                                            value={approvalOverrides.esic_number}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, esic_number: e.target.value.toUpperCase() }))}
+                                            placeholder="ESIC IP Number"
                                             className="h-10 rounded-xl bg-slate-50 font-bold text-xs"
                                         />
                                     </div>
@@ -3043,6 +3142,17 @@ function OnboardingForm() {
                                             className="h-10 rounded-xl bg-white font-mono text-xs font-bold"
                                         />
                                     </div>
+                                </div>
+                                <div className="pt-2 border-t border-amber-200/60">
+                                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 bg-white p-2.5 rounded-xl border border-amber-200">
+                                        <input
+                                            type="checkbox"
+                                            checked={approvalOverrides.is_rotational_shift}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, is_rotational_shift: e.target.checked }))}
+                                            className="h-4 w-4 rounded text-amber-600 focus:ring-amber-500"
+                                        />
+                                        <span>Rotational Shift Employee (Identifies employee on rotational shift roster)</span>
+                                    </label>
                                 </div>
                             </div>
                         </div>
@@ -3093,14 +3203,14 @@ function OnboardingForm() {
                                     </DialogDescription>
                                 </div>
                             </div>
-                            {previewDoc?.file_url && (
+                            {(previewDoc?.file_url || previewDoc?.data_url) && (
                                 <div className="flex items-center gap-2">
                                     <Button
                                         type="button"
                                         size="sm"
                                         variant="outline"
                                         onClick={() => {
-                                            const targetUrl = getDocPreviewUrl(previewDoc.file_url);
+                                            const targetUrl = previewDoc.data_url || getDocPreviewUrl(previewDoc.file_url);
                                             window.open(targetUrl, "_blank");
                                         }}
                                         className="h-8 px-3 text-xs font-bold border-slate-200 text-slate-700 hover:bg-slate-50 flex items-center gap-1.5"
@@ -3109,7 +3219,7 @@ function OnboardingForm() {
                                         <span>Open in Tab</span>
                                     </Button>
                                     <a
-                                        href={getDocPreviewUrl(previewDoc.file_url)}
+                                        href={previewDoc.data_url || getDocPreviewUrl(previewDoc.file_url)}
                                         download={previewDoc.filename}
                                         target="_blank"
                                         rel="noopener noreferrer"
@@ -3126,11 +3236,11 @@ function OnboardingForm() {
                     {previewDoc && (
                         <div className="py-4 space-y-4">
                             {/* Document Display Canvas */}
-                            {previewDoc.file_url ? (
+                            {(previewDoc.file_url || previewDoc.data_url) ? (
                                 <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 overflow-hidden flex items-center justify-center min-h-[360px]">
-                                    {previewDoc.file_url.toLowerCase().endsWith(".pdf") ? (
+                                    {(previewDoc.data_url?.startsWith("data:application/pdf") || previewDoc.file_url?.toLowerCase().endsWith(".pdf")) ? (
                                         <iframe
-                                            src={getDocPreviewUrl(previewDoc.file_url)}
+                                            src={previewDoc.data_url || getDocPreviewUrl(previewDoc.file_url)}
                                             title={previewDoc.filename}
                                             className="w-full h-[520px] rounded-xl border border-slate-200 bg-white"
                                         />
@@ -3150,7 +3260,7 @@ function OnboardingForm() {
                                                     type="button"
                                                     size="sm"
                                                     onClick={() => {
-                                                        const targetUrl = getDocPreviewUrl(previewDoc.file_url);
+                                                        const targetUrl = previewDoc.data_url || getDocPreviewUrl(previewDoc.file_url);
                                                         window.open(targetUrl, "_blank");
                                                     }}
                                                     className="h-8 px-4 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5"
@@ -3159,7 +3269,7 @@ function OnboardingForm() {
                                                     <span>Open Full File</span>
                                                 </Button>
                                                 <a
-                                                    href={getDocPreviewUrl(previewDoc.file_url)}
+                                                    href={previewDoc.data_url || getDocPreviewUrl(previewDoc.file_url)}
                                                     download={previewDoc.filename}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
@@ -3172,7 +3282,7 @@ function OnboardingForm() {
                                         </div>
                                     ) : (
                                         <img
-                                            src={getDocPreviewUrl(previewDoc.file_url)}
+                                            src={previewDoc.data_url || getDocPreviewUrl(previewDoc.file_url)}
                                             alt={previewDoc.filename}
                                             onError={() => setImgPreviewError(true)}
                                             className="max-h-[500px] w-auto max-w-full object-contain rounded-xl shadow-md border border-slate-200/80 bg-white"
