@@ -434,7 +434,7 @@ export default function AttendancePage() {
         setIsPayrollBreakdownOpen(true);
     };
 
-    // Manual & Authorized Attendance State (Req 5.1, 5.2)
+    // Manual & Authorized Attendance State (Req 5.1, 5.2, 2.5 B, 2.5 D)
     const [isManualEntryOpen, setIsManualEntryOpen] = useState(false);
     const [manualEmpId, setManualEmpId] = useState("");
     const [manualDate, setManualDate] = useState("");
@@ -443,7 +443,33 @@ export default function AttendancePage() {
     const [manualIsOutdoor, setManualIsOutdoor] = useState(false);
     const [manualCheckInTime, setManualCheckInTime] = useState("");
     const [manualCheckOutTime, setManualCheckOutTime] = useState("");
+    const [manualWoComp, setManualWoComp] = useState<"additional_payable_day" | "comp_off">("additional_payable_day");
     const [manualSubmitting, setManualSubmitting] = useState(false);
+
+    // Quick Attendance Adjustment Modal (from Monthly Grid Cell click) (Req 2.5 B & D)
+    const [isCellAdjustOpen, setIsCellAdjustOpen] = useState(false);
+    const [selectedCellAdjust, setSelectedCellAdjust] = useState<{
+        emp: any;
+        date: string;
+        dayIdx: number;
+        dateObj: Date;
+        currentStatus: string;
+        cellDetail?: any;
+    } | null>(null);
+    const [cellAdjustStatus, setCellAdjustStatus] = useState<"Present" | "Absent" | "Half Day" | "Weekly Off Worked">("Present");
+    const [cellAdjustWoComp, setCellAdjustWoComp] = useState<"additional_payable_day" | "comp_off">("additional_payable_day");
+    const [cellAdjustCheckIn, setCellAdjustCheckIn] = useState("10:00");
+    const [cellAdjustCheckOut, setCellAdjustCheckOut] = useState("19:00");
+    const [cellAdjustReason, setCellAdjustReason] = useState("");
+    const [cellAdjustSubmitting, setCellAdjustSubmitting] = useState(false);
+
+    // Rotational & Fixed Weekly-Off Schedule Modal (Req 2.5 C)
+    const [isWeeklyOffModalOpen, setIsWeeklyOffModalOpen] = useState(false);
+    const [weeklyOffEmpSearch, setWeeklyOffEmpSearch] = useState("");
+    const [editingEmpWeeklyOff, setEditingEmpWeeklyOff] = useState<any | null>(null);
+    const [editOffDays, setEditOffDays] = useState<string[]>(["Sunday"]);
+    const [editRotationalOff, setEditRotationalOff] = useState(false);
+    const [weeklyOffSaving, setWeeklyOffSaving] = useState(false);
 
     // Late Attendance Threshold State (Req 5.3)
     const [lateThresholdMinutes, setLateThresholdMinutes] = useState(60);
@@ -726,12 +752,13 @@ export default function AttendancePage() {
     useEffect(() => { if (activeTab === "history") { setHistoryPage(1); fetchHistory(1); } }, [historyFrom, historyTo, selectedCompanyId, selectedOfficeId, historyDebouncedSearch, selectedDepartment]);
     useEffect(() => { if (activeTab === "monthly") fetchMonthly(); }, [activeTab, selectedMonth, selectedYear, cycleType, fetchMonthly]);
 
-    // Manual & Authorized entry submit (Req 5.1 & 5.2)
+    // Manual & Authorized entry submit (Req 5.1, 5.2, 2.5 B, 2.5 D)
     const handleManualSubmit = async () => {
         if (!manualEmpId || !manualDate || !manualStatus) return;
         setManualSubmitting(true);
         try {
             const isOutdoorDuty = manualIsOutdoor || manualStatus === "Present - Outdoor";
+            const isWoWorked = manualStatus === "Weekly Off Worked";
             const normalizedStatus = manualStatus === "Present - Outdoor" ? "Present" : manualStatus;
             await apiPost("/attendance/admin/manual-entry", {
                 employeeId: manualEmpId,
@@ -739,6 +766,8 @@ export default function AttendancePage() {
                 status: normalizedStatus,
                 reason: manualReason,
                 is_outdoor: isOutdoorDuty,
+                is_weekly_off_worked: isWoWorked,
+                weekly_off_compensation: isWoWorked ? manualWoComp : "none",
                 check_in_time: manualCheckInTime || undefined,
                 check_out_time: manualCheckOutTime || undefined,
             });
@@ -750,6 +779,7 @@ export default function AttendancePage() {
             setManualIsOutdoor(false);
             setManualCheckInTime("");
             setManualCheckOutTime("");
+            setManualWoComp("additional_payable_day");
             if (activeTab === "live") fetchLiveAttendance();
             if (activeTab === "history") fetchHistory();
             if (activeTab === "monthly") fetchMonthly();
@@ -758,6 +788,105 @@ export default function AttendancePage() {
             alert(err?.response?.data?.message || "Failed to submit manual entry. Check employee ID.");
         } finally {
             setManualSubmitting(false);
+        }
+    };
+
+    // Quick Attendance Adjustment directly from Grid Cell Click (Req 2.5 B & D)
+    const openCellAdjust = (emp: any, dayIdx: number, dateObj: Date) => {
+        const yyyy = dateObj.getFullYear();
+        const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const dd = String(dateObj.getDate()).padStart(2, '0');
+        const dateStr = `${yyyy}-${mm}-${dd}`;
+        const detail = emp.grid_details ? emp.grid_details[dayIdx] : null;
+        const currentCode = detail?.display_code || (emp.grid ? emp.grid[dayIdx] : '-');
+
+        setSelectedCellAdjust({
+            emp,
+            dayIdx,
+            date: dateStr,
+            dateObj,
+            currentStatus: currentCode,
+            cellDetail: detail,
+        });
+
+        if (currentCode === 'A') setCellAdjustStatus('Absent');
+        else if (currentCode === 'HD') setCellAdjustStatus('Half Day');
+        else if (currentCode === 'WO' || detail?.is_weekly_off_worked) setCellAdjustStatus('Weekly Off Worked');
+        else setCellAdjustStatus('Present');
+
+        setCellAdjustWoComp(detail?.compensation === 'comp_off' ? 'comp_off' : 'additional_payable_day');
+        setCellAdjustCheckIn(detail?.check_in_time ? detail.check_in_time.slice(0, 5) : (emp.shift_start_time ? emp.shift_start_time.slice(0, 5) : "10:00"));
+        setCellAdjustCheckOut(detail?.check_out_time ? detail.check_out_time.slice(0, 5) : (emp.shift_end_time ? emp.shift_end_time.slice(0, 5) : "19:00"));
+        setCellAdjustReason(detail?.remarks || "");
+        setIsCellAdjustOpen(true);
+    };
+
+    const handleCellAdjustSubmit = async () => {
+        if (!selectedCellAdjust) return;
+        setCellAdjustSubmitting(true);
+        try {
+            const isWo = cellAdjustStatus === "Weekly Off Worked";
+            await apiPost("/attendance/admin/manual-entry", {
+                employeeId: selectedCellAdjust.emp.employee_id || selectedCellAdjust.emp.id,
+                date: selectedCellAdjust.date,
+                status: isWo ? "Weekly Off Worked" : cellAdjustStatus,
+                is_weekly_off_worked: isWo,
+                weekly_off_compensation: isWo ? cellAdjustWoComp : "none",
+                check_in_time: cellAdjustCheckIn ? `${cellAdjustCheckIn}:00` : undefined,
+                check_out_time: cellAdjustCheckOut ? `${cellAdjustCheckOut}:00` : undefined,
+                reason: cellAdjustReason || (isWo ? `Weekly off worked (${cellAdjustWoComp})` : `Admin adjusted to ${cellAdjustStatus}`),
+            });
+            setIsCellAdjustOpen(false);
+            setSelectedCellAdjust(null);
+            await fetchMonthly();
+        } catch (err: any) {
+            console.error("Cell adjust error:", err);
+            alert(err?.response?.data?.message || "Failed to adjust attendance. Please try again.");
+        } finally {
+            setCellAdjustSubmitting(false);
+        }
+    };
+
+    // Rotational & Fixed Weekly-Off Schedule Handlers (Req 2.5 C)
+    const openWeeklyOffEdit = (emp: any) => {
+        setEditingEmpWeeklyOff(emp);
+        let offs = emp.weekly_off_days;
+        if (typeof offs === "string") {
+            try { offs = JSON.parse(offs); } catch (e) { offs = [offs]; }
+        }
+        setEditOffDays(Array.isArray(offs) && offs.length > 0 ? offs : ["Sunday"]);
+        setEditRotationalOff(Boolean(emp.rotational_weekly_off));
+    };
+
+    const toggleEditOffDay = (dayName: string) => {
+        if (editOffDays.includes(dayName)) {
+            if (editOffDays.length === 1) {
+                alert("At least one weekly off day must be selected.");
+                return;
+            }
+            setEditOffDays(editOffDays.filter(d => d !== dayName));
+        } else {
+            setEditOffDays([...editOffDays, dayName]);
+        }
+    };
+
+    const handleSaveWeeklyOffSchedule = async () => {
+        if (!editingEmpWeeklyOff) return;
+        setWeeklyOffSaving(true);
+        try {
+            await apiPut("/attendance/admin/weekly-off-config", {
+                employeeId: editingEmpWeeklyOff.employee_id || editingEmpWeeklyOff.id,
+                weekly_off_days: editOffDays,
+                rotational_weekly_off: editRotationalOff,
+                weekly_off_type: editRotationalOff ? "rotational" : "fixed",
+            });
+            setEditingEmpWeeklyOff(null);
+            await fetchMonthly();
+        } catch (err: any) {
+            console.error("Save weekly off schedule error:", err);
+            alert(err?.response?.data?.message || "Failed to update weekly off schedule.");
+        } finally {
+            setWeeklyOffSaving(false);
         }
     };
 
@@ -826,6 +955,15 @@ export default function AttendancePage() {
                         >
                             <Clock className="h-4 w-4 text-amber-600" />
                             <span>Late Rule: {lateThresholdMinutes}m</span>
+                        </Button>
+                        <Button
+                            onClick={() => setIsWeeklyOffModalOpen(true)}
+                            variant="outline"
+                            className="border-purple-200 bg-purple-50/70 hover:bg-purple-100 text-purple-900 font-black uppercase text-[9px] tracking-widest px-4 h-11 rounded-2xl shadow-xs transition-all gap-2"
+                            title="Configure Fixed & Rotational Weekly Off Schedule (Req 2.5 C)"
+                        >
+                            <Sliders className="h-4 w-4 text-purple-600" />
+                            <span>Weekly Offs</span>
                         </Button>
                         <Button
                             onClick={() => setIsTourOpen(true)}
@@ -1517,62 +1655,96 @@ export default function AttendancePage() {
                 {activeTab === "monthly" && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 mx-2">
                         {/* Monthly Attendance Summary Metrics Cards (Req 6.4, 8) */}
+                        {/* Monthly Attendance Summary Metrics Cards (Req 2.5 A) */}
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                            <Card className="bg-slate-900 text-white rounded-2xl p-4 shadow-sm border-none">
-                                <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Total Staff</p>
-                                <h4 className="text-2xl font-black italic tracking-tighter mt-1">{monthlyRows.length}</h4>
-                                <span className="text-[8px] text-slate-400 font-bold uppercase">In View</span>
-                            </Card>
-                            <Card className="bg-blue-50/80 rounded-2xl p-4 shadow-sm border-none">
-                                <p className="text-[8px] font-black uppercase tracking-widest text-blue-600">1. Muster / Total Days</p>
-                                <h4 className="text-2xl font-black italic tracking-tighter text-blue-950 mt-1">{daysInSelectedMonth}</h4>
-                                <span className="text-[8px] text-blue-500 font-bold uppercase">{cycleType === "payroll" ? "26th - 25th Cycle" : "Calendar Month"}</span>
-                            </Card>
-                            <Card className="bg-emerald-50/80 rounded-2xl p-4 shadow-sm border-none">
-                                <p className="text-[8px] font-black uppercase tracking-widest text-emerald-600">Total Present Days</p>
-                                <h4 className="text-2xl font-black italic tracking-tighter text-emerald-950 mt-1">
-                                    {monthlyRows.reduce((sum, r) => sum + (r.present || 0), 0)}
+                            {/* Card 1: Payable Days */}
+                            <Card className="bg-emerald-950 text-white rounded-2xl p-4 shadow-sm border-none relative overflow-hidden">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-[8px] font-black uppercase tracking-widest text-emerald-400">1. Payable Days</p>
+                                    <Badge className="bg-emerald-500/20 text-emerald-300 font-bold text-[8px] px-1.5 py-0 border-none uppercase">Salary Paid</Badge>
+                                </div>
+                                <h4 className="text-2xl font-black italic tracking-tighter text-white mt-1">
+                                    {monthlyRows.reduce((sum, r) => sum + (r.payable_days ?? ((r.present || 0) + (r.woff || 0) + (r.leave || 0) + (r.holiday || 0) + (r.tour || 0))), 0)}
                                 </h4>
-                                <span className="text-[8px] text-emerald-600 font-bold uppercase">Recorded Staff Days</span>
+                                <span className="text-[8px] text-emerald-400/80 font-bold uppercase block mt-0.5">Present + WO + H + Leaves + Tour</span>
                             </Card>
-                            <Card className="bg-indigo-50/80 rounded-2xl p-4 shadow-sm border-none">
-                                <p className="text-[8px] font-black uppercase tracking-widest text-indigo-600">2. Payable Days</p>
-                                <h4 className="text-2xl font-black italic tracking-tighter text-indigo-950 mt-1">
-                                    {monthlyRows.reduce((sum, r) => sum + ((r.present || 0) + (r.woff || 0) + (r.leave || 0) + (r.holiday || 0) + (r.tour || 0)), 0)}
-                                </h4>
-                                <span className="text-[8px] text-indigo-600 font-bold uppercase">Present + WO + H + L + Tour</span>
-                            </Card>
-                            <Card className="bg-rose-50/80 rounded-2xl p-4 shadow-sm border-none">
-                                <p className="text-[8px] font-black uppercase tracking-widest text-rose-600">3. LWP (Loss of Pay)</p>
+
+                            {/* Card 2: Leave Without Pay (LWP) */}
+                            <Card className="bg-rose-50/90 rounded-2xl p-4 shadow-sm border border-rose-100">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-[8px] font-black uppercase tracking-widest text-rose-600">2. Leave Without Pay (LWP)</p>
+                                    <Badge className="bg-rose-100 text-rose-800 font-bold text-[8px] px-1.5 py-0 border-none uppercase">Unpaid</Badge>
+                                </div>
                                 <h4 className="text-2xl font-black italic tracking-tighter text-rose-950 mt-1">
-                                    {monthlyRows.reduce((sum, r) => sum + (r.absent || 0), 0)}
+                                    {monthlyRows.reduce((sum, r) => sum + (r.lwp_days ?? (r.absent || 0)), 0)}
                                 </h4>
-                                <span className="text-[8px] text-rose-600 font-bold uppercase">Salary Deducted Days</span>
+                                <span className="text-[8px] text-rose-600 font-bold uppercase block mt-0.5">Unexcused / Loss of Pay Days</span>
+                            </Card>
+
+                            {/* Card 3: Total Leave Taken */}
+                            <Card className="bg-indigo-50/90 rounded-2xl p-4 shadow-sm border border-indigo-100">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-[8px] font-black uppercase tracking-widest text-indigo-600">3. Total Leave Taken</p>
+                                    <Badge className="bg-indigo-100 text-indigo-800 font-bold text-[8px] px-1.5 py-0 border-none uppercase">All Leaves</Badge>
+                                </div>
+                                <h4 className="text-2xl font-black italic tracking-tighter text-indigo-950 mt-1">
+                                    {monthlyRows.reduce((sum, r) => sum + (r.total_leaves_taken ?? ((r.leave || 0) + (r.absent || 0))), 0)}
+                                </h4>
+                                <span className="text-[8px] text-indigo-600 font-bold uppercase block mt-0.5">Paid Leaves + LWP Combined</span>
+                            </Card>
+
+                            {/* Card 4: Paid Leave Taken */}
+                            <Card className="bg-violet-50/90 rounded-2xl p-4 shadow-sm border border-violet-100">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-[8px] font-black uppercase tracking-widest text-violet-600">4. Paid Leave Taken</p>
+                                    <Badge className="bg-violet-100 text-violet-800 font-bold text-[8px] px-1.5 py-0 border-none uppercase">Approved</Badge>
+                                </div>
+                                <h4 className="text-2xl font-black italic tracking-tighter text-violet-950 mt-1">
+                                    {monthlyRows.reduce((sum, r) => sum + (r.paid_leaves_taken ?? (r.leave || 0)), 0)}
+                                </h4>
+                                <span className="text-[8px] text-violet-600 font-bold uppercase block mt-0.5">CL & EL Approved Balance</span>
+                            </Card>
+
+                            {/* Card 5: Remaining Leave Balance */}
+                            <Card className="bg-amber-50/90 rounded-2xl p-4 shadow-sm border border-amber-100">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-[8px] font-black uppercase tracking-widest text-amber-700">5. Remaining Leave Balance</p>
+                                    <Badge className="bg-amber-100 text-amber-800 font-bold text-[8px] px-1.5 py-0 border-none uppercase">Available</Badge>
+                                </div>
+                                <h4 className="text-2xl font-black italic tracking-tighter text-amber-950 mt-1">
+                                    {monthlyRows.reduce((sum, r) => sum + (r.remaining_leave_balance || 0), 0)}
+                                </h4>
+                                <span className="text-[8px] text-amber-700 font-bold uppercase block mt-0.5">Total Days Available in Ledger</span>
                             </Card>
                         </div>
 
-                        {/* Attendance & Payroll Calculation Relationship Bridge (Req 8) */}
+                        {/* Approved Policy & Separate Tracking Banner (Req 2.5 A & D) */}
                         <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 text-slate-700 shadow-sm">
                             <div className="flex flex-wrap items-center gap-3 text-[10px]">
                                 <div className="flex items-center gap-1.5 font-black uppercase tracking-wider text-slate-900">
-                                    <Info className="h-4 w-4 text-indigo-600 shrink-0" />
-                                    <span>Payroll Relationship:</span>
+                                    <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+                                    <span>Approved Leave Policy:</span>
                                 </div>
                                 <div className="flex items-center gap-1.5 font-bold">
-                                    <span className="bg-blue-100 text-blue-900 px-2 py-0.5 rounded-md font-black">Muster Days ({daysInSelectedMonth})</span>
+                                    <span className="bg-blue-100 text-blue-900 px-2 py-0.5 rounded-md font-black">Muster ({daysInSelectedMonth})</span>
                                     <span className="text-slate-400 font-black">=</span>
-                                    <span className="bg-indigo-100 text-indigo-900 px-2 py-0.5 rounded-md font-black">Payable Days</span>
+                                    <span className="bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded-md font-black">Payable</span>
                                     <span className="text-slate-400 font-black">+</span>
-                                    <span className="bg-rose-100 text-rose-900 px-2 py-0.5 rounded-md font-black">LWP Days</span>
+                                    <span className="bg-rose-100 text-rose-900 px-2 py-0.5 rounded-md font-black">LWP</span>
                                 </div>
                                 <div className="hidden lg:inline text-slate-300">|</div>
-                                <span className="text-slate-500 font-semibold hidden sm:inline">
-                                    Per-Day Rate = Fixed Gross ÷ Muster Days • Gross Payout = Payable Days × Daily Rate
+                                <span className="text-slate-600 font-semibold text-[9px]">
+                                    Paid Leave and LWP are tracked separately. Unapproved leave is never auto-treated as LWP without applying policy.
                                 </span>
+                                {monthlyRows.some(r => (r.weekly_off_worked_days || 0) > 0) && (
+                                    <Badge className="bg-purple-100 text-purple-900 font-black text-[9px] px-2 py-0.5 border border-purple-200">
+                                        ⚡ {monthlyRows.reduce((sum, r) => sum + (r.weekly_off_worked_days || 0), 0)} Weekly Off / Sunday Worked (Compensated)
+                                    </Badge>
+                                )}
                             </div>
-                            <div className="text-[8px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                                <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
-                                Click any Payable or LWP badge for breakdown
+                            <div className="text-[8px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                Click any cell to manually adjust attendance
                             </div>
                         </div>
 
@@ -1879,6 +2051,12 @@ export default function AttendancePage() {
                                             <th className="text-center py-4 px-3 text-[9px] font-black text-rose-600 uppercase tracking-widest min-w-[65px] bg-rose-50/90 border-r border-slate-50 sticky top-0 z-30">
                                                 LWP
                                             </th>
+                                            <th className="text-center py-4 px-2 text-[9px] font-black text-amber-700 uppercase tracking-widest min-w-[70px] bg-amber-50/90 border-r border-slate-50 sticky top-0 z-30" title="Remaining Leave Balance (CL + EL + Comp-Off)">
+                                                Leave Bal
+                                            </th>
+                                            <th className="text-center py-4 px-2 text-[9px] font-black text-purple-700 uppercase tracking-widest min-w-[75px] bg-purple-50/90 border-r border-slate-50 sticky top-0 z-30" title="Configured Weekly Off Day (Fixed / Rotational)">
+                                                Off Day
+                                            </th>
                                             {/* Dynamic Day Columns with '01 Wed' format (Req 6.1, 6.3) */}
                                             {cycleDates.map((dateObj, i) => {
                                                 const isToday =
@@ -1904,11 +2082,11 @@ export default function AttendancePage() {
                                     </TableHeader>
                                     <TableBody>
                                         {monthlyLoading ? (
-                                            <tr><td colSpan={daysInSelectedMonth + 6} className="py-20 text-center"><p className="text-[10px] font-bold text-slate-400 animate-pulse">Loading monthly data...</p></td></tr>
+                                            <tr><td colSpan={daysInSelectedMonth + 8} className="py-20 text-center"><p className="text-[10px] font-bold text-slate-400 animate-pulse">Loading monthly data...</p></td></tr>
                                         ) : monthlyRows.length === 0 ? (
-                                            <tr><td colSpan={daysInSelectedMonth + 6} className="py-20 text-center"><p className="text-[10px] font-bold text-slate-400">No monthly attendance records found</p></td></tr>
+                                            <tr><td colSpan={daysInSelectedMonth + 8} className="py-20 text-center"><p className="text-[10px] font-bold text-slate-400">No monthly attendance records found</p></td></tr>
                                         ) : monthlyRows.map((emp, idx) => {
-                                            const payable = (emp.present ?? 0) + (emp.woff ?? 0) + (emp.leave ?? 0) + (emp.holiday ?? 0) + (emp.tour ?? 0);
+                                            const payable = emp.payable_days ?? ((emp.present ?? 0) + (emp.woff ?? 0) + (emp.leave ?? 0) + (emp.holiday ?? 0) + (emp.tour ?? 0));
                                             const dailyRate = Math.round((emp.salary || 0) / daysInSelectedMonth);
                                             return (
                                                 <tr key={emp.employee_id || idx} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors group">
@@ -1939,7 +2117,7 @@ export default function AttendancePage() {
                                                         <div
                                                             onClick={() => openPayrollBreakdown(emp)}
                                                             className="flex flex-col items-center justify-center gap-0.5 cursor-pointer group/badge"
-                                                            title={`Employee: ${emp.name}\nFixed Gross: ₹${(emp.salary || 0).toLocaleString('en-IN')}\nPer-Day Rate: ₹${dailyRate.toLocaleString('en-IN')}\n────────────────\nMuster Days: ${emp.muster_days ?? daysInSelectedMonth}\n• Present: ${emp.present ?? 0}\n• Weekly Off: ${emp.woff ?? 0}\n• Holiday: ${emp.holiday ?? 0}\n• Paid Leave: ${emp.leave ?? 0}\n• Tour (Paid): ${emp.tour ?? 0}\n────────────────\nPayable Days: ${payable}\nEstimated Gross Payout: ₹${(payable * dailyRate).toLocaleString('en-IN')}\n\n(Click to view full payroll calculation breakdown)`}
+                                                            title={`Employee: ${emp.name}\nFixed Gross: ₹${(emp.salary || 0).toLocaleString('en-IN')}\nPer-Day Rate: ₹${dailyRate.toLocaleString('en-IN')}\n────────────────\nMuster Days: ${emp.muster_days ?? daysInSelectedMonth}\n• Present: ${emp.present ?? 0}\n• Weekly Off: ${emp.woff ?? 0}\n• Holiday: ${emp.holiday ?? 0}\n• Paid Leave: ${emp.leave ?? 0}\n• Tour (Paid): ${emp.tour ?? 0}\n• Weekly Off Worked: ${emp.weekly_off_worked_days ?? 0}\n────────────────\nPayable Days: ${payable}\nEstimated Gross Payout: ₹${(payable * dailyRate).toLocaleString('en-IN')}\n\n(Click to view full payroll calculation breakdown)`}
                                                         >
                                                             <Badge className="bg-emerald-500 text-white font-black text-[10px] h-6 px-2.5 rounded-md shadow-sm group-hover/badge:bg-emerald-600 transition-transform group-hover/badge:scale-105">{payable}</Badge>
                                                         </div>
@@ -1954,30 +2132,68 @@ export default function AttendancePage() {
                                                             <Badge className={cn("font-black text-[10px] h-6 px-2.5 rounded-md shadow-sm transition-transform group-hover/badge:scale-105", (emp.absent || 0) > 0 ? "bg-rose-500 text-white group-hover/badge:bg-rose-600" : "bg-slate-100 text-slate-400 group-hover/badge:bg-slate-200")}>{emp.absent ?? 0}</Badge>
                                                         </div>
                                                     </td>
-                                                    {/* Day cells */}
+                                                    {/* Remaining Leave Balance (Req 2.5 A) */}
+                                                    <td className="py-3 px-2 text-center border-r border-slate-50 bg-amber-50/10">
+                                                        <Badge className="bg-amber-100 text-amber-900 border border-amber-200 font-black text-[9px] h-6 px-2 rounded-md shadow-xs">
+                                                            {emp.remaining_leave_balance != null ? `${emp.remaining_leave_balance}d` : "24d"}
+                                                        </Badge>
+                                                    </td>
+                                                    {/* Configured Weekly Off Day (Req 2.5 C) */}
+                                                    <td className="py-3 px-2 text-center border-r border-slate-50 bg-purple-50/10">
+                                                        <div
+                                                            onClick={() => {
+                                                                openWeeklyOffEdit(emp);
+                                                                setIsWeeklyOffModalOpen(true);
+                                                            }}
+                                                            className="cursor-pointer group/off"
+                                                            title={`Click to configure weekly off schedule for ${emp.name}`}
+                                                        >
+                                                            <Badge className={cn("text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md transition-transform group-hover/off:scale-105", emp.rotational_weekly_off ? "bg-purple-100 text-purple-900 border border-purple-200" : "bg-slate-100 text-slate-700")}>
+                                                                {Array.isArray(emp.weekly_off_days) ? emp.weekly_off_days.map((d: string) => d.slice(0, 3)).join(",") : "Sun"}
+                                                                {emp.rotational_weekly_off ? " (Rot)" : ""}
+                                                            </Badge>
+                                                        </div>
+                                                    </td>
+                                                    {/* Day cells (Req 2.5 B, D, E) */}
                                                     {cycleDates.map((dateObj, dayIdx) => {
-                                                        const status = (emp.grid && emp.grid[dayIdx]) ? emp.grid[dayIdx] : '-';
+                                                        const detail = emp.grid_details ? emp.grid_details[dayIdx] : null;
+                                                        const status = detail ? detail.display_code : ((emp.grid && emp.grid[dayIdx]) ? emp.grid[dayIdx] : '-');
                                                         const isToday =
                                                             dateObj.getDate() === currentDate.getDate() &&
                                                             dateObj.getMonth() === currentDate.getMonth() &&
                                                             dateObj.getFullYear() === currentDate.getFullYear();
 
-                                                        const earnedForDay = status === 'A' || status === '-' ? 0 : dailyRate;
-                                                        const tooltipLines = `${dateObj.toLocaleDateString('en-GB')}: ${status === 'P' ? 'Present' : status === 'A' ? 'Absent/LWP' : status === 'W' ? 'Weekly Off' : status === 'H' ? 'Holiday' : status === 'T' ? 'Tour' : status === 'L' ? 'Leave' : 'No Data'} (₹${earnedForDay.toLocaleString('en-IN')})`;
+                                                        const isHalfDay = status === 'HD';
+                                                        const isWoWorked = status === 'WO' || detail?.is_weekly_off_worked;
+                                                        const earnedForDay = (status === 'A' || status === '-') ? 0 : (isHalfDay ? Math.round(dailyRate * 0.5) : dailyRate);
+                                                        const statusLabel =
+                                                            status === 'P' ? 'Present' :
+                                                            status === 'HD' ? 'Half Day' :
+                                                            status === 'WO' ? `Weekly Off Worked (${detail?.compensation === 'comp_off' ? 'Comp-Off Credit' : '+1 Payable Day Compensated'})` :
+                                                            status === 'A' ? 'Absent / Loss of Pay (LWP)' :
+                                                            status === 'W' ? 'Weekly Off' :
+                                                            status === 'H' ? 'Public Holiday' :
+                                                            status === 'T' ? 'Tour / Field Duty' :
+                                                            status === 'L' ? 'Paid Leave' : 'No Record';
+
+                                                        const tooltipLines = `${dateObj.toLocaleDateString('en-GB')}: ${statusLabel} (₹${earnedForDay.toLocaleString('en-IN')})\nClick to adjust attendance`;
 
                                                         return (
                                                             <td key={dayIdx} className={cn("py-3 px-1 text-center transition-all", isToday ? "bg-indigo-50/30" : "")}>
                                                                 <div
+                                                                    onClick={() => openCellAdjust(emp, dayIdx, dateObj)}
                                                                     title={tooltipLines}
                                                                     className={cn(
-                                                                        "h-6 w-6 mx-auto rounded-md flex items-center justify-center text-[8px] font-black transition-transform hover:scale-110 cursor-help shadow-sm border",
-                                                                        status === 'P' ? "bg-emerald-50 text-emerald-600 border-emerald-100" :
-                                                                            status === 'A' ? "bg-rose-500 text-white shadow-rose-200 border-rose-600" :
-                                                                                status === 'W' ? "bg-slate-100 text-slate-400 border-slate-200 opacity-60" :
-                                                                                    status === 'H' ? "bg-blue-500 text-white shadow-blue-200 border-blue-600" :
-                                                                                        status === 'T' ? "bg-violet-100 text-violet-700 border-violet-200" :
-                                                                                            status === 'L' ? "bg-amber-100 text-amber-700 border-amber-200" :
-                                                                                                "bg-white text-slate-300 border-dashed border-slate-200"
+                                                                        "h-6 w-6 mx-auto rounded-md flex items-center justify-center text-[8px] font-black transition-all hover:scale-125 cursor-pointer shadow-sm border select-none",
+                                                                        status === 'P' ? "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100" :
+                                                                        status === 'HD' ? "bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200" :
+                                                                        status === 'WO' ? "bg-purple-100 text-purple-900 border-purple-300 ring-1 ring-purple-400 hover:bg-purple-200" :
+                                                                        status === 'A' ? "bg-rose-500 text-white shadow-rose-200 border-rose-600 hover:bg-rose-600" :
+                                                                        status === 'W' ? "bg-slate-100 text-slate-400 border-slate-200 opacity-60 hover:opacity-100 hover:bg-slate-200" :
+                                                                        status === 'H' ? "bg-blue-500 text-white shadow-blue-200 border-blue-600 hover:bg-blue-600" :
+                                                                        status === 'T' ? "bg-violet-100 text-violet-700 border-violet-200 hover:bg-violet-200" :
+                                                                        status === 'L' ? "bg-indigo-100 text-indigo-700 border-indigo-200 hover:bg-indigo-200" :
+                                                                        "bg-white text-slate-300 border-dashed border-slate-200 hover:border-slate-400"
                                                                     )}
                                                                 >
                                                                     {status}
@@ -2309,11 +2525,29 @@ export default function AttendancePage() {
                                     <option value="Present">Present (Standard In-Office)</option>
                                     <option value="Present - Outdoor">Present (Outdoor / Field Duty)</option>
                                     <option value="Late">Late Arrival</option>
-                                    <option value="Half Day">Half Day</option>
-                                    <option value="Absent">Absent</option>
+                                    <option value="Half Day">Half Day (0.5)</option>
+                                    <option value="Absent">Absent (LWP)</option>
+                                    <option value="Weekly Off Worked">Weekly Off / Sunday Worked (Compensated)</option>
                                 </select>
                             </div>
                         </div>
+
+                        {/* Weekly Off Compensation Selector (Req 2.5 D) */}
+                        {manualStatus === "Weekly Off Worked" && (
+                            <div className="space-y-1.5 p-3 rounded-xl bg-purple-50 border border-purple-200 animate-in fade-in">
+                                <Label className="text-[9px] font-black uppercase tracking-widest text-purple-900 block">
+                                    Weekly Off Compensation Method (Req 2.5 D)
+                                </Label>
+                                <select
+                                    value={manualWoComp}
+                                    onChange={(e: any) => setManualWoComp(e.target.value)}
+                                    className="h-10 w-full px-3 rounded-xl bg-white border border-purple-200 font-bold text-[10px] uppercase outline-none focus:ring-2 ring-purple-200"
+                                >
+                                    <option value="additional_payable_day">Additional Payable Day (+1 Day Payout in Salary)</option>
+                                    <option value="comp_off">Compensatory Off (+1 Day Credited to Leave Balance)</option>
+                                </select>
+                            </div>
+                        )}
 
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1.5">
@@ -2374,6 +2608,367 @@ export default function AttendancePage() {
                                 {manualSubmitting ? "Submitting..." : "Authorize Entry"}
                             </Button>
                         </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Quick Attendance Adjustment Dialog (Req 2.5 B & D) */}
+            <Dialog open={isCellAdjustOpen} onOpenChange={setIsCellAdjustOpen}>
+                <DialogContent className="sm:max-w-[480px] rounded-[2rem] p-0 overflow-hidden bg-white border-none shadow-2xl">
+                    {selectedCellAdjust && (
+                        <div>
+                            <div className="bg-slate-900 p-6 text-white relative overflow-hidden">
+                                <div className="absolute inset-0 opacity-10">
+                                    <div className="absolute inset-0 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]" />
+                                </div>
+                                <div className="relative z-10 flex items-center justify-between">
+                                    <div>
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-[#D9F99D]">Manual Attendance Adjustment</span>
+                                        <DialogTitle className="text-xl font-black italic tracking-tight text-white mt-0.5">
+                                            {selectedCellAdjust.emp.name}
+                                        </DialogTitle>
+                                        <DialogDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                                            {selectedCellAdjust.emp.id} • {selectedCellAdjust.dateObj.toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' })}
+                                        </DialogDescription>
+                                    </div>
+                                    <Badge className="bg-white/10 text-slate-200 border border-white/20 font-black text-[9px] px-2.5 py-1 uppercase">
+                                        Current: {selectedCellAdjust.currentStatus}
+                                    </Badge>
+                                </div>
+                            </div>
+
+                            <div className="p-6 space-y-4">
+                                {/* Status Selection Buttons (Req 2.5 B) */}
+                                <div className="space-y-1.5">
+                                    <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Select Status (Req 2.5 B)</Label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => setCellAdjustStatus("Present")}
+                                            className={cn(
+                                                "h-11 rounded-xl font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all",
+                                                cellAdjustStatus === "Present"
+                                                    ? "bg-emerald-600 text-white border-emerald-600 shadow-md"
+                                                    : "bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100"
+                                            )}
+                                        >
+                                            <CheckCircle2 className="h-4 w-4" /> Present
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => setCellAdjustStatus("Absent")}
+                                            className={cn(
+                                                "h-11 rounded-xl font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all",
+                                                cellAdjustStatus === "Absent"
+                                                    ? "bg-rose-600 text-white border-rose-600 shadow-md"
+                                                    : "bg-rose-50 text-rose-800 border-rose-200 hover:bg-rose-100"
+                                            )}
+                                        >
+                                            <XCircle className="h-4 w-4" /> Absent (LWP)
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => setCellAdjustStatus("Half Day")}
+                                            className={cn(
+                                                "h-11 rounded-xl font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all",
+                                                cellAdjustStatus === "Half Day"
+                                                    ? "bg-amber-600 text-white border-amber-600 shadow-md"
+                                                    : "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100"
+                                            )}
+                                        >
+                                            <Clock className="h-4 w-4" /> Half Day (0.5)
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => setCellAdjustStatus("Weekly Off Worked")}
+                                            className={cn(
+                                                "h-11 rounded-xl font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all",
+                                                cellAdjustStatus === "Weekly Off Worked"
+                                                    ? "bg-purple-600 text-white border-purple-600 shadow-md"
+                                                    : "bg-purple-50 text-purple-900 border-purple-200 hover:bg-purple-100"
+                                            )}
+                                        >
+                                            <Activity className="h-4 w-4" /> Weekly Off Worked
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                {/* Weekly Off Compensation Options (Req 2.5 D) */}
+                                {cellAdjustStatus === "Weekly Off Worked" && (
+                                    <div className="p-3.5 rounded-2xl bg-purple-50 border border-purple-200 space-y-2 animate-in fade-in">
+                                        <Label className="text-[9px] font-black uppercase tracking-widest text-purple-900 block">
+                                            Compensation Treatment (Req 2.5 D)
+                                        </Label>
+                                        <div className="grid grid-cols-1 gap-2">
+                                            <label className={cn("p-2.5 rounded-xl border flex items-center gap-2.5 cursor-pointer text-xs font-bold transition-all", cellAdjustWoComp === "additional_payable_day" ? "bg-white border-purple-500 text-purple-950 shadow-xs" : "bg-purple-50/50 border-purple-100 text-purple-800")}>
+                                                <input
+                                                    type="radio"
+                                                    name="woComp"
+                                                    checked={cellAdjustWoComp === "additional_payable_day"}
+                                                    onChange={() => setCellAdjustWoComp("additional_payable_day")}
+                                                    className="text-purple-600"
+                                                />
+                                                <div>
+                                                    <span className="block font-black text-[10px] uppercase">Additional Payable Day (+1)</span>
+                                                    <span className="block text-[8px] text-purple-600 font-medium">Adds 1 full day payout to monthly salary</span>
+                                                </div>
+                                            </label>
+                                            <label className={cn("p-2.5 rounded-xl border flex items-center gap-2.5 cursor-pointer text-xs font-bold transition-all", cellAdjustWoComp === "comp_off" ? "bg-white border-purple-500 text-purple-950 shadow-xs" : "bg-purple-50/50 border-purple-100 text-purple-800")}>
+                                                <input
+                                                    type="radio"
+                                                    name="woComp"
+                                                    checked={cellAdjustWoComp === "comp_off"}
+                                                    onChange={() => setCellAdjustWoComp("comp_off")}
+                                                    className="text-purple-600"
+                                                />
+                                                <div>
+                                                    <span className="block font-black text-[10px] uppercase">Compensatory Off (Comp-Off Credit)</span>
+                                                    <span className="block text-[8px] text-purple-600 font-medium">Credits +1 day to employee leave balance</span>
+                                                </div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Time fields (for present, half day, weekly off worked) */}
+                                {(cellAdjustStatus === "Present" || cellAdjustStatus === "Half Day" || cellAdjustStatus === "Weekly Off Worked") && (
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-1">
+                                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Shift Check-In</Label>
+                                            <Input
+                                                type="time"
+                                                value={cellAdjustCheckIn}
+                                                onChange={(e) => setCellAdjustCheckIn(e.target.value)}
+                                                className="h-10 rounded-xl bg-slate-50 border-none font-bold text-xs"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Shift Check-Out</Label>
+                                            <Input
+                                                type="time"
+                                                value={cellAdjustCheckOut}
+                                                onChange={(e) => setCellAdjustCheckOut(e.target.value)}
+                                                className="h-10 rounded-xl bg-slate-50 border-none font-bold text-xs"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Reason */}
+                                <div className="space-y-1">
+                                    <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Adjustment Note / Reason</Label>
+                                    <Input
+                                        placeholder="e.g. Approved overtime on weekly off, manager approved correction..."
+                                        value={cellAdjustReason}
+                                        onChange={(e) => setCellAdjustReason(e.target.value)}
+                                        className="h-10 rounded-xl bg-slate-50 border-none font-bold text-xs"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="p-5 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                                <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1">
+                                    <ShieldCheck className="h-3.5 w-3.5 text-indigo-500" /> Instant Monthly Sync
+                                </span>
+                                <div className="flex gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        onClick={() => setIsCellAdjustOpen(false)}
+                                        className="text-[9px] font-black uppercase tracking-wider text-slate-500 rounded-xl"
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        onClick={handleCellAdjustSubmit}
+                                        disabled={cellAdjustSubmitting}
+                                        className="bg-slate-900 hover:bg-slate-800 text-white font-black text-[9px] uppercase tracking-wider rounded-xl px-5 shadow-sm"
+                                    >
+                                        {cellAdjustSubmitting ? "Saving..." : "Save Adjustment"}
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Rotational & Fixed Weekly-Off Schedule Configuration Dialog (Req 2.5 C) */}
+            <Dialog open={isWeeklyOffModalOpen} onOpenChange={setIsWeeklyOffModalOpen}>
+                <DialogContent className="sm:max-w-[650px] rounded-[2rem] p-0 overflow-hidden bg-white border-none shadow-2xl max-h-[90vh] flex flex-col">
+                    <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 text-white relative">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <span className="text-[9px] font-black uppercase tracking-widest text-purple-400">Rotational & Fixed Weekly Offs</span>
+                                <DialogTitle className="text-xl font-black italic tracking-tight text-white mt-0.5">
+                                    Weekly-Off Schedule Control
+                                </DialogTitle>
+                                <DialogDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                                    Configure fixed or rotational off days per employee (Req 2.5 C)
+                                </DialogDescription>
+                            </div>
+                            <div className="h-10 w-10 rounded-2xl bg-white/10 flex items-center justify-center">
+                                <Sliders className="h-5 w-5 text-purple-300" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                        {editingEmpWeeklyOff ? (
+                            /* Edit screen for selected employee */
+                            <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <span className="text-xs font-black text-slate-900 uppercase">{editingEmpWeeklyOff.name}</span>
+                                        <span className="text-[9px] font-bold text-slate-400 block">{editingEmpWeeklyOff.id} • {editingEmpWeeklyOff.role}</span>
+                                    </div>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setEditingEmpWeeklyOff(null)}
+                                        className="text-[9px] font-black uppercase text-slate-400 hover:text-slate-700"
+                                    >
+                                        Back to Staff List
+                                    </Button>
+                                </div>
+
+                                {/* Rotational Toggle */}
+                                <div className="p-3.5 rounded-xl bg-white border border-slate-200 flex items-center justify-between">
+                                    <div>
+                                        <span className="text-[10px] font-black uppercase text-slate-900 block">Rotational Weekly Off Schedule</span>
+                                        <span className="text-[8px] text-slate-400 font-medium">Enable for employees whose weekly offs rotate (e.g. Monday, Tuesday, Sunday)</span>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setEditRotationalOff(!editRotationalOff)}
+                                        className={cn(
+                                            "h-8 px-3 rounded-lg font-black text-[9px] uppercase tracking-wider transition-all",
+                                            editRotationalOff ? "bg-purple-600 text-white border-purple-600" : "bg-slate-100 text-slate-600"
+                                        )}
+                                    >
+                                        {editRotationalOff ? "✓ Rotational Active" : "Fixed Schedule"}
+                                    </Button>
+                                </div>
+
+                                {/* Day Selection Pills */}
+                                <div className="space-y-2">
+                                    <Label className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+                                        Select Weekly-Off Days ({editOffDays.length} selected)
+                                    </Label>
+                                    <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5">
+                                        {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((dName) => {
+                                            const isSelected = editOffDays.includes(dName);
+                                            return (
+                                                <button
+                                                    key={dName}
+                                                    type="button"
+                                                    onClick={() => toggleEditOffDay(dName)}
+                                                    className={cn(
+                                                        "py-2 px-1 rounded-xl text-[9px] font-black uppercase transition-all border",
+                                                        isSelected
+                                                            ? "bg-purple-600 text-white border-purple-600 shadow-xs"
+                                                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                                                    )}
+                                                >
+                                                    {dName.slice(0, 3)}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    <p className="text-[8px] text-slate-400 font-medium mt-1">
+                                        Current Active Off Days: <strong className="text-purple-700">{editOffDays.join(", ")}</strong>. Attendance and payable days recalculate automatically based on this schedule.
+                                    </p>
+                                </div>
+
+                                <div className="flex justify-end gap-2 pt-2">
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        onClick={() => setEditingEmpWeeklyOff(null)}
+                                        className="text-[9px] font-black uppercase text-slate-500 rounded-xl"
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        onClick={handleSaveWeeklyOffSchedule}
+                                        disabled={weeklyOffSaving}
+                                        className="bg-purple-600 hover:bg-purple-700 text-white font-black text-[9px] uppercase tracking-wider rounded-xl px-5 shadow-sm"
+                                    >
+                                        {weeklyOffSaving ? "Saving..." : "Save Schedule"}
+                                    </Button>
+                                </div>
+                            </div>
+                        ) : (
+                            /* List of employees */
+                            <div className="space-y-3">
+                                <div className="relative">
+                                    <Search className="h-4 w-4 absolute left-3 top-3 text-slate-400" />
+                                    <Input
+                                        placeholder="Search employee by name or ID..."
+                                        value={weeklyOffEmpSearch}
+                                        onChange={(e) => setWeeklyOffEmpSearch(e.target.value)}
+                                        className="h-10 pl-9 rounded-xl bg-slate-50 border-none font-bold text-xs"
+                                    />
+                                </div>
+
+                                <div className="border border-slate-100 rounded-2xl overflow-hidden divide-y divide-slate-100 max-h-[360px] overflow-y-auto">
+                                    {monthlyRows
+                                        .filter(emp => !weeklyOffEmpSearch || emp.name.toLowerCase().includes(weeklyOffEmpSearch.toLowerCase()) || (emp.id && emp.id.toLowerCase().includes(weeklyOffEmpSearch.toLowerCase())))
+                                        .map((emp) => {
+                                            const currentOffs = Array.isArray(emp.weekly_off_days) ? emp.weekly_off_days.join(", ") : "Sunday";
+                                            return (
+                                                <div key={emp.employee_id || emp.id} className="p-3.5 flex items-center justify-between hover:bg-slate-50/80 transition-colors">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="h-8 w-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-black italic text-xs">
+                                                            {emp.name.charAt(0)}
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-xs font-black text-slate-900 block leading-tight">{emp.name}</span>
+                                                            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{emp.id} • {emp.department}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="text-right">
+                                                            <span className="text-[8px] font-bold text-slate-400 uppercase block">Weekly Off</span>
+                                                            <Badge className={cn("text-[8px] font-black uppercase px-2 py-0.5", emp.rotational_weekly_off ? "bg-purple-100 text-purple-900 border border-purple-200" : "bg-slate-100 text-slate-700")}>
+                                                                {currentOffs} {emp.rotational_weekly_off ? "(Rotational)" : "(Fixed)"}
+                                                            </Badge>
+                                                        </div>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => openWeeklyOffEdit(emp)}
+                                                            className="h-8 px-3 rounded-lg border-purple-200 hover:bg-purple-50 text-purple-900 font-black text-[9px] uppercase tracking-wider"
+                                                        >
+                                                            Configure
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-[9px] text-slate-400 font-bold uppercase tracking-widest">
+                        <span>Configured schedule applies immediately to monthly attendance grid & payroll</span>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setIsWeeklyOffModalOpen(false)}
+                            className="h-8 rounded-xl font-black text-[9px] uppercase tracking-wider"
+                        >
+                            Close
+                        </Button>
                     </div>
                 </DialogContent>
             </Dialog>
