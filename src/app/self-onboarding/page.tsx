@@ -27,6 +27,8 @@ import {
     Sparkles,
     Info,
     ExternalLink,
+    Landmark,
+    BadgeHelp,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -131,29 +133,29 @@ function CandidateOnboardingContent() {
         aadhaar: "", // Aadhaar 12-digit number (*)
         pan: "", // PAN Card Number (NOT mandatory under Req 2.3 A)
 
-        // Section B: Employment Information
-        working_location: "", // Working Location (renamed from Office Location)
-        designation: "", // Designation (renamed from Job Role; separate job title removed)
+        // Section B: Employment Information (Allocated by Company)
+        working_location: "", // Working Location (allocated by HR)
+        designation: "", // Designation (allocated by HR)
         shift_start_time: "09:30", // Shift Start Time
         shift_end_time: "18:30", // Shift End Time
-        is_rotational_shift: false, // Rotational Shift option (NEW Req 2.3 B)
+        is_rotational_shift: false, // Rotational Shift Acknowledgment (Req 2.3 B)
 
-        // Section C: Salary Information - Section 1: Salary & Bank Details
-        fixed_gross: "", // Monthly CTC (₹)
+        // Section C: Bank Details (Candidate's Salary Credit Account)
+        account_holder_name: "", // Account Holder Name (*)
         bank_name: "", // Bank Name (*)
         bank_account_number: "", // Bank Account Number (*)
         confirm_account_number: "", // Confirm Account Number (*)
         ifsc_code: "", // IFSC Code (*)
         payment_mode: "Bank Transfer", // Payment Mode
 
-        // Section C: Salary Information - Section 2: Statutory Information
-        pf_applicable: true, // PF applicability
-        pf_ceiling: true, // PF ceiling limit (₹15,000 cap)
-        pf_employment_date: "", // PF Employment Date
-        pf_number: "", // PF Number
-        uan: "", // UAN Number
-        esic_applicable: false, // ESIC applicability
-        esic_number: "", // ESIC Registration / Configuration (replaces LIC field)
+        // Section C: Statutory Compliance & Declarations (Candidate Declarations)
+        has_existing_pf: false, // Existing EPFO member?
+        uan: "", // 12-digit UAN if previously allocated
+        prev_pf_number: "", // Previous PF Member ID (optional)
+        prev_exit_date: "", // Date of Exit from previous organization (optional)
+
+        has_existing_esic: false, // Existing ESIC IP?
+        esic_number: "", // 10-digit / 17-digit ESIC IP number
     });
 
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -183,12 +185,12 @@ function CandidateOnboardingContent() {
                 // Auto-fill available details from the invitation
                 setFormData((prev) => ({
                     ...prev,
-                    name: inv.candidate_name || "",
-                    phone: inv.phone || "",
-                    working_location: inv.office?.name || (inv.office?.address ? `${inv.office.name} - ${inv.office.address}` : "Head Office"),
+                    name: inv.candidate_name || prev.name,
+                    account_holder_name: inv.candidate_name || prev.name,
+                    phone: inv.phone || prev.phone,
+                    working_location: inv.office?.name || (inv.office?.address ? `${inv.office.name} - ${inv.office.address}` : "Indore Logistics Hub"),
                     designation: inv.designation || "Executive",
-                    fixed_gross: inv.fixed_gross ? String(inv.fixed_gross) : "",
-                    doj: new Date().toISOString().split("T")[0],
+                    doj: inv.date_of_joining || new Date().toISOString().split("T")[0],
                 }));
             } catch (err: any) {
                 setTokenError(err.message || "Invalid or expired onboarding invitation.");
@@ -259,7 +261,6 @@ function CandidateOnboardingContent() {
         const errors: Record<string, string> = {};
 
         // ── STEP 0: Personal Information (Page A) ──
-        // All fields marked mandatory EXCEPT PAN Number
         if (step === 0) {
             if (!formData.name.trim()) errors.name = "Full name as per Aadhaar is required";
             if (!formData.dob) errors.dob = "Date of birth is required";
@@ -297,23 +298,21 @@ function CandidateOnboardingContent() {
 
         // ── STEP 1: Employment Information (Page B) ──
         if (step === 1) {
+            if (!formData.doj) {
+                errors.doj = "Date of joining confirmation is required";
+            }
             if (!formData.working_location.trim()) {
                 errors.working_location = "Working location is required";
             }
             if (!formData.designation.trim()) {
                 errors.designation = "Designation is required";
             }
-            if (!formData.shift_start_time) {
-                errors.shift_start_time = "Shift start time is required";
-            }
-            if (!formData.shift_end_time) {
-                errors.shift_end_time = "Shift end time is required";
-            }
         }
 
-        // ── STEP 2: Salary Information (Page C) ──
+        // ── STEP 2: Bank Details & Statutory Declarations (Page C) ──
         if (step === 2) {
-            // Section 1: Salary & Bank Details
+            // Section 1: Bank Details
+            if (!formData.account_holder_name.trim()) errors.account_holder_name = "Account holder name as per bank record is required";
             if (!formData.bank_name.trim()) errors.bank_name = "Bank name is required";
             if (!formData.bank_account_number.trim()) errors.bank_account_number = "Bank account number is required";
             if (formData.bank_account_number !== formData.confirm_account_number) {
@@ -323,13 +322,17 @@ function CandidateOnboardingContent() {
             if (!cleanIfsc || !IFSC_RE.test(cleanIfsc)) {
                 errors.ifsc_code = "Valid 11-character IFSC code is required (e.g. HDFC0001234)";
             }
-            if (!formData.payment_mode) {
-                errors.payment_mode = "Payment mode is required";
-            }
 
-            // Section 2: Statutory Information
-            if (formData.pf_applicable && formData.uan.trim() && !/^\d{12}$/.test(formData.uan.trim())) {
-                errors.uan = "UAN should be a 12-digit number";
+            // Section 2: Statutory EPFO & ESIC Declarations
+            if (formData.has_existing_pf) {
+                if (!formData.uan.trim() || !/^\d{12}$/.test(formData.uan.trim())) {
+                    errors.uan = "Valid 12-digit Universal Account Number (UAN) is required for existing PF members";
+                }
+            }
+            if (formData.has_existing_esic) {
+                if (!formData.esic_number.trim() || formData.esic_number.trim().length < 8) {
+                    errors.esic_number = "Valid ESIC Insurance Number (IP) is required for existing insured members";
+                }
             }
         }
 
@@ -405,20 +408,24 @@ function CandidateOnboardingContent() {
                 is_rotational_shift: Boolean(formData.is_rotational_shift),
 
                 // Salary & Bank Details
-                fixed_gross: formData.fixed_gross ? Number(formData.fixed_gross) : (invitation?.fixed_gross || 0),
+                fixed_gross: Number(invitation?.fixed_gross) || 0,
+                account_holder_name: formData.account_holder_name.trim() || formData.name.trim(),
                 bank_name: formData.bank_name.trim(),
                 bank_account_number: formData.bank_account_number.trim(),
                 ifsc_code: formData.ifsc_code.trim().toUpperCase(),
-                payment_mode: formData.payment_mode,
+                payment_mode: "Bank Transfer",
 
-                // Statutory Information
-                pf_applicable: Boolean(formData.pf_applicable),
-                pf_ceiling: Boolean(formData.pf_ceiling),
-                pf_employment_date: formData.pf_employment_date || null,
-                pf_number: formData.pf_number.trim().toUpperCase() || null,
-                uan: formData.uan.trim() || null,
-                esic_applicable: Boolean(formData.esic_applicable),
-                esic_number: formData.esic_number.trim().toUpperCase() || null,
+                // Statutory Information (Candidate Declarations)
+                has_existing_pf: Boolean(formData.has_existing_pf),
+                pf_applicable: true,
+                pf_ceiling: true,
+                pf_employment_date: formData.has_existing_pf ? (formData.prev_exit_date || null) : null,
+                pf_number: formData.has_existing_pf ? (formData.prev_pf_number.trim().toUpperCase() || null) : null,
+                uan: formData.has_existing_pf ? formData.uan.trim() : null,
+
+                has_existing_esic: Boolean(formData.has_existing_esic),
+                esic_applicable: Boolean(formData.has_existing_esic),
+                esic_number: formData.has_existing_esic ? formData.esic_number.trim().toUpperCase() : null,
 
                 // Uploaded Documents
                 uploaded_docs: docList,
@@ -438,7 +445,7 @@ function CandidateOnboardingContent() {
             setSubmittedSuccess(true);
         } catch (err: any) {
             console.error("Submission failed:", err);
-            alert(err.message || "Failed to submit onboarding details. Please try again.");
+            alert(err.message || "An unexpected error occurred during submission. Please try again.");
         } finally {
             setSubmitting(false);
         }
@@ -446,7 +453,7 @@ function CandidateOnboardingContent() {
 
     if (loading) {
         return (
-            <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
+            <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4">
                 <div className="relative">
                     <div className="h-16 w-16 rounded-3xl bg-slate-900 text-white flex items-center justify-center font-black text-2xl shadow-xl animate-pulse">
                         A
@@ -496,7 +503,7 @@ function CandidateOnboardingContent() {
                         Welcome Aboard, {formData.name}!
                     </h2>
                     <p className="text-xs text-slate-500 leading-relaxed mb-6 max-w-md mx-auto">
-                        Your complete onboarding profile, statutory registrations, and verification documents have been securely submitted to our Human Resources department.
+                        Your complete onboarding profile, bank credentials, statutory declarations, and verification documents have been securely submitted to our Human Resources department.
                     </p>
 
                     <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 text-left space-y-2.5 text-xs mb-6">
@@ -515,6 +522,12 @@ function CandidateOnboardingContent() {
                         <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
                             <span className="text-slate-400 font-bold uppercase text-[10px]">Working Location</span>
                             <span className="font-bold text-slate-800">{formData.working_location}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
+                            <span className="text-slate-400 font-bold uppercase text-[10px]">Salary Bank A/C</span>
+                            <span className="font-mono font-bold text-slate-800">
+                                {formData.bank_name} (••••{formData.bank_account_number.slice(-4)})
+                            </span>
                         </div>
                         <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
                             <span className="text-slate-400 font-bold uppercase text-[10px]">Documents Uploaded</span>
@@ -544,106 +557,46 @@ function CandidateOnboardingContent() {
     }
 
     const steps = [
-        { label: "Personal Information", desc: "Aadhaar, contacts & personal data" },
-        { label: "Employment Information", desc: "Designation, location & shift" },
-        { label: "Salary & Statutory", desc: "Bank details & statutory compliance" },
-        { label: "Document Uploads", desc: "8 verification documents" },
-        { label: "Review & Submit", desc: "Final verification & declaration" },
+        { label: "Personal Info", desc: "Aadhaar, contacts & personal data" },
+        { label: "Employment Info", desc: "Designation, location & shift" },
+        { label: "Bank & Statutory", desc: "Salary account & statutory declarations" },
+        { label: "Documents", desc: "8 verification documents" },
+        { label: "Review & Submit", desc: "Final verification" },
     ];
 
     return (
-        <div className="min-h-screen bg-slate-100 py-10 px-4 sm:px-6">
-            <input
-                type="file"
-                ref={fileInputRef}
-                onChange={onFilePicked}
-                className="hidden"
-                accept=".pdf,.png,.jpg,.jpeg"
-            />
-
-            {/* Document Preview Modal */}
-            {previewDocModal && (
-                <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-                    <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
-                        <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-                            <div>
-                                <h3 className="font-black text-slate-900 text-sm">{previewDocModal.title}</h3>
-                                <p className="text-xs text-slate-400 font-mono truncate max-w-sm">{previewDocModal.fileName}</p>
-                            </div>
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => setPreviewDocModal(null)}
-                                className="h-8 w-8 p-0 rounded-full"
-                            >
-                                <X className="h-5 w-5" />
-                            </Button>
-                        </div>
-                        <div className="flex-1 overflow-auto bg-slate-50 rounded-2xl p-3 flex items-center justify-center min-h-[300px]">
-                            {previewDocModal.fileType.startsWith("image/") ? (
-                                <img
-                                    src={previewDocModal.dataUrl}
-                                    alt={previewDocModal.title}
-                                    className="max-h-[60vh] max-w-full rounded-xl object-contain shadow-sm"
-                                />
-                            ) : (
-                                <iframe
-                                    src={previewDocModal.dataUrl}
-                                    className="w-full h-[60vh] rounded-xl border border-slate-200"
-                                    title={previewDocModal.title}
-                                />
-                            )}
-                        </div>
-                        <div className="flex justify-end pt-2">
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => setPreviewDocModal(null)}
-                                className="h-9 rounded-xl text-xs font-bold"
-                            >
-                                Close Preview
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
+        <div className="min-h-screen bg-gradient-to-b from-slate-100 to-slate-50 py-8 px-4 sm:px-6">
             <div className="max-w-3xl mx-auto space-y-6">
-                {/* Brand Banner */}
-                <div className="bg-white rounded-3xl p-6 sm:p-7 shadow-sm border border-slate-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div className="flex items-center gap-3.5">
-                        <div className="h-12 w-12 rounded-2xl bg-slate-900 text-[#D9F99D] flex items-center justify-center font-black text-xl shadow-md">
+                {/* Brand Header */}
+                <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
+                    <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black text-lg shadow-md">
                             A
                         </div>
                         <div>
-                            <div className="flex items-center gap-2">
-                                <h1 className="text-lg font-black text-slate-900 tracking-tight">Employee Self-Onboarding</h1>
-                                <Badge className="bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-bold">
-                                    Confidential
-                                </Badge>
-                            </div>
-                            <p className="text-xs text-slate-500 font-medium">
-                                Please review and complete your employee registration details.
+                            <h1 className="text-lg font-black text-slate-900 tracking-tight">
+                                {invitation?.company?.name || "Apaar Logistics & Cold Supply Chain Pvt Ltd"}
+                            </h1>
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                                Official Employee Self-Onboarding Portal
                             </p>
                         </div>
                     </div>
-                    <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Legal Entity</span>
-                        <span className="text-xs font-black text-slate-800">
-                            {invitation?.company?.name || "Apaar Logistics & Cold Supply Chain"}
-                        </span>
-                    </div>
+                    <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold uppercase px-2.5 py-1">
+                        Secure Session
+                    </Badge>
                 </div>
 
-                {/* Step Indicator */}
-                <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/70">
-                    <div className="grid grid-cols-5 gap-2">
+                {/* Stepper Header */}
+                <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80">
+                    <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
                         {steps.map((step, idx) => {
-                            const isCurrent = idx === currentStep;
-                            const isDone = idx < currentStep;
+                            const isDone = currentStep > idx;
+                            const isCurrent = currentStep === idx;
+
                             return (
                                 <button
-                                    key={step.label}
+                                    key={idx}
                                     type="button"
                                     onClick={() => {
                                         if (isDone) setCurrentStep(idx);
@@ -679,9 +632,9 @@ function CandidateOnboardingContent() {
 
                 {/* Form Body Card */}
                 <Card className="rounded-3xl border-none shadow-xl bg-white p-6 sm:p-8">
-                    {/* ═════════════════════════════════════════════════════════ */}
+                    {/* ════════════════════════════════════════════════════════ */}
                     {/* STEP 0 (PAGE A): PERSONAL INFORMATION */}
-                    {/* ═════════════════════════════════════════════════════════ */}
+                    {/* ════════════════════════════════════════════════════════ */}
                     {currentStep === 0 && (
                         <div className="space-y-6">
                             <div className="border-b border-slate-100 pb-4">
@@ -708,9 +661,14 @@ function CandidateOnboardingContent() {
                                     </Label>
                                     <Input
                                         value={formData.name}
-                                        onChange={(e) => updateField("name", e.target.value)}
+                                        onChange={(e) => {
+                                            updateField("name", e.target.value);
+                                            if (!formData.account_holder_name || formData.account_holder_name === formData.name) {
+                                                updateField("account_holder_name", e.target.value);
+                                            }
+                                        }}
                                         className="h-11 rounded-xl bg-slate-50 mt-1 font-bold text-xs"
-                                        placeholder="Full legal name exactly as shown on your Aadhaar card"
+                                        placeholder="Full legal name exactly as printed on your Aadhaar Card"
                                     />
                                     {fieldErrors.name && <p className="text-xs text-rose-500 mt-1">{fieldErrors.name}</p>}
                                 </div>
@@ -804,33 +762,40 @@ function CandidateOnboardingContent() {
                                         <Input
                                             value={formData.phone}
                                             onChange={(e) => updateField("phone", e.target.value)}
-                                            className="h-11 rounded-xl bg-slate-50 mt-1 font-bold text-xs"
-                                            placeholder="10-digit primary mobile number"
+                                            className="h-11 rounded-xl bg-slate-50 mt-1 font-mono font-bold text-xs"
+                                            placeholder="10-digit mobile number"
+                                            maxLength={10}
                                         />
                                         {fieldErrors.phone && <p className="text-xs text-rose-500 mt-1">{fieldErrors.phone}</p>}
                                     </div>
 
                                     <div>
-                                        <Label className="text-xs font-bold text-slate-700">
-                                            Registered Email Address (Read-only)
-                                        </Label>
+                                        <div className="flex items-center justify-between">
+                                            <Label className="text-xs font-bold text-slate-700">
+                                                Registered Email Address
+                                            </Label>
+                                            <Badge variant="outline" className="text-[9px] text-emerald-600 border-emerald-200 bg-emerald-50">
+                                                Verified
+                                            </Badge>
+                                        </div>
                                         <Input
-                                            value={invitation?.email || ""}
                                             disabled
-                                            className="h-11 rounded-xl bg-slate-100 text-slate-500 mt-1 font-bold text-xs"
+                                            value={invitation?.email || ""}
+                                            className="h-11 rounded-xl bg-slate-100 border-slate-200 mt-1 font-bold text-xs text-slate-500 cursor-not-allowed"
                                         />
                                     </div>
                                 </div>
 
-                                {/* 5. Emergency Contact details */}
-                                <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/80 space-y-3">
-                                    <span className="text-[11px] font-black uppercase tracking-wider text-amber-800 flex items-center gap-1.5">
-                                        <Users className="h-3.5 w-3.5 text-amber-600" /> Emergency Contact Details
+                                {/* 5. Emergency Contact Details */}
+                                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/70 space-y-3">
+                                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+                                        <Phone className="h-3.5 w-3.5 text-indigo-600" /> Emergency Contact Particulars
                                     </span>
+
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                         <div>
                                             <Label className="text-[11px] font-bold text-slate-700">
-                                                Emergency Contact Name <span className="text-rose-500">*</span>
+                                                Contact Person Name <span className="text-rose-500">*</span>
                                             </Label>
                                             <Input
                                                 value={formData.emergency_contact_name}
@@ -844,13 +809,14 @@ function CandidateOnboardingContent() {
                                         </div>
                                         <div>
                                             <Label className="text-[11px] font-bold text-slate-700">
-                                                Emergency Contact Number <span className="text-rose-500">*</span>
+                                                Emergency Phone <span className="text-rose-500">*</span>
                                             </Label>
                                             <Input
                                                 value={formData.emergency_contact_phone}
                                                 onChange={(e) => updateField("emergency_contact_phone", e.target.value)}
                                                 className="h-10 rounded-xl bg-white mt-1 font-bold text-xs"
                                                 placeholder="10-digit emergency number"
+                                                maxLength={10}
                                             />
                                             {fieldErrors.emergency_contact_phone && (
                                                 <p className="text-[10px] text-rose-500 mt-1">{fieldErrors.emergency_contact_phone}</p>
@@ -895,7 +861,7 @@ function CandidateOnboardingContent() {
                                         </Label>
                                         <Input
                                             value={formData.aadhaar}
-                                            onChange={(e) => updateField("aadhaar", e.target.value)}
+                                            onChange={(e) => updateField("aadhaar", e.target.value.replace(/\D/g, ""))}
                                             className="h-11 rounded-xl bg-slate-50 mt-1 font-mono font-bold text-xs"
                                             placeholder="12-digit UIDAI number"
                                             maxLength={12}
@@ -916,7 +882,7 @@ function CandidateOnboardingContent() {
                                             value={formData.pan}
                                             onChange={(e) => updateField("pan", e.target.value.toUpperCase())}
                                             className="h-11 rounded-xl bg-slate-50 mt-1 font-mono uppercase font-bold text-xs"
-                                            placeholder="ABCDE1234F (Optional)"
+                                            placeholder="e.g. ABCDE1234F"
                                             maxLength={10}
                                         />
                                         {fieldErrors.pan && <p className="text-xs text-rose-500 mt-1">{fieldErrors.pan}</p>}
@@ -926,9 +892,9 @@ function CandidateOnboardingContent() {
                         </div>
                     )}
 
-                    {/* ═════════════════════════════════════════════════════════ */}
-                    {/* STEP 1 (PAGE B): EMPLOYMENT INFORMATION */}
-                    {/* ═════════════════════════════════════════════════════════ */}
+                    {/* ════════════════════════════════════════════════════════ */}
+                    {/* STEP 1 (PAGE B): EMPLOYMENT INFORMATION (CONFIRMED OFFER) */}
+                    {/* ════════════════════════════════════════════════════════ */}
                     {currentStep === 1 && (
                         <div className="space-y-6">
                             <div className="border-b border-slate-100 pb-4">
@@ -941,58 +907,87 @@ function CandidateOnboardingContent() {
                                             Page 2: Employment Information
                                         </h2>
                                         <p className="text-xs text-slate-500">
-                                            Role allocation, working location, and daily shift operational schedule.
+                                            Confirmed offer details, allocated office branch, and daily shift operational schedule.
                                         </p>
                                     </div>
                                 </div>
                             </div>
 
                             <div className="space-y-4">
-                                {/* Working Location & Designation */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div>
-                                        <Label className="text-xs font-bold text-slate-700">
-                                            Working Location <span className="text-rose-500">*</span>
-                                        </Label>
-                                        <Input
-                                            value={formData.working_location}
-                                            onChange={(e) => updateField("working_location", e.target.value)}
-                                            className="h-11 rounded-xl bg-slate-50 mt-1 font-bold text-xs"
-                                            placeholder="e.g. Mumbai Logistics Hub"
-                                        />
-                                        {fieldErrors.working_location && (
-                                            <p className="text-xs text-rose-500 mt-1">{fieldErrors.working_location}</p>
-                                        )}
+                                {/* Offer Allocation Card (Company Assigned - Read Only) */}
+                                <div className="p-5 rounded-2xl bg-indigo-50/50 border border-indigo-100 space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[11px] font-black uppercase tracking-wider text-indigo-900 flex items-center gap-1.5">
+                                            <Building2 className="h-4 w-4 text-indigo-600" /> Allocated Role & Working Location
+                                        </span>
+                                        <Badge className="bg-indigo-600 text-white font-bold text-[9px] uppercase tracking-wider px-2 py-0.5">
+                                            Offer Confirmed
+                                        </Badge>
                                     </div>
 
-                                    <div>
-                                        <Label className="text-xs font-bold text-slate-700">
-                                            Designation <span className="text-rose-500">*</span>
-                                        </Label>
-                                        <Input
-                                            value={formData.designation}
-                                            onChange={(e) => updateField("designation", e.target.value)}
-                                            className="h-11 rounded-xl bg-slate-50 mt-1 font-bold text-xs"
-                                            placeholder="e.g. Senior Supply Chain Executive"
-                                        />
-                                        {fieldErrors.designation && (
-                                            <p className="text-xs text-rose-500 mt-1">{fieldErrors.designation}</p>
-                                        )}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                                        <div className="bg-white p-3.5 rounded-xl border border-indigo-100/80 shadow-xs">
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
+                                                Designation (Job Role)
+                                            </span>
+                                            <div className="flex items-center gap-2">
+                                                <Briefcase className="h-4 w-4 text-indigo-500" />
+                                                <span className="font-black text-sm text-slate-900">
+                                                    {formData.designation || "Executive"}
+                                                </span>
+                                            </div>
+                                            <p className="text-[10px] text-slate-400 mt-1">
+                                                As finalized in your official employment offer.
+                                            </p>
+                                        </div>
+
+                                        <div className="bg-white p-3.5 rounded-xl border border-indigo-100/80 shadow-xs">
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
+                                                Working Location (Office / Hub)
+                                            </span>
+                                            <div className="flex items-center gap-2">
+                                                <MapPin className="h-4 w-4 text-emerald-600" />
+                                                <span className="font-black text-sm text-slate-900">
+                                                    {formData.working_location || "Indore Logistics Hub"}
+                                                </span>
+                                            </div>
+                                            <p className="text-[10px] text-slate-400 mt-1">
+                                                Primary reporting branch and operational center.
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
 
-                                {/* Shift Timings & Rotational Shift Option */}
+                                {/* Confirmed Date of Joining */}
+                                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
+                                    <Label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                                        <span>Confirmed / Planned Date of Joining <span className="text-rose-500">*</span></span>
+                                        <span className="text-[10px] text-slate-400 font-normal">Please confirm your reporting date</span>
+                                    </Label>
+                                    <Input
+                                        type="date"
+                                        value={formData.doj}
+                                        onChange={(e) => updateField("doj", e.target.value)}
+                                        className="h-11 rounded-xl bg-white mt-1.5 font-bold text-xs"
+                                    />
+                                    {fieldErrors.doj && <p className="text-xs text-rose-500 mt-1">{fieldErrors.doj}</p>}
+                                </div>
+
+                                {/* Shift Timings & Rotational Shift Option (Req 2.3 B) */}
                                 <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-4">
                                     <div className="flex items-center justify-between">
                                         <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                                             <Clock className="h-3.5 w-3.5 text-indigo-600" /> Operational Shift Schedule
                                         </span>
+                                        <Badge variant="outline" className="text-[9px] text-slate-500 border-slate-300 bg-white font-mono">
+                                            Standard Shift
+                                        </Badge>
                                     </div>
 
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                         <div>
                                             <Label className="text-xs font-bold text-slate-700">
-                                                Shift Start Time <span className="text-rose-500">*</span>
+                                                Standard Shift Start Time
                                             </Label>
                                             <Input
                                                 type="time"
@@ -1000,14 +995,11 @@ function CandidateOnboardingContent() {
                                                 onChange={(e) => updateField("shift_start_time", e.target.value)}
                                                 className="h-11 rounded-xl bg-white mt-1 font-mono font-bold text-xs"
                                             />
-                                            {fieldErrors.shift_start_time && (
-                                                <p className="text-xs text-rose-500 mt-1">{fieldErrors.shift_start_time}</p>
-                                            )}
                                         </div>
 
                                         <div>
                                             <Label className="text-xs font-bold text-slate-700">
-                                                Shift End Time <span className="text-rose-500">*</span>
+                                                Standard Shift End Time
                                             </Label>
                                             <Input
                                                 type="time"
@@ -1015,29 +1007,25 @@ function CandidateOnboardingContent() {
                                                 onChange={(e) => updateField("shift_end_time", e.target.value)}
                                                 className="h-11 rounded-xl bg-white mt-1 font-mono font-bold text-xs"
                                             />
-                                            {fieldErrors.shift_end_time && (
-                                                <p className="text-xs text-rose-500 mt-1">{fieldErrors.shift_end_time}</p>
-                                            )}
                                         </div>
                                     </div>
 
-                                    {/* Rotational Shift Checkbox / Option (Req 2.3 B) */}
-                                    <div className="pt-2 border-t border-slate-200/60">
-                                        <label className="flex items-start gap-3 p-3 rounded-xl bg-white border border-slate-200 cursor-pointer hover:border-indigo-300 transition-all">
-                                            <input
-                                                type="checkbox"
-                                                checked={formData.is_rotational_shift}
-                                                onChange={(e) => updateField("is_rotational_shift", e.target.checked)}
-                                                className="mt-0.5 h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500"
-                                            />
-                                            <div className="space-y-0.5">
-                                                <span className="text-xs font-black text-slate-900 block">
-                                                    Rotational Shift
-                                                </span>
-                                                <p className="text-[11px] text-slate-500 leading-relaxed">
-                                                    Check this option if your role operates on rotational shifts (e.g. morning, evening, night roster).
-                                                </p>
-                                            </div>
+                                    {/* Rotational Shift Option (Req 2.3 B) */}
+                                    <div className="p-3.5 rounded-xl bg-white border border-slate-200/90 flex items-start gap-3 mt-2">
+                                        <input
+                                            type="checkbox"
+                                            id="is_rotational_shift"
+                                            checked={formData.is_rotational_shift}
+                                            onChange={(e) => updateField("is_rotational_shift", e.target.checked)}
+                                            className="h-4 w-4 mt-0.5 rounded text-indigo-600 border-slate-300 focus:ring-indigo-500"
+                                        />
+                                        <label htmlFor="is_rotational_shift" className="cursor-pointer">
+                                            <p className="text-xs font-black text-slate-900">
+                                                Rotational Shift Schedule Acknowledgment (Req 2.3 B)
+                                            </p>
+                                            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                                                I acknowledge and agree that my operational duties may require working on rotational shifts and scheduled weekly offs as assigned by management.
+                                            </p>
                                         </label>
                                     </div>
                                 </div>
@@ -1045,74 +1033,104 @@ function CandidateOnboardingContent() {
                         </div>
                     )}
 
-                    {/* ═════════════════════════════════════════════════════════ */}
-                    {/* STEP 2 (PAGE C): SALARY INFORMATION */}
-                    {/* ═════════════════════════════════════════════════════════ */}
+                    {/* ════════════════════════════════════════════════════════ */}
+                    {/* STEP 2 (PAGE C): BANK DETAILS & STATUTORY DECLARATIONS */}
+                    {/* ════════════════════════════════════════════════════════ */}
                     {currentStep === 2 && (
                         <div className="space-y-6">
                             <div className="border-b border-slate-100 pb-4">
                                 <div className="flex items-center gap-2">
                                     <div className="h-8 w-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
-                                        <CreditCard className="h-4 w-4" />
+                                        <Landmark className="h-4 w-4" />
                                     </div>
                                     <div>
                                         <h2 className="text-base font-black text-slate-900">
-                                            Page 3: Salary Information
+                                            Page 3: Bank Details & Statutory Declarations
                                         </h2>
                                         <p className="text-xs text-slate-500">
-                                            Banking credentials for monthly disbursement & statutory compliance declarations.
+                                            Banking credentials for salary credit and statutory compliance declarations.
                                         </p>
                                     </div>
                                 </div>
                             </div>
 
+                            {/* ── Compensation Overview (Locked / Read-Only Offer Confirmation) ── */}
+                            {Number(invitation?.fixed_gross) > 0 ? (
+                                <div className="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                                    <div className="space-y-0.5">
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 flex items-center gap-1.5">
+                                            <Sparkles className="h-3.5 w-3.5 text-emerald-600" /> Offered Monthly Gross Compensation
+                                        </span>
+                                        <p className="text-2xl font-black text-slate-900">
+                                            ₹{Number(invitation.fixed_gross).toLocaleString("en-IN")}{" "}
+                                            <span className="text-xs font-bold text-slate-500">/ month</span>
+                                        </p>
+                                        <p className="text-[11px] text-slate-600">
+                                            As specified in your approved employment offer. Detailed component breakdown will be itemized in your Appointment Letter.
+                                        </p>
+                                    </div>
+                                    <Badge className="bg-emerald-600 text-white font-bold text-[10px] uppercase tracking-wider px-3 py-1 self-start sm:self-center shrink-0">
+                                        HR Pre-Approved
+                                    </Badge>
+                                </div>
+                            ) : (
+                                <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                                    <div className="space-y-0.5">
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-indigo-900 flex items-center gap-1.5">
+                                            <Info className="h-3.5 w-3.5 text-indigo-600" /> Compensation Structure
+                                        </span>
+                                        <p className="text-base font-black text-slate-900">
+                                            As Authorized in Approved Offer Letter
+                                        </p>
+                                        <p className="text-[11px] text-slate-600">
+                                            Your payroll structure will be finalized by HR upon verification of your previous salary proofs and relieving documents.
+                                        </p>
+                                    </div>
+                                    <Badge className="bg-indigo-600 text-white font-bold text-[10px] uppercase tracking-wider px-3 py-1 self-start sm:self-center shrink-0">
+                                        Pre-Authorized
+                                    </Badge>
+                                </div>
+                            )}
+
                             {/* ── Section 1: Salary & Bank Details ── */}
-                            <div className="space-y-3 p-4 rounded-2xl bg-white border border-slate-200 shadow-xs">
-                                <span className="text-[11px] font-black uppercase tracking-wider text-emerald-700 flex items-center gap-1.5">
-                                    <CreditCard className="h-3.5 w-3.5 text-emerald-600" /> Section 1: Salary & Bank Details
-                                </span>
+                            <div className="space-y-4 p-5 rounded-2xl bg-white border border-slate-200 shadow-xs">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[11px] font-black uppercase tracking-wider text-emerald-800 flex items-center gap-1.5">
+                                        <CreditCard className="h-3.5 w-3.5 text-emerald-600" /> Section 1: Salary Credit Bank Account Details
+                                    </span>
+                                    <Badge variant="outline" className="text-[9px] text-emerald-700 border-emerald-300 bg-emerald-50">
+                                        Direct Bank Transfer (NEFT/RTGS)
+                                    </Badge>
+                                </div>
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <div>
                                         <Label className="text-xs font-bold text-slate-700">
-                                            Monthly CTC (₹)
+                                            Account Holder Name <span className="text-rose-500">*</span>
                                         </Label>
                                         <Input
-                                            type="number"
-                                            value={formData.fixed_gross}
-                                            onChange={(e) => updateField("fixed_gross", e.target.value)}
+                                            value={formData.account_holder_name}
+                                            onChange={(e) => updateField("account_holder_name", e.target.value)}
                                             className="h-11 rounded-xl bg-slate-50 mt-1 font-bold text-xs"
-                                            placeholder="Agreed monthly gross CTC"
+                                            placeholder="Must match name on Bank Passbook / Cheque"
                                         />
+                                        {fieldErrors.account_holder_name && (
+                                            <p className="text-xs text-rose-500 mt-1">{fieldErrors.account_holder_name}</p>
+                                        )}
                                     </div>
 
                                     <div>
                                         <Label className="text-xs font-bold text-slate-700">
-                                            Payment Mode <span className="text-rose-500">*</span>
+                                            Bank Name <span className="text-rose-500">*</span>
                                         </Label>
-                                        <select
-                                            value={formData.payment_mode}
-                                            onChange={(e) => updateField("payment_mode", e.target.value)}
-                                            className="w-full h-11 rounded-xl bg-slate-50 border border-slate-200 px-3 text-xs font-bold text-slate-800 mt-1 outline-none"
-                                        >
-                                            <option value="Bank Transfer">Bank Transfer (NEFT/RTGS)</option>
-                                            <option value="Cheque">Cheque</option>
-                                            <option value="Cash">Cash</option>
-                                        </select>
+                                        <Input
+                                            value={formData.bank_name}
+                                            onChange={(e) => updateField("bank_name", e.target.value)}
+                                            className="h-11 rounded-xl bg-slate-50 mt-1 font-bold text-xs"
+                                            placeholder="e.g. HDFC Bank, ICICI Bank, State Bank of India"
+                                        />
+                                        {fieldErrors.bank_name && <p className="text-xs text-rose-500 mt-1">{fieldErrors.bank_name}</p>}
                                     </div>
-                                </div>
-
-                                <div>
-                                    <Label className="text-xs font-bold text-slate-700">
-                                        Bank Name <span className="text-rose-500">*</span>
-                                    </Label>
-                                    <Input
-                                        value={formData.bank_name}
-                                        onChange={(e) => updateField("bank_name", e.target.value)}
-                                        className="h-11 rounded-xl bg-slate-50 mt-1 font-bold text-xs"
-                                        placeholder="e.g. HDFC Bank, ICICI Bank, State Bank of India"
-                                    />
-                                    {fieldErrors.bank_name && <p className="text-xs text-rose-500 mt-1">{fieldErrors.bank_name}</p>}
                                 </div>
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1122,7 +1140,7 @@ function CandidateOnboardingContent() {
                                         </Label>
                                         <Input
                                             value={formData.bank_account_number}
-                                            onChange={(e) => updateField("bank_account_number", e.target.value)}
+                                            onChange={(e) => updateField("bank_account_number", e.target.value.replace(/\D/g, ""))}
                                             className="h-11 rounded-xl bg-slate-50 mt-1 font-mono font-bold text-xs"
                                             placeholder="Your salary account number"
                                         />
@@ -1137,7 +1155,7 @@ function CandidateOnboardingContent() {
                                         </Label>
                                         <Input
                                             value={formData.confirm_account_number}
-                                            onChange={(e) => updateField("confirm_account_number", e.target.value)}
+                                            onChange={(e) => updateField("confirm_account_number", e.target.value.replace(/\D/g, ""))}
                                             className="h-11 rounded-xl bg-slate-50 mt-1 font-mono font-bold text-xs"
                                             placeholder="Re-enter account number"
                                         />
@@ -1153,126 +1171,219 @@ function CandidateOnboardingContent() {
                                     </Label>
                                     <Input
                                         value={formData.ifsc_code}
-                                        onChange={(e) => updateField("ifsc_code", e.target.value.toUpperCase())}
+                                        onChange={(e) => updateField("ifsc_code", e.target.value.toUpperCase().replace(/\s/g, ""))}
                                         className="h-11 rounded-xl bg-slate-50 mt-1 font-mono uppercase font-bold text-xs"
                                         placeholder="e.g. HDFC0001234 (11 characters)"
                                         maxLength={11}
                                     />
                                     {fieldErrors.ifsc_code && <p className="text-xs text-rose-500 mt-1">{fieldErrors.ifsc_code}</p>}
+                                    <p className="text-[10px] text-slate-400 mt-1">
+                                        Found on your cheque leaf or front page of your bank passbook.
+                                    </p>
                                 </div>
                             </div>
 
-                            {/* ── Section 2: Statutory Information ── */}
-                            <div className="space-y-4 p-4 rounded-2xl bg-white border border-slate-200 shadow-xs">
-                                <span className="text-[11px] font-black uppercase tracking-wider text-blue-700 flex items-center gap-1.5">
-                                    <ShieldCheck className="h-3.5 w-3.5 text-blue-600" /> Section 2: Terms & Conditions / Statutory Information
-                                </span>
+                            {/* ── Section 2: Statutory Information (EPFO & ESIC Declarations) ── */}
+                            <div className="space-y-4 p-5 rounded-2xl bg-white border border-slate-200 shadow-xs">
+                                <div className="flex items-center justify-between pb-1 border-b border-slate-100">
+                                    <span className="text-[11px] font-black uppercase tracking-wider text-blue-700 flex items-center gap-1.5">
+                                        <ShieldCheck className="h-3.5 w-3.5 text-blue-600" /> Section 2: Statutory Compliance & Declarations
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                                        EPFO & ESIC Setup
+                                    </span>
+                                </div>
 
-                                {/* PF Configuration */}
-                                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-xs font-black text-slate-900">Provident Fund (PF) Setup</span>
-                                        <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700">
-                                            <span>PF Applicable</span>
-                                            <input
-                                                type="checkbox"
-                                                checked={formData.pf_applicable}
-                                                onChange={(e) => updateField("pf_applicable", e.target.checked)}
-                                                className="h-4 w-4 rounded text-blue-600"
-                                            />
-                                        </label>
+                                {/* A. Provident Fund (EPFO) / Form 11 Declaration */}
+                                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/90 space-y-3">
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div>
+                                            <span className="text-xs font-black text-slate-900 block">
+                                                Provident Fund (EPFO) Registration Declaration
+                                            </span>
+                                            <span className="text-[11px] text-slate-500">
+                                                Are you already an existing member of Employees&apos; Provident Fund (EPFO)?
+                                            </span>
+                                        </div>
                                     </div>
 
-                                    {formData.pf_applicable && (
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200/60">
-                                            <div>
-                                                <Label className="text-[11px] font-bold text-slate-700">
-                                                    PF Ceiling Limit
-                                                </Label>
-                                                <select
-                                                    value={formData.pf_ceiling ? "yes" : "no"}
-                                                    onChange={(e) => updateField("pf_ceiling", e.target.value === "yes")}
-                                                    className="w-full h-10 rounded-xl bg-white border border-slate-200 px-3 text-xs font-bold text-slate-800 mt-1 outline-none"
-                                                >
-                                                    <option value="yes">Yes (Capped at ₹15,000 ceiling)</option>
-                                                    <option value="no">No (Calculated on Actual Basic)</option>
-                                                </select>
+                                    {/* Choice: Fresher vs Existing */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => updateField("has_existing_pf", false)}
+                                            className={`p-3 rounded-xl border text-left transition-all ${
+                                                !formData.has_existing_pf
+                                                    ? "border-blue-500 bg-blue-50/50 shadow-xs ring-1 ring-blue-500"
+                                                    : "border-slate-200 bg-white hover:bg-slate-50"
+                                            }`}
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <div className={`h-4 w-4 rounded-full border flex items-center justify-center ${!formData.has_existing_pf ? "border-blue-600 bg-blue-600" : "border-slate-300"}`}>
+                                                    {!formData.has_existing_pf && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+                                                </div>
+                                                <span className="text-xs font-bold text-slate-900">No, I am a First-Time Member</span>
+                                            </div>
+                                            <p className="text-[10px] text-slate-500 mt-1 pl-6">
+                                                Fresher or not previously registered with EPFO.
+                                            </p>
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => updateField("has_existing_pf", true)}
+                                            className={`p-3 rounded-xl border text-left transition-all ${
+                                                formData.has_existing_pf
+                                                    ? "border-blue-500 bg-blue-50/50 shadow-xs ring-1 ring-blue-500"
+                                                    : "border-slate-200 bg-white hover:bg-slate-50"
+                                            }`}
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <div className={`h-4 w-4 rounded-full border flex items-center justify-center ${formData.has_existing_pf ? "border-blue-600 bg-blue-600" : "border-slate-300"}`}>
+                                                    {formData.has_existing_pf && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+                                                </div>
+                                                <span className="text-xs font-bold text-slate-900">Yes, I Have an Existing UAN</span>
+                                            </div>
+                                            <p className="text-[10px] text-slate-500 mt-1 pl-6">
+                                                Previously allocated a 12-digit UAN by another employer.
+                                            </p>
+                                        </button>
+                                    </div>
+
+                                    {/* Existing PF details inputs */}
+                                    {formData.has_existing_pf ? (
+                                        <div className="pt-3 border-t border-slate-200 space-y-3 animate-in fade-in duration-200">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                <div>
+                                                    <Label className="text-[11px] font-bold text-slate-700">
+                                                        Universal Account Number (UAN) <span className="text-rose-500">*</span>
+                                                    </Label>
+                                                    <Input
+                                                        value={formData.uan}
+                                                        onChange={(e) => updateField("uan", e.target.value.replace(/\D/g, ""))}
+                                                        className="h-10 rounded-xl bg-white mt-1 font-mono font-bold text-xs"
+                                                        placeholder="12-digit UAN number"
+                                                        maxLength={12}
+                                                    />
+                                                    {fieldErrors.uan && <p className="text-[10px] text-rose-500 mt-1">{fieldErrors.uan}</p>}
+                                                </div>
+
+                                                <div>
+                                                    <Label className="text-[11px] font-bold text-slate-700">
+                                                        Previous PF Member ID
+                                                    </Label>
+                                                    <Input
+                                                        value={formData.prev_pf_number}
+                                                        onChange={(e) => updateField("prev_pf_number", e.target.value.toUpperCase())}
+                                                        className="h-10 rounded-xl bg-white mt-1 font-mono uppercase font-bold text-xs"
+                                                        placeholder="e.g. MH/BAN/0012345/000/0000001"
+                                                    />
+                                                </div>
                                             </div>
 
-                                            <div>
+                                            <div className="sm:w-1/2 pr-0 sm:pr-1.5">
                                                 <Label className="text-[11px] font-bold text-slate-700">
-                                                    PF Employment Date
+                                                    Previous Organization Exit Date
                                                 </Label>
                                                 <Input
                                                     type="date"
-                                                    value={formData.pf_employment_date}
-                                                    onChange={(e) => updateField("pf_employment_date", e.target.value)}
+                                                    value={formData.prev_exit_date}
+                                                    onChange={(e) => updateField("prev_exit_date", e.target.value)}
                                                     className="h-10 rounded-xl bg-white mt-1 font-bold text-xs"
                                                 />
                                             </div>
-
-                                            <div>
-                                                <Label className="text-[11px] font-bold text-slate-700">
-                                                    Existing PF Number (Optional)
-                                                </Label>
-                                                <Input
-                                                    value={formData.pf_number}
-                                                    onChange={(e) => updateField("pf_number", e.target.value.toUpperCase())}
-                                                    className="h-10 rounded-xl bg-white mt-1 font-mono uppercase font-bold text-xs"
-                                                    placeholder="e.g. MH/BAN/0012345/000/0000001"
-                                                />
-                                            </div>
-
-                                            <div>
-                                                <Label className="text-[11px] font-bold text-slate-700">
-                                                    Universal Account Number (UAN)
-                                                </Label>
-                                                <Input
-                                                    value={formData.uan}
-                                                    onChange={(e) => updateField("uan", e.target.value)}
-                                                    className="h-10 rounded-xl bg-white mt-1 font-mono font-bold text-xs"
-                                                    placeholder="12-digit UAN if previously allocated"
-                                                    maxLength={12}
-                                                />
-                                                {fieldErrors.uan && <p className="text-[10px] text-rose-500 mt-1">{fieldErrors.uan}</p>}
-                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="p-3 rounded-xl bg-blue-50/60 border border-blue-100 text-[11px] text-blue-900 leading-relaxed flex items-start gap-2">
+                                            <Info className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+                                            <span>
+                                                <strong>First-Time Member Enrollment:</strong> A fresh Universal Account Number (UAN) and Member ID will be generated by Apaar Logistics upon onboarding registration. Company statutory PF calculations comply with the standard ₹15,000 ceiling.
+                                            </span>
                                         </div>
                                     )}
                                 </div>
 
-                                {/* ESIC Configuration (Replaces incorrectly labelled LIC field) */}
-                                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <div>
+                                {/* B. Employee State Insurance (ESIC) Declaration */}
+                                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/90 space-y-3">
+                                    <div>
+                                        <div className="flex items-center justify-between">
                                             <span className="text-xs font-black text-slate-900 block">
                                                 Employee State Insurance (ESIC) Setup
                                             </span>
-                                            <span className="text-[10px] text-slate-400">
-                                                Replaces legacy statutory life policy field as confirmed.
-                                            </span>
+                                            <Badge variant="outline" className="text-[8px] text-slate-500 font-normal">
+                                                Statutory Health Scheme (Req 2.3 C)
+                                            </Badge>
                                         </div>
-                                        <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700">
-                                            <span>ESIC Applicable</span>
-                                            <input
-                                                type="checkbox"
-                                                checked={formData.esic_applicable}
-                                                onChange={(e) => updateField("esic_applicable", e.target.checked)}
-                                                className="h-4 w-4 rounded text-blue-600"
-                                            />
-                                        </label>
+                                        <span className="text-[11px] text-slate-500">
+                                            Do you have an existing ESIC Insurance Number (IP Number) from previous employment?
+                                        </span>
                                     </div>
 
-                                    {formData.esic_applicable && (
-                                        <div className="pt-2 border-t border-slate-200/60">
+                                    {/* Choice: Existing vs None */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => updateField("has_existing_esic", false)}
+                                            className={`p-3 rounded-xl border text-left transition-all ${
+                                                !formData.has_existing_esic
+                                                    ? "border-emerald-500 bg-emerald-50/50 shadow-xs ring-1 ring-emerald-500"
+                                                    : "border-slate-200 bg-white hover:bg-slate-50"
+                                            }`}
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <div className={`h-4 w-4 rounded-full border flex items-center justify-center ${!formData.has_existing_esic ? "border-emerald-600 bg-emerald-600" : "border-slate-300"}`}>
+                                                    {!formData.has_existing_esic && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+                                                </div>
+                                                <span className="text-xs font-bold text-slate-900">No / First-Time Registrant</span>
+                                            </div>
+                                            <p className="text-[10px] text-slate-500 mt-1 pl-6">
+                                                Never previously registered with ESIC.
+                                            </p>
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => updateField("has_existing_esic", true)}
+                                            className={`p-3 rounded-xl border text-left transition-all ${
+                                                formData.has_existing_esic
+                                                    ? "border-emerald-500 bg-emerald-50/50 shadow-xs ring-1 ring-emerald-500"
+                                                    : "border-slate-200 bg-white hover:bg-slate-50"
+                                            }`}
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <div className={`h-4 w-4 rounded-full border flex items-center justify-center ${formData.has_existing_esic ? "border-emerald-600 bg-emerald-600" : "border-slate-300"}`}>
+                                                    {formData.has_existing_esic && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+                                                </div>
+                                                <span className="text-xs font-bold text-slate-900">Yes, I Have an Existing IP Number</span>
+                                            </div>
+                                            <p className="text-[10px] text-slate-500 mt-1 pl-6">
+                                                Have an active 10 or 17 digit ESIC Insurance Number.
+                                            </p>
+                                        </button>
+                                    </div>
+
+                                    {formData.has_existing_esic ? (
+                                        <div className="pt-2 border-t border-slate-200 animate-in fade-in duration-200">
                                             <Label className="text-[11px] font-bold text-slate-700">
-                                                ESIC Number / IP Insurance Number
+                                                Existing ESIC IP Number <span className="text-rose-500">*</span>
                                             </Label>
                                             <Input
                                                 value={formData.esic_number}
-                                                onChange={(e) => updateField("esic_number", e.target.value)}
+                                                onChange={(e) => updateField("esic_number", e.target.value.replace(/\D/g, ""))}
                                                 className="h-10 rounded-xl bg-white mt-1 font-mono font-bold text-xs"
-                                                placeholder="17-digit ESIC Insured Person (IP) number"
+                                                placeholder="10 or 17 digit ESIC Insurance (IP) Number"
+                                                maxLength={17}
                                             />
+                                            {fieldErrors.esic_number && (
+                                                <p className="text-[10px] text-rose-500 mt-1">{fieldErrors.esic_number}</p>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="p-3 rounded-xl bg-slate-100/70 border border-slate-200 text-[11px] text-slate-600 leading-relaxed flex items-start gap-2">
+                                            <Info className="h-4 w-4 text-slate-500 shrink-0 mt-0.5" />
+                                            <span>
+                                                If your monthly gross salary falls within the statutory eligibility threshold (≤ ₹21,000/month), you will be newly registered and allocated an ESIC IP Number.
+                                            </span>
                                         </div>
                                     )}
                                 </div>
@@ -1280,9 +1391,9 @@ function CandidateOnboardingContent() {
                         </div>
                     )}
 
-                    {/* ═════════════════════════════════════════════════════════ */}
+                    {/* ════════════════════════════════════════════════════════ */}
                     {/* STEP 3 (PAGE D): MANDATORY DOCUMENT UPLOADS */}
-                    {/* ═════════════════════════════════════════════════════════ */}
+                    {/* ════════════════════════════════════════════════════════ */}
                     {currentStep === 3 && (
                         <div className="space-y-6">
                             <div className="border-b border-slate-100 pb-4">
@@ -1405,9 +1516,9 @@ function CandidateOnboardingContent() {
                         </div>
                     )}
 
-                    {/* ═════════════════════════════════════════════════════════ */}
+                    {/* ════════════════════════════════════════════════════════ */}
                     {/* STEP 4 (PAGE E): REVIEW & SUBMISSION */}
-                    {/* ═════════════════════════════════════════════════════════ */}
+                    {/* ════════════════════════════════════════════════════════ */}
                     {currentStep === 4 && (
                         <div className="space-y-6">
                             <div className="border-b border-slate-100 pb-4">
@@ -1500,33 +1611,33 @@ function CandidateOnboardingContent() {
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     <div>
-                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">Working Location</span>
-                                        <span className="font-black text-slate-900">{formData.working_location}</span>
+                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">Company & Location</span>
+                                        <span className="font-bold text-slate-800">
+                                            {invitation?.company?.name || "Apaar Logistics"} • {formData.working_location}
+                                        </span>
                                     </div>
                                     <div>
                                         <span className="text-slate-400 font-bold uppercase text-[9px] block">Designation</span>
                                         <span className="font-black text-slate-900">{formData.designation}</span>
                                     </div>
                                     <div>
-                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">Daily Shift Timings</span>
-                                        <span className="font-bold text-slate-800">
-                                            {formData.shift_start_time} to {formData.shift_end_time}
-                                        </span>
+                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">Shift Timings</span>
+                                        <span className="font-mono text-slate-800">{formData.shift_start_time} to {formData.shift_end_time}</span>
                                     </div>
                                     <div>
                                         <span className="text-slate-400 font-bold uppercase text-[9px] block">Rotational Shift Policy</span>
-                                        <Badge className={`text-[9px] font-bold ${formData.is_rotational_shift ? "bg-amber-100 text-amber-800" : "bg-slate-200 text-slate-700"}`}>
-                                            {formData.is_rotational_shift ? "Yes (Rotational Shift)" : "Standard Shift"}
-                                        </Badge>
+                                        <span className="font-bold text-slate-800">
+                                            {formData.is_rotational_shift ? "Acknowledged (Rotational Offs Applicable)" : "Standard Schedule"}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Section 3: Salary & Statutory Details Preview */}
+                            {/* Section 3: Salary & Bank Details Preview */}
                             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5 text-xs">
                                 <div className="flex items-center justify-between pb-1 border-b border-slate-200/60">
                                     <span className="text-[10px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                                        <CreditCard className="h-3.5 w-3.5 text-emerald-600" /> C. Salary & Statutory Details
+                                        <CreditCard className="h-3.5 w-3.5 text-emerald-600" /> C. Bank & Statutory Declarations
                                     </span>
                                     <Button
                                         type="button"
@@ -1540,42 +1651,47 @@ function CandidateOnboardingContent() {
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     <div>
-                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">Monthly CTC & Mode</span>
-                                        <span className="font-black text-slate-900">
-                                            {formData.fixed_gross ? `₹${Number(formData.fixed_gross).toLocaleString("en-IN")}` : "As per appointment"} • {formData.payment_mode}
+                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">Offered Monthly CTC</span>
+                                        <span className="font-black text-emerald-700 text-sm">
+                                            {Number(invitation?.fixed_gross) > 0 ? `₹${Number(invitation.fixed_gross).toLocaleString("en-IN")} / month` : "As per approved Offer Letter"}
                                         </span>
                                     </div>
                                     <div>
-                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">Bank Name & A/C</span>
+                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">Salary Bank & Mode</span>
                                         <span className="font-bold text-slate-800">
-                                            {formData.bank_name} • A/C: {formData.bank_account_number}
+                                            {formData.bank_name} (Direct Bank Transfer)
                                         </span>
                                     </div>
                                     <div>
-                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">IFSC Code</span>
+                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">Account Holder & Number</span>
+                                        <span className="font-mono font-bold text-slate-800">
+                                            {formData.account_holder_name} • ••••••••{formData.bank_account_number.slice(-4)}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">Bank IFSC Code</span>
                                         <span className="font-mono font-bold text-slate-800">{formData.ifsc_code}</span>
                                     </div>
                                     <div>
-                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">PF & Ceiling</span>
+                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">EPFO / UAN Status</span>
                                         <span className="font-bold text-slate-800">
-                                            {formData.pf_applicable ? `Yes (${formData.pf_ceiling ? "₹15k Ceiling Cap" : "Actual Basic"})` : "Not Applicable"}
-                                            {formData.uan && ` • UAN: ${formData.uan}`}
+                                            {formData.has_existing_pf ? `Existing UAN: ${formData.uan}` : "First-Time Member (Fresh UAN Allocation)"}
                                         </span>
                                     </div>
-                                    <div className="sm:col-span-2">
-                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">ESIC Coverage</span>
+                                    <div>
+                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">ESIC Declaration</span>
                                         <span className="font-bold text-slate-800">
-                                            {formData.esic_applicable ? `Applicable • IP No: ${formData.esic_number || "To be allocated"}` : "Not Applicable"}
+                                            {formData.has_existing_esic ? `Existing IP: ${formData.esic_number}` : "First-Time Registrant (Subject to Wage Slabs)"}
                                         </span>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Section 4: Document Summary Preview */}
+                            {/* Section 4: Attached Documents Summary */}
                             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5 text-xs">
                                 <div className="flex items-center justify-between pb-1 border-b border-slate-200/60">
                                     <span className="text-[10px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                                        <FileText className="h-3.5 w-3.5 text-slate-600" /> D. Attached Verification Documents ({Object.keys(uploadedDocs).length} Files)
+                                        <FileText className="h-3.5 w-3.5 text-emerald-600" /> D. Attached Verification Documents
                                     </span>
                                     <Button
                                         type="button"
@@ -1587,25 +1703,26 @@ function CandidateOnboardingContent() {
                                         Edit
                                     </Button>
                                 </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                                     {DOCUMENT_DEFINITIONS.map((def) => {
-                                        const up = uploadedDocs[def.id];
+                                        const doc = uploadedDocs[def.id];
                                         return (
                                             <div
                                                 key={def.id}
-                                                className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-200 text-[11px]"
+                                                className="p-2 rounded-xl bg-white border border-slate-200/80 flex items-center justify-between gap-2"
                                             >
-                                                <span className="font-bold text-slate-800 truncate pr-2">
-                                                    {def.title.split(". ")[1]}
+                                                <span className="text-[11px] font-bold text-slate-800 truncate">
+                                                    {def.title.split(". ")[1] || def.title}
                                                 </span>
-                                                {up ? (
-                                                    <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-bold shrink-0">
+                                                {doc ? (
+                                                    <Badge className="bg-emerald-100 text-emerald-800 border-none text-[8px] font-bold uppercase">
                                                         Attached
                                                     </Badge>
                                                 ) : (
-                                                    <span className="text-[9px] text-slate-400 italic shrink-0">
-                                                        Not attached
-                                                    </span>
+                                                    <Badge variant="outline" className="text-[8px] text-slate-400 border-slate-200">
+                                                        Not Uploaded
+                                                    </Badge>
                                                 )}
                                             </div>
                                         );
@@ -1613,77 +1730,140 @@ function CandidateOnboardingContent() {
                                 </div>
                             </div>
 
-                            {/* Legal Declaration */}
-                            <label className="flex items-start gap-3 p-4 rounded-2xl bg-amber-50/80 border border-amber-200/90 cursor-pointer text-amber-950 text-xs">
-                                <input
-                                    type="checkbox"
-                                    checked={declarationAccepted}
-                                    onChange={(e) => setDeclarationAccepted(e.target.checked)}
-                                    className="mt-0.5 h-4 w-4 rounded text-amber-600 focus:ring-amber-500"
-                                />
-                                <div className="space-y-1">
-                                    <span className="font-black text-amber-900 block">
-                                        Employee Self-Declaration & Consent
-                                    </span>
-                                    <p className="text-[11px] text-amber-800 leading-relaxed">
-                                        I hereby declare that all particulars, documents, and statements furnished above are true, complete, and authentic to the best of my knowledge and belief. I agree to produce original verification documents upon request by the Company.
+                            {/* Candidate Declaration */}
+                            <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-200/80 space-y-2">
+                                <label className="flex items-start gap-2.5 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={declarationAccepted}
+                                        onChange={(e) => setDeclarationAccepted(e.target.checked)}
+                                        className="h-4 w-4 rounded text-emerald-600 mt-0.5 border-emerald-400 focus:ring-emerald-500"
+                                    />
+                                    <p className="text-[11px] text-emerald-950 font-medium leading-relaxed">
+                                        I hereby solemnly declare that all personal credentials, bank details, statutory declarations, and uploaded documents provided above are genuine, true, and accurate to the best of my knowledge. I understand that any discrepancy discovered during background verification may result in disciplinary action or withdrawal of offer as per company employment policies.
                                     </p>
-                                </div>
-                            </label>
+                                </label>
+                            </div>
                         </div>
                     )}
 
-                    {/* Step Navigation Bar */}
-                    <div className="flex items-center justify-between pt-6 border-t border-slate-100 mt-6">
+                    {/* Step Navigation Actions */}
+                    <div className="flex items-center justify-between pt-6 mt-6 border-t border-slate-100">
                         {currentStep > 0 ? (
                             <Button
                                 type="button"
                                 variant="outline"
                                 onClick={() => setCurrentStep((s) => s - 1)}
-                                className="h-11 rounded-xl text-xs font-bold px-5"
+                                className="h-11 px-5 rounded-2xl font-bold text-xs"
                             >
-                                <ArrowLeft className="h-4 w-4 mr-1" /> Previous Step
+                                <ArrowLeft className="h-4 w-4 mr-1.5" /> Previous Step
                             </Button>
                         ) : (
                             <div />
                         )}
 
-                        {currentStep < 4 ? (
+                        {currentStep < steps.length - 1 ? (
                             <Button
                                 type="button"
                                 onClick={handleNext}
-                                className="bg-slate-900 text-white hover:bg-black font-black uppercase text-[10px] tracking-widest px-8 h-11 rounded-xl shadow-lg flex items-center gap-2"
+                                className="h-11 px-6 rounded-2xl font-black uppercase text-[10px] tracking-widest bg-slate-900 text-white hover:bg-slate-800 shadow-lg shadow-slate-900/10"
                             >
-                                Next Step <ArrowRight className="h-4 w-4" />
+                                Next Step <ArrowRight className="h-4 w-4 ml-1.5" />
                             </Button>
                         ) : (
                             <Button
                                 type="button"
-                                onClick={handleSubmit}
                                 disabled={submitting || !declarationAccepted}
-                                className="bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 font-black uppercase text-[10px] tracking-widest px-8 h-11 rounded-xl shadow-lg flex items-center gap-2"
+                                onClick={handleSubmit}
+                                className="h-11 px-8 rounded-2xl font-black uppercase text-[10px] tracking-widest bg-emerald-600 text-white hover:bg-emerald-700 shadow-xl shadow-emerald-600/20 disabled:opacity-50"
                             >
                                 {submitting ? (
                                     <>
-                                        <Loader2 className="h-4 w-4 animate-spin" /> Submitting Dossier...
+                                        <Loader2 className="h-4 w-4 animate-spin mr-2" /> Submitting Dossier...
                                     </>
                                 ) : (
                                     <>
-                                        <Check className="h-4 w-4 stroke-[3]" /> Submit All Details to HR
+                                        <CheckCircle2 className="h-4 w-4 mr-1.5" /> Submit Onboarding Dossier
                                     </>
                                 )}
                             </Button>
                         )}
                     </div>
                 </Card>
+
+                {/* Secure Footer */}
+                <div className="text-center text-[11px] text-slate-400 font-medium">
+                    Protected by Apaar Logistics 256-Bit SSL Encrypted HRMS Portal. All Rights Reserved.
+                </div>
             </div>
+
+            {/* Document Preview Modal */}
+            {previewDocModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+                    <Card className="max-w-2xl w-full rounded-3xl border-none shadow-2xl p-6 bg-white space-y-4">
+                        <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                            <div>
+                                <h3 className="font-black text-sm text-slate-900">{previewDocModal.title}</h3>
+                                <p className="text-[10px] text-slate-400 font-mono">{previewDocModal.fileName}</p>
+                            </div>
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setPreviewDocModal(null)}
+                                className="h-8 w-8 p-0 rounded-full"
+                            >
+                                <X className="h-4 w-4" />
+                            </Button>
+                        </div>
+
+                        <div className="max-h-[60vh] overflow-auto rounded-2xl bg-slate-50 p-2 flex items-center justify-center border border-slate-200/80">
+                            {previewDocModal.fileType.includes("image") ? (
+                                <img
+                                    src={previewDocModal.dataUrl}
+                                    alt={previewDocModal.title}
+                                    className="max-h-[55vh] object-contain rounded-xl"
+                                />
+                            ) : (
+                                <div className="p-8 text-center space-y-3">
+                                    <FileText className="h-12 w-12 text-slate-400 mx-auto" />
+                                    <p className="text-xs font-bold text-slate-700">PDF Document Attached</p>
+                                    <a
+                                        href={previewDocModal.dataUrl}
+                                        download={previewDocModal.fileName}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-bold"
+                                    >
+                                        <ExternalLink className="h-3.5 w-3.5" /> Download / View External
+                                    </a>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex justify-end pt-2">
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setPreviewDocModal(null)}
+                                className="text-xs font-bold rounded-xl"
+                            >
+                                Close
+                            </Button>
+                        </div>
+                    </Card>
+                </div>
+            )}
         </div>
     );
 }
 
-export default function CandidateOnboardingPage() {
+export default function CandidateSelfOnboardingPage() {
     return (
-        <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+        <Suspense
+            fallback={
+                <div className="min-h-screen flex items-center justify-center bg-slate-50">
+                    <Loader2 className="h-6 w-6 animate-spin text-slate-600" />
+                </div>
+            }
+        >
             <CandidateOnboardingContent />
         </Suspense>
     );
