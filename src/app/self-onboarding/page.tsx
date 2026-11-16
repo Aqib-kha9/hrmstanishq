@@ -256,6 +256,62 @@ function CandidateOnboardingContent() {
         });
     };
 
+    // Fill all fields with realistic dummy data for rapid testing & UAT
+    const fillDummyData = () => {
+        setFormData((prev) => ({
+            ...prev,
+            name: prev.name || "Rahul Sharma",
+            dob: "1998-05-20",
+            doj: prev.doj || "2026-12-01",
+            gender: "male",
+            marital_status: "unmarried",
+            father_or_husband_name: "Omprakash Sharma",
+            phone: prev.phone || "9876543210",
+            emergency_contact_name: "Priya Sharma",
+            emergency_contact_phone: "9876543211",
+            emergency_contact_relation: "Spouse",
+            address: "12/3, MG Road, Vijay Nagar, Indore, MP 452010",
+            aadhaar: "123456789012",
+            pan: "ABCDE1234F",
+            working_location: prev.working_location || "Indore Logistics Hub",
+            designation: prev.designation || "Operations Manager",
+            shift_start_time: "09:30",
+            shift_end_time: "18:30",
+            is_rotational_shift: true,
+            account_holder_name: prev.name || "Rahul Sharma",
+            bank_name: "HDFC Bank",
+            bank_account_number: "50100123456789",
+            confirm_account_number: "50100123456789",
+            ifsc_code: "HDFC0001234",
+            payment_mode: "Bank Transfer",
+            has_existing_pf: true,
+            uan: "101234567890",
+            prev_pf_number: "MH/BAN/0012345/000/0000001",
+            prev_exit_date: "2026-10-31",
+            has_existing_esic: true,
+            esic_number: "3123456789",
+        }));
+
+        setFieldErrors({});
+
+        // Pre-populate mock dummy files for all 8 SOW documents so user can test end-to-end effortlessly
+        const mockSvg = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="100%" height="100%" fill="%23f1f5f9"/><text x="50%" y="50%" font-family="sans-serif" font-size="16" font-weight="bold" fill="%23334155" text-anchor="middle">Mock Verification Document</text></svg>`;
+
+        const dummyDocs: Record<string, { file: File; dataUrl: string }> = {};
+        DOCUMENT_DEFINITIONS.forEach((doc, idx) => {
+            const ext = doc.id === "photo" ? "png" : "pdf";
+            const mime = doc.id === "photo" ? "image/png" : "application/pdf";
+            const mockBlob = new Blob([`Mock verification document content for ${doc.title}`], { type: mime });
+            const mockFile = new File([mockBlob], `${doc.id}_mock_document_${idx + 1}.${ext}`, { type: mime });
+            dummyDocs[doc.id] = {
+                file: mockFile,
+                dataUrl: mockSvg,
+            };
+        });
+        setUploadedDocs(dummyDocs);
+        setDeclarationAccepted(true);
+    };
+
     // Validation per step
     const validateStep = (step: number): boolean => {
         const errors: Record<string, string> = {};
@@ -582,9 +638,19 @@ function CandidateOnboardingContent() {
                             </p>
                         </div>
                     </div>
-                    <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold uppercase px-2.5 py-1">
-                        Secure Session
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={fillDummyData}
+                            className="h-8 px-3 rounded-xl border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 font-bold text-xs shadow-xs"
+                        >
+                            <Sparkles className="h-3.5 w-3.5 mr-1 text-amber-600" /> Fill Dummy
+                        </Button>
+                        <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold uppercase px-2.5 py-1">
+                            Secure Session
+                        </Badge>
+                    </div>
                 </div>
 
                 {/* Stepper Header */}
@@ -637,7 +703,7 @@ function CandidateOnboardingContent() {
                     {/* ════════════════════════════════════════════════════════ */}
                     {currentStep === 0 && (
                         <div className="space-y-6">
-                            <div className="border-b border-slate-100 pb-4">
+                            <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <div className="h-8 w-8 rounded-xl bg-slate-100 text-slate-800 flex items-center justify-center">
                                         <User className="h-4 w-4" />
@@ -651,6 +717,14 @@ function CandidateOnboardingContent() {
                                         </p>
                                     </div>
                                 </div>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={fillDummyData}
+                                    className="h-8 px-3 rounded-xl border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 font-bold text-xs shadow-xs shrink-0"
+                                >
+                                    <Sparkles className="h-3.5 w-3.5 mr-1 text-amber-600" /> Fill Dummy
+                                </Button>
                             </div>
 
                             <div className="space-y-4">
@@ -897,7 +971,7 @@ function CandidateOnboardingContent() {
                     {/* ════════════════════════════════════════════════════════ */}
                     {currentStep === 1 && (
                         <div className="space-y-6">
-                            <div className="border-b border-slate-100 pb-4">
+                            <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <div className="h-8 w-8 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center">
                                         <Briefcase className="h-4 w-4" />
@@ -911,6 +985,14 @@ function CandidateOnboardingContent() {
                                         </p>
                                     </div>
                                 </div>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={fillDummyData}
+                                    className="h-8 px-3 rounded-xl border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 font-bold text-xs shadow-xs shrink-0"
+                                >
+                                    <Sparkles className="h-3.5 w-3.5 mr-1 text-amber-600" /> Fill Dummy
+                                </Button>
                             </div>
 
                             <div className="space-y-4">
@@ -1038,7 +1120,7 @@ function CandidateOnboardingContent() {
                     {/* ════════════════════════════════════════════════════════ */}
                     {currentStep === 2 && (
                         <div className="space-y-6">
-                            <div className="border-b border-slate-100 pb-4">
+                            <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <div className="h-8 w-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
                                         <Landmark className="h-4 w-4" />
@@ -1052,6 +1134,14 @@ function CandidateOnboardingContent() {
                                         </p>
                                     </div>
                                 </div>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={fillDummyData}
+                                    className="h-8 px-3 rounded-xl border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 font-bold text-xs shadow-xs shrink-0"
+                                >
+                                    <Sparkles className="h-3.5 w-3.5 mr-1 text-amber-600" /> Fill Dummy
+                                </Button>
                             </div>
 
                             {/* ── Compensation Overview (Locked / Read-Only Offer Confirmation) ── */}
@@ -1411,9 +1501,19 @@ function CandidateOnboardingContent() {
                                             </p>
                                         </div>
                                     </div>
-                                    <Badge className="bg-slate-900 text-white font-mono text-xs">
-                                        {Object.keys(uploadedDocs).length} / {DOCUMENT_DEFINITIONS.length} Attached
-                                    </Badge>
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={fillDummyData}
+                                            className="h-8 px-3 rounded-xl border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 font-bold text-xs shadow-xs shrink-0"
+                                        >
+                                            <Sparkles className="h-3.5 w-3.5 mr-1 text-amber-600" /> Fill Dummy
+                                        </Button>
+                                        <Badge className="bg-slate-900 text-white font-mono text-xs">
+                                            {Object.keys(uploadedDocs).length} / {DOCUMENT_DEFINITIONS.length} Attached
+                                        </Badge>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1521,7 +1621,7 @@ function CandidateOnboardingContent() {
                     {/* ════════════════════════════════════════════════════════ */}
                     {currentStep === 4 && (
                         <div className="space-y-6">
-                            <div className="border-b border-slate-100 pb-4">
+                            <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <div className="h-8 w-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
                                         <FileCheck className="h-4 w-4" />
@@ -1535,6 +1635,14 @@ function CandidateOnboardingContent() {
                                         </p>
                                     </div>
                                 </div>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={fillDummyData}
+                                    className="h-8 px-3 rounded-xl border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 font-bold text-xs shadow-xs shrink-0"
+                                >
+                                    <Sparkles className="h-3.5 w-3.5 mr-1 text-amber-600" /> Fill Dummy
+                                </Button>
                             </div>
 
                             {/* Section 1: Personal Details Preview */}
