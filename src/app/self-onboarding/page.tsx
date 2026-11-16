@@ -147,14 +147,7 @@ function CandidateOnboardingContent() {
         aadhaar: "", // Aadhaar 12-digit number (*)
         pan: "", // PAN Card Number (NOT mandatory under Req 2.3 A)
 
-        // Section B: Employment Information (Allocated by Company)
-        working_location: "", // Working Location (allocated by HR)
-        designation: "", // Designation (allocated by HR)
-        shift_start_time: "09:30", // Shift Start Time
-        shift_end_time: "18:30", // Shift End Time
-        is_rotational_shift: false, // Rotational Shift Acknowledgment (Req 2.3 B)
-
-        // Section C: Bank Details (Candidate's Salary Credit Account)
+        // Section B: Bank Details (Candidate's Salary Credit Account)
         account_holder_name: "", // Account Holder Name (*)
         bank_name: "", // Bank Name (*)
         bank_account_number: "", // Bank Account Number (*)
@@ -299,11 +292,6 @@ function CandidateOnboardingContent() {
             address: "12/3, MG Road, Vijay Nagar, Indore, MP 452010",
             aadhaar: `12345678${rand}`,
             pan: `ABCDE${rand}${randLetter}`,
-            working_location: prev.working_location || "Indore Logistics Hub",
-            designation: prev.designation || "Operations Manager",
-            shift_start_time: "09:30",
-            shift_end_time: "18:30",
-            is_rotational_shift: true,
             account_holder_name: prev.name || "Rahul Sharma",
             bank_name: "HDFC Bank",
             bank_account_number: "50100123456789",
@@ -342,11 +330,10 @@ function CandidateOnboardingContent() {
     const validateStep = (step: number): boolean => {
         const errors: Record<string, string> = {};
 
-        // ── STEP 0: Personal Information (Page A) ──
+        // ── STEP 0: Personal Information (Page 1) ──
         if (step === 0) {
             if (!formData.name.trim()) errors.name = "Full name as per Aadhaar is required";
             if (!formData.dob) errors.dob = "Date of birth is required";
-            if (!formData.doj) errors.doj = "Date of joining is required";
             if (!formData.marital_status) errors.marital_status = "Marital status is required";
             if (!formData.father_or_husband_name.trim()) {
                 errors.father_or_husband_name = "Father's / Husband's name is required";
@@ -378,21 +365,8 @@ function CandidateOnboardingContent() {
             }
         }
 
-        // ── STEP 1: Employment Information (Page B) ──
+        // ── STEP 1: Bank Details & Statutory Declarations (Page 2) ──
         if (step === 1) {
-            if (!formData.doj) {
-                errors.doj = "Date of joining confirmation is required";
-            }
-            if (!formData.working_location.trim()) {
-                errors.working_location = "Working location is required";
-            }
-            if (!formData.designation.trim()) {
-                errors.designation = "Designation is required";
-            }
-        }
-
-        // ── STEP 2: Bank Details & Statutory Declarations (Page C) ──
-        if (step === 2) {
             // Section 1: Bank Details
             if (!formData.account_holder_name.trim()) errors.account_holder_name = "Account holder name as per bank record is required";
             if (!formData.bank_name.trim()) errors.bank_name = "Bank name is required";
@@ -418,8 +392,8 @@ function CandidateOnboardingContent() {
             }
         }
 
-        // ── STEP 3: Mandatory Document Uploads (Page D) ──
-        if (step === 3) {
+        // ── STEP 2: Mandatory Document Uploads (Page 3) ──
+        if (step === 2) {
             if (!uploadedDocs.aadhaar_card) {
                 errors.docs = "Please upload your Aadhaar Card (mandatory verification document)";
             } else if (!uploadedDocs.pan_card) {
@@ -470,7 +444,6 @@ function CandidateOnboardingContent() {
                 // Personal Information
                 name: formData.name.trim(),
                 date_of_birth: formData.dob,
-                date_of_joining: formData.doj,
                 marital_status: formData.marital_status,
                 father_or_husband_name: formData.father_or_husband_name.trim(),
                 phone: formData.phone.trim(),
@@ -482,15 +455,7 @@ function CandidateOnboardingContent() {
                 aadhaar_number: formData.aadhaar.replace(/\s/g, ""),
                 pan_number: formData.pan.trim().toUpperCase() || null,
 
-                // Employment Information
-                working_location: formData.working_location.trim(),
-                designation: formData.designation.trim(),
-                shift_start_time: formData.shift_start_time,
-                shift_end_time: formData.shift_end_time,
-                is_rotational_shift: Boolean(formData.is_rotational_shift),
-
                 // Salary & Bank Details
-                fixed_gross: Number(invitation?.fixed_gross) || 0,
                 account_holder_name: formData.account_holder_name.trim() || formData.name.trim(),
                 bank_name: formData.bank_name.trim(),
                 bank_account_number: formData.bank_account_number.trim(),
@@ -598,12 +563,8 @@ function CandidateOnboardingContent() {
                             <span className="font-bold text-slate-800">{invitation?.email}</span>
                         </div>
                         <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
-                            <span className="text-slate-400 font-bold uppercase text-[10px]">Designation</span>
-                            <span className="font-bold text-slate-800">{formData.designation}</span>
-                        </div>
-                        <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
-                            <span className="text-slate-400 font-bold uppercase text-[10px]">Working Location</span>
-                            <span className="font-bold text-slate-800">{formData.working_location}</span>
+                            <span className="text-slate-400 font-bold uppercase text-[10px]">Company Entity</span>
+                            <span className="font-bold text-slate-800">{invitation?.company?.name || "Apaar Logistics"}</span>
                         </div>
                         <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
                             <span className="text-slate-400 font-bold uppercase text-[10px]">Salary Bank A/C</span>
@@ -640,10 +601,9 @@ function CandidateOnboardingContent() {
 
     const steps = [
         { label: "Personal Info", desc: "Aadhaar, contacts & personal data" },
-        { label: "Employment Info", desc: "Designation, location & shift" },
         { label: "Bank & Statutory", desc: "Salary account & statutory declarations" },
-        { label: "Documents", desc: "8 verification documents" },
-        { label: "Review & Submit", desc: "Final verification" },
+        { label: "Documents", desc: "Verification documents & resume" },
+        { label: "Review & Submit", desc: "Final declaration & submission" },
     ];
 
     return (
@@ -681,7 +641,7 @@ function CandidateOnboardingContent() {
 
                 {/* Stepper Header */}
                 <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80">
-                    <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
+                    <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
                         {steps.map((step, idx) => {
                             const isDone = currentStep > idx;
                             const isCurrent = currentStep === idx;
@@ -1001,158 +961,9 @@ function CandidateOnboardingContent() {
                     )}
 
                     {/* ════════════════════════════════════════════════════════ */}
-                    {/* STEP 1 (PAGE B): EMPLOYMENT INFORMATION (CONFIRMED OFFER) */}
+                    {/* STEP 1 (PAGE B): BANK DETAILS & STATUTORY DECLARATIONS */}
                     {/* ════════════════════════════════════════════════════════ */}
                     {currentStep === 1 && (
-                        <div className="space-y-6">
-                            <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <div className="h-8 w-8 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center">
-                                        <Briefcase className="h-4 w-4" />
-                                    </div>
-                                    <div>
-                                        <h2 className="text-base font-black text-slate-900">
-                                            Page 2: Employment Information
-                                        </h2>
-                                        <p className="text-xs text-slate-500">
-                                            Confirmed offer details, allocated office branch, and daily shift operational schedule.
-                                        </p>
-                                    </div>
-                                </div>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={fillDummyData}
-                                    className="h-8 px-3 rounded-xl border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 font-bold text-xs shadow-xs shrink-0"
-                                >
-                                    <Sparkles className="h-3.5 w-3.5 mr-1 text-amber-600" /> Fill Dummy
-                                </Button>
-                            </div>
-
-                            <div className="space-y-4">
-                                {/* Offer Allocation Card (Company Assigned - Read Only) */}
-                                <div className="p-5 rounded-2xl bg-indigo-50/50 border border-indigo-100 space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-[11px] font-black uppercase tracking-wider text-indigo-900 flex items-center gap-1.5">
-                                            <Building2 className="h-4 w-4 text-indigo-600" /> Allocated Role & Working Location
-                                        </span>
-                                        <Badge className="bg-indigo-600 text-white font-bold text-[9px] uppercase tracking-wider px-2 py-0.5">
-                                            Offer Confirmed
-                                        </Badge>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                                        <div className="bg-white p-3.5 rounded-xl border border-indigo-100/80 shadow-xs">
-                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
-                                                Designation (Job Role)
-                                            </span>
-                                            <div className="flex items-center gap-2">
-                                                <Briefcase className="h-4 w-4 text-indigo-500" />
-                                                <span className="font-black text-sm text-slate-900">
-                                                    {formData.designation || "Executive"}
-                                                </span>
-                                            </div>
-                                            <p className="text-[10px] text-slate-400 mt-1">
-                                                As finalized in your official employment offer.
-                                            </p>
-                                        </div>
-
-                                        <div className="bg-white p-3.5 rounded-xl border border-indigo-100/80 shadow-xs">
-                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
-                                                Working Location (Office / Hub)
-                                            </span>
-                                            <div className="flex items-center gap-2">
-                                                <MapPin className="h-4 w-4 text-emerald-600" />
-                                                <span className="font-black text-sm text-slate-900">
-                                                    {formData.working_location || "Indore Logistics Hub"}
-                                                </span>
-                                            </div>
-                                            <p className="text-[10px] text-slate-400 mt-1">
-                                                Primary reporting branch and operational center.
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Confirmed Date of Joining */}
-                                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
-                                    <Label className="text-xs font-bold text-slate-700 flex items-center justify-between">
-                                        <span>Confirmed / Planned Date of Joining <span className="text-rose-500">*</span></span>
-                                        <span className="text-[10px] text-slate-400 font-normal">Please confirm your reporting date</span>
-                                    </Label>
-                                    <Input
-                                        type="date"
-                                        value={formData.doj}
-                                        onChange={(e) => updateField("doj", e.target.value)}
-                                        className="h-11 rounded-xl bg-white mt-1.5 font-bold text-xs"
-                                    />
-                                    {fieldErrors.doj && <p className="text-xs text-rose-500 mt-1">{fieldErrors.doj}</p>}
-                                </div>
-
-                                {/* Shift Timings & Rotational Shift Option (Req 2.3 B) */}
-                                <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                                            <Clock className="h-3.5 w-3.5 text-indigo-600" /> Operational Shift Schedule
-                                        </span>
-                                        <Badge variant="outline" className="text-[9px] text-slate-500 border-slate-300 bg-white font-mono">
-                                            Standard Shift
-                                        </Badge>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                        <div>
-                                            <Label className="text-xs font-bold text-slate-700">
-                                                Standard Shift Start Time
-                                            </Label>
-                                            <Input
-                                                type="time"
-                                                value={formData.shift_start_time}
-                                                onChange={(e) => updateField("shift_start_time", e.target.value)}
-                                                className="h-11 rounded-xl bg-white mt-1 font-mono font-bold text-xs"
-                                            />
-                                        </div>
-
-                                        <div>
-                                            <Label className="text-xs font-bold text-slate-700">
-                                                Standard Shift End Time
-                                            </Label>
-                                            <Input
-                                                type="time"
-                                                value={formData.shift_end_time}
-                                                onChange={(e) => updateField("shift_end_time", e.target.value)}
-                                                className="h-11 rounded-xl bg-white mt-1 font-mono font-bold text-xs"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* Rotational Shift Option (Req 2.3 B) */}
-                                    <div className="p-3.5 rounded-xl bg-white border border-slate-200/90 flex items-start gap-3 mt-2">
-                                        <input
-                                            type="checkbox"
-                                            id="is_rotational_shift"
-                                            checked={formData.is_rotational_shift}
-                                            onChange={(e) => updateField("is_rotational_shift", e.target.checked)}
-                                            className="h-4 w-4 mt-0.5 rounded text-indigo-600 border-slate-300 focus:ring-indigo-500"
-                                        />
-                                        <label htmlFor="is_rotational_shift" className="cursor-pointer">
-                                            <p className="text-xs font-black text-slate-900">
-                                                Rotational Shift Schedule Acknowledgment (Req 2.3 B)
-                                            </p>
-                                            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                                                I acknowledge and agree that my operational duties may require working on rotational shifts and scheduled weekly offs as assigned by management.
-                                            </p>
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* ════════════════════════════════════════════════════════ */}
-                    {/* STEP 2 (PAGE C): BANK DETAILS & STATUTORY DECLARATIONS */}
-                    {/* ════════════════════════════════════════════════════════ */}
-                    {currentStep === 2 && (
                         <div className="space-y-6">
                             <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
                                 <div className="flex items-center gap-2">
@@ -1161,7 +972,7 @@ function CandidateOnboardingContent() {
                                     </div>
                                     <div>
                                         <h2 className="text-base font-black text-slate-900">
-                                            Page 3: Bank Details & Statutory Declarations
+                                            Page 2: Bank Details & Statutory Declarations
                                         </h2>
                                         <p className="text-xs text-slate-500">
                                             Banking credentials for salary credit and statutory compliance declarations.
@@ -1516,9 +1327,9 @@ function CandidateOnboardingContent() {
                     )}
 
                     {/* ════════════════════════════════════════════════════════ */}
-                    {/* STEP 3 (PAGE D): MANDATORY DOCUMENT UPLOADS */}
+                    {/* STEP 2 (PAGE C): MANDATORY DOCUMENT UPLOADS */}
                     {/* ════════════════════════════════════════════════════════ */}
-                    {currentStep === 3 && (
+                    {currentStep === 2 && (
                         <div className="space-y-6">
                             <div className="border-b border-slate-100 pb-4">
                                 <div className="flex items-center justify-between">
@@ -1528,7 +1339,7 @@ function CandidateOnboardingContent() {
                                         </div>
                                         <div>
                                             <h2 className="text-base font-black text-slate-900">
-                                                Page 4: Mandatory Document Uploads
+                                                Page 3: Document Uploads & Verification
                                             </h2>
                                             <p className="text-xs text-slate-500">
                                                 Attach clear scanned copies or photos (PDF, PNG, JPG up to 10MB each).
@@ -1661,9 +1472,9 @@ function CandidateOnboardingContent() {
                     )}
 
                     {/* ════════════════════════════════════════════════════════ */}
-                    {/* STEP 4 (PAGE E): REVIEW & SUBMISSION */}
+                    {/* STEP 3 (PAGE D): REVIEW & SUBMISSION */}
                     {/* ════════════════════════════════════════════════════════ */}
-                    {currentStep === 4 && (
+                    {currentStep === 3 && (
                         <div className="space-y-6">
                             <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
                                 <div className="flex items-center gap-2">
@@ -1672,7 +1483,7 @@ function CandidateOnboardingContent() {
                                     </div>
                                     <div>
                                         <h2 className="text-base font-black text-slate-900">
-                                            Page 5: Review & Submission
+                                            Page 4: Review & Submission
                                         </h2>
                                         <p className="text-xs text-slate-500">
                                             Please verify all submitted onboarding particulars before sending to HR.
@@ -1711,9 +1522,9 @@ function CandidateOnboardingContent() {
                                         <span className="font-black text-slate-900">{formData.name}</span>
                                     </div>
                                     <div>
-                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">DOB / DOJ / Gender</span>
+                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">DOB / Gender</span>
                                         <span className="font-bold text-slate-800">
-                                            {formData.dob} • DOJ: {formData.doj} • {formData.gender.toUpperCase()}
+                                            {formData.dob} • {formData.gender.toUpperCase()}
                                         </span>
                                     </div>
                                     <div>
@@ -1745,57 +1556,17 @@ function CandidateOnboardingContent() {
                                 </div>
                             </div>
 
-                            {/* Section 2: Employment Details Preview */}
+                            {/* Section 2: Salary & Bank Details Preview */}
                             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5 text-xs">
                                 <div className="flex items-center justify-between pb-1 border-b border-slate-200/60">
                                     <span className="text-[10px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                                        <Briefcase className="h-3.5 w-3.5 text-indigo-600" /> B. Employment Information
+                                        <CreditCard className="h-3.5 w-3.5 text-emerald-600" /> B. Bank & Statutory Declarations
                                     </span>
                                     <Button
                                         type="button"
                                         variant="ghost"
                                         size="sm"
                                         onClick={() => setCurrentStep(1)}
-                                        className="h-6 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 p-0"
-                                    >
-                                        Edit
-                                    </Button>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                    <div>
-                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">Company & Location</span>
-                                        <span className="font-bold text-slate-800">
-                                            {invitation?.company?.name || "Apaar Logistics"} • {formData.working_location}
-                                        </span>
-                                    </div>
-                                    <div>
-                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">Designation</span>
-                                        <span className="font-black text-slate-900">{formData.designation}</span>
-                                    </div>
-                                    <div>
-                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">Shift Timings</span>
-                                        <span className="font-mono text-slate-800">{formData.shift_start_time} to {formData.shift_end_time}</span>
-                                    </div>
-                                    <div>
-                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">Rotational Shift Policy</span>
-                                        <span className="font-bold text-slate-800">
-                                            {formData.is_rotational_shift ? "Acknowledged (Rotational Offs Applicable)" : "Standard Schedule"}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Section 3: Salary & Bank Details Preview */}
-                            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5 text-xs">
-                                <div className="flex items-center justify-between pb-1 border-b border-slate-200/60">
-                                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                                        <CreditCard className="h-3.5 w-3.5 text-emerald-600" /> C. Bank & Statutory Declarations
-                                    </span>
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => setCurrentStep(2)}
                                         className="h-6 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 p-0"
                                     >
                                         Edit
@@ -1839,17 +1610,17 @@ function CandidateOnboardingContent() {
                                 </div>
                             </div>
 
-                            {/* Section 4: Attached Documents Summary */}
+                            {/* Section 3: Attached Documents Summary */}
                             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5 text-xs">
                                 <div className="flex items-center justify-between pb-1 border-b border-slate-200/60">
                                     <span className="text-[10px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                                        <FileText className="h-3.5 w-3.5 text-emerald-600" /> D. Attached Verification Documents
+                                        <FileText className="h-3.5 w-3.5 text-indigo-600" /> C. Attached Verification Documents
                                     </span>
                                     <Button
                                         type="button"
                                         variant="ghost"
                                         size="sm"
-                                        onClick={() => setCurrentStep(3)}
+                                        onClick={() => setCurrentStep(2)}
                                         className="h-6 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 p-0"
                                     >
                                         Edit
