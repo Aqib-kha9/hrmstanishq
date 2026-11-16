@@ -289,6 +289,10 @@ const validateField = (id: string, value: string): string | null => {
         case "location":
             if (!v) return "Working Location is required";
             return null;
+        case "dept":
+            if (!v) return "Department is required";
+            if (v.length > 80) return "Department must be under 80 characters";
+            return null;
         case "role":
             if (!v) return "System Role is required";
             return null;
@@ -373,6 +377,7 @@ const validateStep = (step: number, formData: Record<string, string>): FieldErro
         case 1:
             check("company");
             check("location");
+            check("dept");
             check("role");
             check("jobTitle");
             check("shiftStartTime");
@@ -428,19 +433,35 @@ function OnboardingForm() {
     // ── Dynamic companies & offices (fetched from DB) ──
     const [companies, setCompanies] = useState<CompanyItem[]>([]);
     const [offices, setOffices] = useState<OfficeItem[]>([]);
+    const [departmentList, setDepartmentList] = useState<string[]>([
+        "Operations",
+        "Logistics & Supply Chain",
+        "Human Resources",
+        "Finance & Accounts",
+        "Sales & Business Development",
+        "Marketing",
+        "IT & Tech Support",
+        "Warehouse & Depot",
+        "Administration",
+        "Management",
+    ]);
     const [loadingLookups, setLoadingLookups] = useState(true);
 
     useEffect(() => {
         let cancelled = false;
         async function fetchLookups() {
             try {
-                const [co, of] = await Promise.all([
+                const [co, of, depts] = await Promise.all([
                     apiGet<CompanyItem[]>("/companies"),
                     apiGet<OfficeItem[]>("/offices", { limit: 100 }),
+                    apiGet<string[]>("/leave/departments").catch(() => []),
                 ]);
                 if (!cancelled) {
                     setCompanies(co);
                     setOffices(of);
+                    if (Array.isArray(depts) && depts.length > 0) {
+                        setDepartmentList((prev) => Array.from(new Set([...prev, ...depts])).sort());
+                    }
                     if (!editId) {
                         if (co.length > 0) {
                             setFormData((prev) => ({ ...prev, company: co[0].id.toString() }));
@@ -535,6 +556,8 @@ function OnboardingForm() {
         phone: "",
         company_id: "",
         office_id: "",
+        department: "Operations",
+        designation: "",
         notes: "",
     });
 
@@ -694,6 +717,8 @@ function OnboardingForm() {
                 phone: inviteForm.phone || undefined,
                 company_id: inviteForm.company_id ? Number(inviteForm.company_id) : undefined,
                 office_id: inviteForm.office_id ? Number(inviteForm.office_id) : undefined,
+                department: inviteForm.department || "Operations",
+                designation: inviteForm.designation || undefined,
                 notes: inviteForm.notes || undefined,
             });
             alert(`Self-onboarding invitation link sent successfully to ${inviteForm.email}!`);
@@ -705,6 +730,8 @@ function OnboardingForm() {
                 phone: "",
                 company_id: "",
                 office_id: "",
+                department: "Operations",
+                designation: "",
                 notes: "",
             });
             setActiveTab("submissions");
@@ -1851,7 +1878,7 @@ function OnboardingForm() {
                                                                     {inv.status}
                                                                 </Badge>
                                                             </div>
-                                                            <p className="text-xs text-slate-500 font-medium mt-0.5">{inv.email} {inv.phone && `• ${inv.phone}`}</p>
+                                                            <p className="text-xs text-slate-500 font-medium mt-0.5">{inv.email} {inv.phone && `• ${inv.phone}`} {inv.department && `• Dept: ${inv.department}`}</p>
                                                             <p className="text-[10px] text-slate-400 mt-0.5">
                                                                 Expires: {new Date(inv.expires_at).toLocaleDateString()}
                                                             </p>
@@ -2347,7 +2374,48 @@ function OnboardingForm() {
                                                 {fieldErrorEl("location")}
                                             </div>
 
-                                            {/* 3. System Role */}
+                                            {/* 3. Department */}
+                                            <div className="space-y-2">
+                                                <div className="flex items-center justify-between">
+                                                    <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
+                                                        Department <span className="text-red-500 font-bold ml-1">*</span>
+                                                    </Label>
+                                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Select or Type</span>
+                                                </div>
+                                                <div className="relative">
+                                                    <Input
+                                                        list="department-options"
+                                                        placeholder="e.g. Operations, Logistics, Sales"
+                                                        className={inputClass("dept", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs uppercase tracking-widest")}
+                                                        value={formData.dept}
+                                                        onChange={(e) => updateField("dept", e.target.value)}
+                                                        onBlur={() => handleBlur("dept")}
+                                                    />
+                                                    <datalist id="department-options">
+                                                        {departmentList.map((d) => (
+                                                            <option key={d} value={d} />
+                                                        ))}
+                                                    </datalist>
+                                                </div>
+                                                {fieldErrorEl("dept")}
+                                            </div>
+
+                                            {/* 4. Designation */}
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
+                                                    Designation <span className="text-red-500 font-bold ml-1">*</span>
+                                                </Label>
+                                                <Input
+                                                    placeholder="e.g. Operations Manager"
+                                                    className={inputClass("jobTitle", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs uppercase tracking-widest")}
+                                                    value={formData.jobTitle}
+                                                    onChange={(e) => updateField("jobTitle", e.target.value)}
+                                                    onBlur={() => handleBlur("jobTitle")}
+                                                />
+                                                {fieldErrorEl("jobTitle")}
+                                            </div>
+
+                                            {/* 5. System Role */}
                                             <div className="space-y-2">
                                                 <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
                                                     Role <span className="text-red-500 font-bold ml-1">*</span>
@@ -2366,23 +2434,8 @@ function OnboardingForm() {
                                                 {fieldErrorEl("role")}
                                             </div>
 
-                                            {/* 4. Designation (renamed from Job Role; separate Job Title & Department removed per Req 2.3 B) */}
+                                            {/* 6. HR Manager / Reporting Manager */}
                                             <div className="space-y-2">
-                                                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
-                                                    Designation <span className="text-red-500 font-bold ml-1">*</span>
-                                                </Label>
-                                                <Input
-                                                    placeholder="e.g. Operations Manager"
-                                                    className={inputClass("jobTitle", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs uppercase tracking-widest")}
-                                                    value={formData.jobTitle}
-                                                    onChange={(e) => updateField("jobTitle", e.target.value)}
-                                                    onBlur={() => handleBlur("jobTitle")}
-                                                />
-                                                {fieldErrorEl("jobTitle")}
-                                            </div>
-
-                                            {/* 5. HR Manager / Reporting Manager */}
-                                            <div className="space-y-2 md:col-span-2">
                                                 <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
                                                     HR Manager / Reporting Manager <span className="text-slate-400 font-bold normal-case text-[9px]">(Optional)</span>
                                                 </Label>
@@ -3673,6 +3726,30 @@ function OnboardingForm() {
                                     </select>
                                 </div>
                             </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Department</Label>
+                                    <Input
+                                        list="invite-department-options"
+                                        value={inviteForm.department}
+                                        onChange={(e) => setInviteForm(f => ({ ...f, department: e.target.value }))}
+                                        placeholder="e.g. Operations"
+                                        className="h-10 rounded-xl bg-slate-50 text-xs font-bold"
+                                    />
+                                    <datalist id="invite-department-options">
+                                        {departmentList.map(d => <option key={d} value={d} />)}
+                                    </datalist>
+                                </div>
+                                <div>
+                                    <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Designation / Role</Label>
+                                    <Input
+                                        value={inviteForm.designation}
+                                        onChange={(e) => setInviteForm(f => ({ ...f, designation: e.target.value }))}
+                                        placeholder="e.g. Executive"
+                                        className="h-10 rounded-xl bg-slate-50 text-xs font-bold"
+                                    />
+                                </div>
+                            </div>
                         </div>
                     )}
 
@@ -3884,10 +3961,14 @@ function OnboardingForm() {
                                     <div>
                                         <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Department *</Label>
                                         <Input
+                                            list="approval-department-options"
                                             value={approvalOverrides.department}
                                             onChange={(e) => setApprovalOverrides(a => ({ ...a, department: e.target.value }))}
                                             className="h-10 rounded-xl bg-slate-50 font-bold text-xs"
                                         />
+                                        <datalist id="approval-department-options">
+                                            {departmentList.map(d => <option key={d} value={d} />)}
+                                        </datalist>
                                     </div>
                                 </div>
 

@@ -887,6 +887,7 @@ export default function PayrollPage() {
                                                             {row.companyCode || (row.company ? String(row.company).split(' ')[0] : 'APA')}
                                                         </Badge>
                                                         <Badge className="bg-slate-50 text-slate-400 border-none font-black text-[7px] h-4 px-1.5 rounded uppercase tracking-widest">{row.designation}</Badge>
+                                                        <Badge className="bg-purple-50 text-purple-700 border-none font-black text-[7px] h-4 px-1.5 rounded uppercase tracking-widest">{row.department || "Operations"}</Badge>
                                                         <Badge className="bg-indigo-50 text-indigo-500 border-none font-black text-[7px] h-4 px-1.5 rounded uppercase tracking-widest">{row.location}</Badge>
                                                         <span className="text-[7px] font-bold text-rose-500 uppercase tracking-widest">{row.absentDays > 0 ? `${row.absentDays} LWP` : 'Full Present'}</span>
                                                     </div>

@@ -82,6 +82,8 @@ export default function EmployeesPage() {
     const [offices, setOffices] = useState<{ id: number; name: string }[]>([]);
     const [selectedCompanyId, setSelectedCompanyId] = useState("");
     const [selectedOfficeId, setSelectedOfficeId] = useState("");
+    const [departments, setDepartments] = useState<string[]>([]);
+    const [selectedDepartment, setSelectedDepartment] = useState("");
     const itemsPerPage = 8;
 
     // Admin password reset state
@@ -126,6 +128,7 @@ export default function EmployeesPage() {
             const params: Record<string, string | number> = { limit: 1000 };
             if (selectedCompanyId) params.company_id = selectedCompanyId;
             if (selectedOfficeId) params.office_id = selectedOfficeId;
+            if (selectedDepartment) params.department = selectedDepartment;
             const data = await apiGet<BackendEmployee[]>("/employees", params);
             const transformed = data.map(toFrontendEmployee);
             setPersonnel(transformed);
@@ -135,17 +138,21 @@ export default function EmployeesPage() {
         } finally {
             setLoading(false);
         }
-    }, [selectedCompanyId, selectedOfficeId]);
+    }, [selectedCompanyId, selectedOfficeId, selectedDepartment]);
 
     useEffect(() => {
         async function fetchLookups() {
             try {
-                const [compData, offData] = await Promise.all([
+                const [compData, offData, deptsData] = await Promise.all([
                     apiGet<{ id: number; name: string }[]>("/companies"),
                     apiGet<{ id: number; name: string }[]>("/offices", { limit: 100 }),
+                    apiGet<string[]>("/leave/departments").catch(() => []),
                 ]);
                 setCompanies(compData || []);
                 setOffices(offData || []);
+                if (Array.isArray(deptsData) && deptsData.length > 0) {
+                    setDepartments(deptsData);
+                }
             } catch (err) {
                 console.error("Failed to load lookup data:", err);
             }
@@ -211,11 +218,13 @@ export default function EmployeesPage() {
         }
     };
 
-    const filteredPersonnel = personnel.filter(p =>
-        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.dept.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredPersonnel = personnel.filter(p => {
+        const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.dept.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesDept = !selectedDepartment || p.dept.toLowerCase() === selectedDepartment.toLowerCase();
+        return matchesSearch && matchesDept;
+    });
 
     // Pagination Logic
     const totalPages = Math.ceil(filteredPersonnel.length / itemsPerPage);
@@ -421,8 +430,8 @@ export default function EmployeesPage() {
                 )}
 
                 {/* Search & Filter Bar */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center px-2">
-                    <div className="lg:col-span-5 relative group">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-center px-2">
+                    <div className="lg:col-span-4 relative group">
                         <Search className="absolute left-6 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300 group-focus-within:text-slate-900 transition-colors" />
                         <Input
                             placeholder="Search by name, ID, or department..."
@@ -439,7 +448,7 @@ export default function EmployeesPage() {
                         <select
                             value={selectedCompanyId}
                             onChange={(e) => { setSelectedCompanyId(e.target.value); setCurrentPage(1); }}
-                            className="bg-transparent border-none text-[10px] font-black uppercase text-slate-500 outline-none w-full"
+                            className="bg-transparent border-none text-[10px] font-black uppercase text-slate-500 outline-none w-full cursor-pointer"
                         >
                             <option value="">All Companies</option>
                             {companies.map((c) => (
@@ -452,7 +461,7 @@ export default function EmployeesPage() {
                         <select
                             value={selectedOfficeId}
                             onChange={(e) => { setSelectedOfficeId(e.target.value); setCurrentPage(1); }}
-                            className="bg-transparent border-none text-[10px] font-black uppercase text-slate-500 outline-none w-full"
+                            className="bg-transparent border-none text-[10px] font-black uppercase text-slate-500 outline-none w-full cursor-pointer"
                         >
                             <option value="">All Offices</option>
                             {offices.map((o) => (
@@ -460,7 +469,20 @@ export default function EmployeesPage() {
                             ))}
                         </select>
                     </div>
-                    <div className="lg:col-span-3 flex items-center justify-between bg-white px-8 h-14 rounded-2xl border border-slate-100 shadow-sm">
+                    <div className="lg:col-span-2 flex items-center gap-2 bg-white px-3 h-14 rounded-2xl border border-slate-100 shadow-sm">
+                        <Briefcase className="h-4 w-4 text-slate-300 shrink-0" />
+                        <select
+                            value={selectedDepartment}
+                            onChange={(e) => { setSelectedDepartment(e.target.value); setCurrentPage(1); }}
+                            className="bg-transparent border-none text-[10px] font-black uppercase text-slate-500 outline-none w-full cursor-pointer"
+                        >
+                            <option value="">All Departments</option>
+                            {departments.map((d) => (
+                                <option key={d} value={d}>{d}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="lg:col-span-2 flex items-center justify-between bg-white px-5 h-14 rounded-2xl border border-slate-100 shadow-sm">
                         <div className="text-center">
                             <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Total</p>
                             <p className="text-sm font-black italic text-slate-900">{personnel.length}</p>

@@ -230,7 +230,7 @@ export function GlobalRulesSheet({
                             </SheetTitle>
                             {selectedEmployee ? (
                                 <SheetDescription className="text-xs text-slate-500 font-normal mt-0.5">
-                                    {selectedEmployee.employeeCode} • {selectedEmployee.designation || 'Staff'} • {selectedEmployee.company || 'Company Entity'}
+                                    {selectedEmployee.employeeCode} • {selectedEmployee.designation || 'Staff'} • {selectedEmployee.department || 'Operations'} • {selectedEmployee.company || 'Company Entity'}
                                 </SheetDescription>
                             ) : (
                                 <SheetDescription className="text-xs text-slate-500 font-normal mt-0.5">
