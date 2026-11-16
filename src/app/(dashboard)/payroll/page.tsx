@@ -375,11 +375,14 @@ export default function PayrollPage() {
     };
 
     const filteredLedger = ledger.filter(emp => {
+        if (!emp) return false;
         const matchesCompany = selectedCompany === "All Companies" || emp.company === selectedCompany || emp.companyCode === selectedCompany;
         const matchesBranch = selectedBranch === "All Branches" || emp.location === selectedBranch;
-        const matchesSearch = emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            emp.employeeCode.toString().includes(searchQuery) ||
-            (emp.company && emp.company.toLowerCase().includes(searchQuery.toLowerCase()));
+        const q = (searchQuery || "").toLowerCase();
+        const matchesSearch = !q ||
+            (emp.name && emp.name.toLowerCase().includes(q)) ||
+            (emp.employeeCode && emp.employeeCode.toString().toLowerCase().includes(q)) ||
+            (emp.company && emp.company.toLowerCase().includes(q));
         const matchesStatus = statusFilter === "ALL" || emp.status === statusFilter;
         return matchesCompany && matchesBranch && matchesSearch && matchesStatus;
     });
