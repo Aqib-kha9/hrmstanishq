@@ -268,6 +268,8 @@ function CandidateOnboardingContent() {
 
     // Fill all fields with realistic dummy data for rapid testing & UAT
     const fillDummyData = () => {
+        const rand = Math.floor(1000 + Math.random() * 9000);
+        const randLetter = String.fromCharCode(65 + Math.floor(Math.random() * 26));
         setFormData((prev) => ({
             ...prev,
             name: prev.name || "Rahul Sharma",
@@ -276,13 +278,13 @@ function CandidateOnboardingContent() {
             gender: "male",
             marital_status: "unmarried",
             father_or_husband_name: "Omprakash Sharma",
-            phone: prev.phone || "9876543210",
+            phone: prev.phone || `987654${rand}`,
             emergency_contact_name: "Priya Sharma",
             emergency_contact_phone: "9876543211",
             emergency_contact_relation: "Spouse",
             address: "12/3, MG Road, Vijay Nagar, Indore, MP 452010",
-            aadhaar: "123456789012",
-            pan: "ABCDE1234F",
+            aadhaar: `12345678${rand}`,
+            pan: `ABCDE${rand}${randLetter}`,
             working_location: prev.working_location || "Indore Logistics Hub",
             designation: prev.designation || "Operations Manager",
             shift_start_time: "09:30",
@@ -295,11 +297,11 @@ function CandidateOnboardingContent() {
             ifsc_code: "HDFC0001234",
             payment_mode: "Bank Transfer",
             has_existing_pf: true,
-            uan: "101234567890",
-            prev_pf_number: "MH/BAN/0012345/000/0000001",
+            uan: `10123456${rand}`,
+            prev_pf_number: `MH/BAN/00${rand}/000/0000001`,
             prev_exit_date: "2026-10-31",
             has_existing_esic: true,
-            esic_number: "3123456789",
+            esic_number: `312345${rand}`,
         }));
 
         setFieldErrors({});

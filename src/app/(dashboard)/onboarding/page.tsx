@@ -865,7 +865,15 @@ function OnboardingForm() {
 
     /** Fill all fields with realistic dummy data for development */
     const fillDummyData = () => {
-        setFormData((prev) => ({ ...prev, ...DUMMY_DATA }));
+        const rand = Math.floor(1000 + Math.random() * 9000);
+        const randLetter = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+        setFormData((prev) => ({
+            ...prev,
+            ...DUMMY_DATA,
+            email: `rahul.test${rand}@apaarlogistics.com`,
+            pan: `ABCDE${rand}${randLetter}`,
+            aadhaar: `12345678${rand}`,
+        }));
         setFieldErrors({});
         setError(null);
 
@@ -3927,6 +3935,29 @@ function OnboardingForm() {
                                             onChange={(e) => setApprovalOverrides(a => ({ ...a, esic_number: e.target.value.toUpperCase() }))}
                                             placeholder="ESIC IP Number"
                                             className="h-10 rounded-xl bg-slate-50 font-bold text-xs"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-slate-700 mb-1 block">PAN Card Number (Statutory Identity)</Label>
+                                        <Input
+                                            value={approvalOverrides.pan}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, pan: e.target.value.toUpperCase() }))}
+                                            placeholder="e.g. ABCDE1234F"
+                                            maxLength={10}
+                                            className="h-10 rounded-xl bg-slate-50 font-bold text-xs uppercase font-mono"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-slate-700 mb-1 block">Aadhaar Card Number (12 Digits)</Label>
+                                        <Input
+                                            value={approvalOverrides.aadhaar}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, aadhaar: e.target.value.replace(/\D/g, '').slice(0, 12) }))}
+                                            placeholder="12-digit UIDAI number"
+                                            maxLength={12}
+                                            className="h-10 rounded-xl bg-slate-50 font-bold text-xs font-mono"
                                         />
                                     </div>
                                 </div>
