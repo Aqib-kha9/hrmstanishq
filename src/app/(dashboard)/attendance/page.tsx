@@ -183,48 +183,9 @@ export default function AttendancePage() {
     const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth());
     const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
 
-    // Synchronized scrollbar refs & state (Req 7 - Usability Improvements)
+    // Table horizontal & vertical scroll ref
     const tableContainerRef = useRef<HTMLDivElement>(null);
-    const topScrollRef = useRef<HTMLDivElement>(null);
-    const [scrollWidth, setScrollWidth] = useState(0);
-    const [scrollLeftPos, setScrollLeftPos] = useState(0);
-    const [maxScrollLeft, setMaxScrollLeft] = useState(1);
-    const isSyncingScroll = useRef(false);
-
-    // Desktop Mouse Drag-to-Pan State (Req 7)
-    const [isPanning, setIsPanning] = useState(false);
-    const dragStartX = useRef(0);
-    const dragScrollLeft = useRef(0);
-    const hasDragged = useRef(false);
-
-    const updateScrollMetrics = useCallback(() => {
-        if (tableContainerRef.current) {
-            const { scrollLeft, scrollWidth: sw, clientWidth } = tableContainerRef.current;
-            setScrollLeftPos(scrollLeft);
-            setScrollWidth(sw);
-            setMaxScrollLeft(Math.max(1, sw - clientWidth));
-        }
-    }, []);
-
-    const handleTopScroll = () => {
-        if (isSyncingScroll.current) return;
-        isSyncingScroll.current = true;
-        if (tableContainerRef.current && topScrollRef.current) {
-            tableContainerRef.current.scrollLeft = topScrollRef.current.scrollLeft;
-            updateScrollMetrics();
-        }
-        requestAnimationFrame(() => { isSyncingScroll.current = false; });
-    };
-
-    const handleTableScroll = () => {
-        if (isSyncingScroll.current) return;
-        isSyncingScroll.current = true;
-        if (topScrollRef.current && tableContainerRef.current) {
-            topScrollRef.current.scrollLeft = tableContainerRef.current.scrollLeft;
-            updateScrollMetrics();
-        }
-        requestAnimationFrame(() => { isSyncingScroll.current = false; });
-    };
+    const hasAutoScrolledToday = useRef(false);
 
     const scrollTable = (offset: number) => {
         if (tableContainerRef.current) {
@@ -242,41 +203,6 @@ export default function AttendancePage() {
         if (tableContainerRef.current) {
             tableContainerRef.current.scrollTo({ left: tableContainerRef.current.scrollWidth, behavior: 'smooth' });
         }
-    };
-
-    const handleScrubberChange = (value: number) => {
-        if (tableContainerRef.current) {
-            const target = (value / 100) * maxScrollLeft;
-            tableContainerRef.current.scrollLeft = target;
-            if (topScrollRef.current) topScrollRef.current.scrollLeft = target;
-            setScrollLeftPos(target);
-        }
-    };
-
-    // Mouse Drag Panning Handlers
-    const handleMouseDown = (e: React.MouseEvent) => {
-        if (e.button !== 0) return; // Only primary mouse button
-        const target = e.target as HTMLElement;
-        if (target.closest('button') || target.closest('a') || target.closest('input') || target.closest('select')) {
-            return;
-        }
-        setIsPanning(true);
-        hasDragged.current = false;
-        dragStartX.current = e.clientX;
-        dragScrollLeft.current = tableContainerRef.current?.scrollLeft || 0;
-    };
-
-    const handleMouseMove = (e: React.MouseEvent) => {
-        if (!isPanning || !tableContainerRef.current) return;
-        const delta = e.clientX - dragStartX.current;
-        if (Math.abs(delta) > 3) {
-            hasDragged.current = true;
-        }
-        tableContainerRef.current.scrollLeft = dragScrollLeft.current - delta;
-    };
-
-    const handleMouseUp = () => {
-        setIsPanning(false);
     };
 
     // Helper to get dates dynamically based on cycle (calendar: 1st-end, payroll: 26th-25th)
@@ -329,8 +255,8 @@ export default function AttendancePage() {
                 d.getFullYear() === currentDate.getFullYear()
         );
         if (todayIdx !== -1 && tableContainerRef.current) {
-            const colWidth = 34;
-            const targetLeft = Math.max(0, todayIdx * colWidth - (tableContainerRef.current.clientWidth / 2) + 200);
+            const colWidth = 36;
+            const targetLeft = Math.max(0, todayIdx * colWidth - 80);
             tableContainerRef.current.scrollTo({ left: targetLeft, behavior: "smooth" });
         }
     };
@@ -745,13 +671,16 @@ export default function AttendancePage() {
         }
     }, [selectedMonth, selectedYear, cycleType, selectedCompanyId, selectedOfficeId, monthlyDebouncedSearch, selectedDepartment]);
 
-    // Update scroll metrics when rows, dates, or active tab change (Req 7)
+    // Auto-scroll to today once when monthly records are loaded
     useEffect(() => {
-        updateScrollMetrics();
-        const handleResize = () => updateScrollMetrics();
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, [monthlyRows, cycleDates, activeTab, updateScrollMetrics]);
+        if (!monthlyLoading && monthlyRows.length > 0 && isTodayInCycle && !hasAutoScrolledToday.current) {
+            hasAutoScrolledToday.current = true;
+            const timer = setTimeout(() => {
+                scrollToToday();
+            }, 300);
+            return () => clearTimeout(timer);
+        }
+    }, [monthlyLoading, monthlyRows.length, isTodayInCycle]);
 
     // Load data on tab switch
     useEffect(() => { if (activeTab === "live") fetchLiveAttendance(); }, [activeTab, fetchLiveAttendance]);
@@ -1767,7 +1696,7 @@ export default function AttendancePage() {
                         </div>
 
                         {/* Executive Month & Day Information Banner (Req 6.3) */}
-                        <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white rounded-3xl p-5 sm:p-6 shadow-md border border-slate-800/80 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+                        <div className="bg-slate-900 text-white rounded-2xl p-5 shadow-sm border border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
                             <div className="flex flex-wrap items-center gap-6 sm:gap-8">
                                 <div>
                                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block">Selected Month</span>
@@ -1842,8 +1771,8 @@ export default function AttendancePage() {
                             </div>
                         </div>
 
-                        <Card className="border-none shadow-sm rounded-[2.5rem] bg-white overflow-hidden">
-                            <CardHeader className="p-8 pb-6 border-b border-slate-50 flex flex-col xl:flex-row xl:items-start xl:justify-between gap-6">
+                        <Card className="border border-slate-200 shadow-sm rounded-2xl bg-white overflow-hidden">
+                            <CardHeader className="p-6 pb-5 border-b border-slate-100 flex flex-col xl:flex-row xl:items-start xl:justify-between gap-5">
                                 <div>
                                     <div className="flex flex-wrap items-center gap-3">
                                         <CardTitle className="text-xl font-black italic uppercase text-slate-900 tracking-tighter">Monthly Attendance Grid</CardTitle>
@@ -1853,14 +1782,14 @@ export default function AttendancePage() {
                                             onChange={(m, y) => { setSelectedMonth(m); setSelectedYear(y); }}
                                         />
                                         {/* Cycle Switcher (Req 6.2) */}
-                                        <div className="flex bg-slate-100 p-1 rounded-2xl ml-2">
+                                        <div className="flex bg-slate-100 p-1 rounded-xl ml-2">
                                             <Button
                                                 type="button"
                                                 variant="ghost"
                                                 onClick={() => setCycleType("payroll")}
                                                 className={cn(
-                                                    "h-8 px-4 rounded-xl font-black text-[9px] uppercase tracking-wider transition-all",
-                                                    cycleType === "payroll" ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-900"
+                                                    "h-8 px-3.5 rounded-lg font-bold text-[10px] uppercase tracking-wider transition-all",
+                                                    cycleType === "payroll" ? "bg-white shadow-xs text-slate-900" : "text-slate-500 hover:text-slate-900"
                                                 )}
                                             >
                                                 Payroll Cycle (26th - 25th)
@@ -1870,8 +1799,8 @@ export default function AttendancePage() {
                                                 variant="ghost"
                                                 onClick={() => setCycleType("calendar")}
                                                 className={cn(
-                                                    "h-8 px-4 rounded-xl font-black text-[9px] uppercase tracking-wider transition-all",
-                                                    cycleType === "calendar" ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-900"
+                                                    "h-8 px-3.5 rounded-lg font-bold text-[10px] uppercase tracking-wider transition-all",
+                                                    cycleType === "calendar" ? "bg-white shadow-xs text-slate-900" : "text-slate-500 hover:text-slate-900"
                                                 )}
                                             >
                                                 Calendar Month (1st - End)
@@ -1880,16 +1809,16 @@ export default function AttendancePage() {
                                     </div>
                                     <CardDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2 leading-relaxed">
                                         {formatCycleRange()} • Dynamic {daysInSelectedMonth}-day grid ({cycleType === "payroll" ? "26th prev month to 25th" : "1st to month-end"}). <br />
-                                        <span className="text-emerald-500 font-bold">Payable Days</span> = Present + Paid Leave + Weekly Off + Holiday + Tour
+                                        <span className="text-emerald-600 font-bold">Payable Days</span> = Present + Paid Leave + Weekly Off + Holiday + Tour
                                     </CardDescription>
                                     {/* Monthly Filters */}
-                                    <div className="flex flex-wrap items-center gap-3 mt-4">
-                                        <div className="flex items-center gap-2 bg-slate-50 px-3 h-9 rounded-xl border border-slate-100">
+                                    <div className="flex flex-wrap items-center gap-2.5 mt-3.5">
+                                        <div className="flex items-center gap-2 bg-slate-50 px-3 h-9 rounded-xl border border-slate-200">
                                             <Building2 className="h-3.5 w-3.5 text-slate-400" />
                                             <select
                                                 value={selectedCompanyId}
                                                 onChange={(e) => setSelectedCompanyId(e.target.value)}
-                                                className="bg-transparent border-none text-[9px] font-black uppercase outline-none pr-2 h-full cursor-pointer"
+                                                className="bg-transparent border-none text-[10px] font-bold text-slate-700 outline-none pr-2 h-full cursor-pointer"
                                             >
                                                 <option value="">All Companies</option>
                                                 {companies.map((c) => (
@@ -1897,12 +1826,12 @@ export default function AttendancePage() {
                                                 ))}
                                             </select>
                                         </div>
-                                        <div className="flex items-center gap-2 bg-slate-50 px-3 h-9 rounded-xl border border-slate-100">
+                                        <div className="flex items-center gap-2 bg-slate-50 px-3 h-9 rounded-xl border border-slate-200">
                                             <MapPin className="h-3.5 w-3.5 text-slate-400" />
                                             <select
                                                 value={selectedOfficeId}
                                                 onChange={(e) => setSelectedOfficeId(e.target.value)}
-                                                className="bg-transparent border-none text-[9px] font-black uppercase outline-none pr-2 h-full cursor-pointer"
+                                                className="bg-transparent border-none text-[10px] font-bold text-slate-700 outline-none pr-2 h-full cursor-pointer"
                                             >
                                                 <option value="">All Offices</option>
                                                 {offices.map((o) => (
@@ -1910,12 +1839,12 @@ export default function AttendancePage() {
                                                 ))}
                                             </select>
                                         </div>
-                                        <div className="flex items-center gap-2 bg-slate-50 px-3 h-9 rounded-xl border border-slate-100">
+                                        <div className="flex items-center gap-2 bg-slate-50 px-3 h-9 rounded-xl border border-slate-200">
                                             <Users2 className="h-3.5 w-3.5 text-slate-400" />
                                             <select
                                                 value={selectedDepartment}
                                                 onChange={(e) => setSelectedDepartment(e.target.value)}
-                                                className="bg-transparent border-none text-[9px] font-black uppercase outline-none pr-2 h-full cursor-pointer"
+                                                className="bg-transparent border-none text-[10px] font-bold text-slate-700 outline-none pr-2 h-full cursor-pointer"
                                             >
                                                 <option value="">All Departments</option>
                                                 {departments.map((d) => (
@@ -1924,17 +1853,17 @@ export default function AttendancePage() {
                                             </select>
                                         </div>
                                         <div className="relative group">
-                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-300 group-focus-within:text-slate-900 transition-colors" />
+                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 group-focus-within:text-slate-900 transition-colors" />
                                             <Input
                                                 placeholder="Search Staff..."
-                                                className="h-9 w-40 pl-9 bg-slate-50 border-none rounded-xl font-bold text-[9px] focus-visible:ring-1 focus-visible:ring-[#D9F99D]"
+                                                className="h-9 w-44 pl-9 bg-slate-50 border-slate-200 rounded-xl font-bold text-xs"
                                                 value={monthlySearch}
                                                 onChange={(e) => handleMonthlySearchChange(e.target.value)}
                                             />
                                         </div>
                                         <Button
                                             variant="outline"
-                                            className="h-9 px-4 rounded-xl border-slate-100 font-black text-[9px] uppercase tracking-widest disabled:opacity-50"
+                                            className="h-9 px-3.5 rounded-xl border-slate-200 font-bold text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                                             onClick={() => {
                                                 setExportType("monthly");
                                                 setExportDeptSelection(selectedDepartment || "All");
@@ -1943,7 +1872,7 @@ export default function AttendancePage() {
                                             disabled={exportingMonthly}
                                         >
                                             {exportingMonthly ? (
-                                                <span className="flex items-center gap-1">
+                                                <span className="flex items-center gap-1.5">
                                                     <svg className="animate-spin h-3.5 w-3.5 text-emerald-500" viewBox="0 0 24 24">
                                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                                                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -1952,101 +1881,85 @@ export default function AttendancePage() {
                                                 </span>
                                             ) : (
                                                 <>
-                                                    <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-500" /> Export
+                                                    <FileSpreadsheet className="h-4 w-4 mr-1.5 text-emerald-600" /> Export CSV
                                                 </>
                                             )}
                                         </Button>
                                     </div>
                                 </div>
                                 <div className="flex flex-col items-end gap-3">
-                                    <div className="flex items-center gap-4 bg-slate-50 py-2 px-4 rounded-xl border border-slate-100">
-                                        <div className="flex items-center gap-2"><div className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div><span className="text-[8px] font-black uppercase tracking-widest text-slate-500">Present</span></div>
-                                        <div className="flex items-center gap-2"><div className="h-2 w-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]"></div><span className="text-[8px] font-black uppercase tracking-widest text-slate-500">Absent/LWP</span></div>
-                                        <div className="flex items-center gap-2"><div className="h-2 w-2 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]"></div><span className="text-[8px] font-black uppercase tracking-widest text-slate-500">Leave</span></div>
-                                        <div className="flex items-center gap-2"><div className="h-2 w-2 rounded-full bg-slate-300"></div><span className="text-[8px] font-black uppercase tracking-widest text-slate-500">WOff</span></div>
-                                        <div className="flex items-center gap-2"><div className="h-2 w-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"></div><span className="text-[8px] font-black uppercase tracking-widest text-slate-500">Holiday</span></div>
+                                    {/* Clean Status Legend */}
+                                    <div className="flex items-center gap-3 bg-slate-50 py-1.5 px-3 rounded-xl border border-slate-200">
+                                        <div className="flex items-center gap-1.5"><div className="h-2.5 w-2.5 rounded-full bg-emerald-500"></div><span className="text-[10px] font-bold text-slate-600">Present</span></div>
+                                        <div className="flex items-center gap-1.5"><div className="h-2.5 w-2.5 rounded-full bg-rose-500"></div><span className="text-[10px] font-bold text-slate-600">Absent/LWP</span></div>
+                                        <div className="flex items-center gap-1.5"><div className="h-2.5 w-2.5 rounded-full bg-amber-500"></div><span className="text-[10px] font-bold text-slate-600">Leave</span></div>
+                                        <div className="flex items-center gap-1.5"><div className="h-2.5 w-2.5 rounded-full bg-slate-400"></div><span className="text-[10px] font-bold text-slate-600">WOff</span></div>
+                                        <div className="flex items-center gap-1.5"><div className="h-2.5 w-2.5 rounded-full bg-blue-500"></div><span className="text-[10px] font-bold text-slate-600">Holiday</span></div>
                                     </div>
-                                    {/* Fast Navigation Scroll Controls (Req 7) */}
-                                    <div className="flex flex-wrap items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
-                                        <span className="text-[8px] font-black uppercase text-slate-400">Scroll:</span>
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={scrollToStart}
-                                            className="h-7 w-7 p-0 rounded-lg border-slate-200 hover:bg-slate-200 text-slate-700"
-                                            title="Jump to Start (Day 1)"
-                                        >
-                                            <ChevronsLeft className="h-3.5 w-3.5 text-slate-700" />
-                                        </Button>
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => scrollTable(-280)}
-                                            className="h-7 w-7 p-0 rounded-lg border-slate-200 hover:bg-slate-200 text-slate-700"
-                                            title="Scroll Left (Prev Week)"
-                                        >
-                                            <ChevronLeft className="h-3.5 w-3.5 text-slate-700" />
-                                        </Button>
+                                    {/* Date Navigation & Jump Controls */}
+                                    <div className="flex items-center gap-2">
                                         {isTodayInCycle && (
                                             <Button
                                                 type="button"
                                                 variant="outline"
                                                 size="sm"
                                                 onClick={scrollToToday}
-                                                className="h-7 px-2 rounded-lg border-emerald-300 bg-emerald-50 hover:bg-emerald-100 font-black text-[8px] uppercase tracking-wider text-emerald-800 shadow-sm"
+                                                className="h-8 px-3 rounded-lg border-indigo-200 bg-indigo-50 hover:bg-indigo-100 font-bold text-[10px] text-indigo-700 shadow-xs cursor-pointer"
                                                 title={`Jump to Today (${currentDate.getDate()} ${monthNames[currentDate.getMonth()].slice(0, 3)})`}
                                             >
-                                                <Target className="h-3 w-3 mr-1 text-emerald-600" />
-                                                Today
+                                                <Target className="h-3.5 w-3.5 mr-1.5 text-indigo-600" />
+                                                Jump to Today
                                             </Button>
                                         )}
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => scrollTable(280)}
-                                            className="h-7 w-7 p-0 rounded-lg border-slate-200 hover:bg-slate-200 text-slate-700"
-                                            title="Scroll Right (Next Week)"
-                                        >
-                                            <ChevronRight className="h-3.5 w-3.5 text-slate-700" />
-                                        </Button>
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={scrollToEnd}
-                                            className="h-7 w-7 p-0 rounded-lg border-slate-200 hover:bg-slate-200 text-slate-700"
-                                            title={`Jump to End (Day ${daysInSelectedMonth})`}
-                                        >
-                                            <ChevronsRight className="h-3.5 w-3.5 text-slate-700" />
-                                        </Button>
+                                        <div className="flex items-center border border-slate-200 rounded-lg p-0.5 bg-slate-50">
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={scrollToStart}
+                                                className="h-7 w-7 p-0 rounded text-slate-600 hover:bg-white cursor-pointer"
+                                                title="Jump to Start (Day 1)"
+                                            >
+                                                <ChevronsLeft className="h-3.5 w-3.5" />
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => scrollTable(-240)}
+                                                className="h-7 w-7 p-0 rounded text-slate-600 hover:bg-white cursor-pointer"
+                                                title="Scroll Left"
+                                            >
+                                                <ChevronLeft className="h-3.5 w-3.5" />
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => scrollTable(240)}
+                                                className="h-7 w-7 p-0 rounded text-slate-600 hover:bg-white cursor-pointer"
+                                                title="Scroll Right"
+                                            >
+                                                <ChevronRight className="h-3.5 w-3.5" />
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={scrollToEnd}
+                                                className="h-7 w-7 p-0 rounded text-slate-600 hover:bg-white cursor-pointer"
+                                                title={`Jump to End (Day ${daysInSelectedMonth})`}
+                                            >
+                                                <ChevronsRight className="h-3.5 w-3.5" />
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
                             </CardHeader>
 
-                            {/* Synchronized Top Horizontal Scrollbar (Req 7 - no need to scroll to bottom) */}
-                            <div
-                                ref={topScrollRef}
-                                onScroll={handleTopScroll}
-                                className="overflow-x-auto border-b border-slate-100 bg-slate-50/70 scrollbar-thin scrollbar-thumb-slate-300"
-                                style={{ height: '14px' }}
-                            >
-                                <div style={{ width: scrollWidth || '100%', height: '1px' }} />
-                            </div>
-
                             <CardContent
                                 ref={tableContainerRef}
-                                onScroll={handleTableScroll}
-                                onMouseDown={handleMouseDown}
-                                onMouseMove={handleMouseMove}
-                                onMouseUp={handleMouseUp}
-                                onMouseLeave={handleMouseUp}
-                                className={cn(
-                                    "p-0 overflow-auto max-h-[calc(100vh-270px)] min-h-[460px] scrollbar-thin select-none",
-                                    isPanning ? "cursor-grabbing" : "cursor-grab"
-                                )}
+                                className="p-0 overflow-auto max-h-[calc(100vh-270px)] min-h-[460px] border-t border-slate-200 scrollbar-thin scrollbar-thumb-slate-300"
                             >
                                 <Table className="w-max min-w-full">
                                     <TableHeader className="sticky top-0 z-30 bg-white shadow-sm">
@@ -2196,26 +2109,29 @@ export default function AttendancePage() {
 
                                                         const tooltipLines = `${dateObj.toLocaleDateString('en-GB')}: ${statusLabel} (₹${earnedForDay.toLocaleString('en-IN')})\nClick to adjust attendance`;
 
+                                                        const isWeekend = dateObj.getDay() === 0;
+
                                                         return (
-                                                            <td key={dayIdx} className={cn("py-3 px-1 text-center transition-all", isToday ? "bg-indigo-50/30" : "")}>
-                                                                <div
+                                                            <td key={dayIdx} className={cn("py-2.5 px-1 text-center border-r border-slate-50 transition-colors", isToday ? "bg-indigo-50/40" : isWeekend ? "bg-slate-50/60" : "")}>
+                                                                <button
+                                                                    type="button"
                                                                     onClick={() => openCellAdjust(emp, dayIdx, dateObj)}
                                                                     title={tooltipLines}
                                                                     className={cn(
-                                                                        "h-6 w-6 mx-auto rounded-md flex items-center justify-center text-[8px] font-black transition-all hover:scale-125 cursor-pointer shadow-sm border select-none",
-                                                                        status === 'P' ? "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100" :
-                                                                        status === 'HD' ? "bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200" :
-                                                                        status === 'WO' ? "bg-purple-100 text-purple-900 border-purple-300 ring-1 ring-purple-400 hover:bg-purple-200" :
-                                                                        status === 'A' ? "bg-rose-500 text-white shadow-rose-200 border-rose-600 hover:bg-rose-600" :
-                                                                        status === 'W' ? "bg-slate-100 text-slate-400 border-slate-200 opacity-60 hover:opacity-100 hover:bg-slate-200" :
-                                                                        status === 'H' ? "bg-blue-500 text-white shadow-blue-200 border-blue-600 hover:bg-blue-600" :
-                                                                        status === 'T' ? "bg-violet-100 text-violet-700 border-violet-200 hover:bg-violet-200" :
-                                                                        status === 'L' ? "bg-indigo-100 text-indigo-700 border-indigo-200 hover:bg-indigo-200" :
+                                                                        "h-6 w-6 mx-auto rounded-md flex items-center justify-center text-[9px] font-black transition-all cursor-pointer border",
+                                                                        status === 'P' ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100" :
+                                                                        status === 'HD' ? "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100" :
+                                                                        status === 'WO' ? "bg-purple-50 text-purple-900 border-purple-300 hover:bg-purple-100" :
+                                                                        status === 'A' ? "bg-rose-500 text-white border-rose-600 hover:bg-rose-600" :
+                                                                        status === 'W' ? "bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200" :
+                                                                        status === 'H' ? "bg-blue-500 text-white border-blue-600 hover:bg-blue-600" :
+                                                                        status === 'T' ? "bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100" :
+                                                                        status === 'L' ? "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100" :
                                                                         "bg-white text-slate-300 border-dashed border-slate-200 hover:border-slate-400"
                                                                     )}
                                                                 >
                                                                     {status}
-                                                                </div>
+                                                                </button>
                                                             </td>
                                                         );
                                                     })}
@@ -2226,99 +2142,7 @@ export default function AttendancePage() {
                                 </Table>
                             </CardContent>
 
-                            {/* Sticky Bottom Desktop Horizontal Navigation Controller (Req 7) */}
-                            <div className="sticky bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200 px-5 py-2.5 shadow-[0_-6px_20px_-4px_rgba(0,0,0,0.06)] flex flex-col md:flex-row md:items-center justify-between gap-3 select-none">
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 mr-1 flex items-center gap-1">
-                                        <MoveHorizontal className="h-3 w-3 text-slate-400" />
-                                        Quick Jump:
-                                    </span>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={scrollToStart}
-                                        className="h-8 px-2.5 rounded-xl border-slate-200 hover:bg-slate-100 font-black text-[9px] uppercase tracking-wider text-slate-700 shadow-sm"
-                                        title="Jump to Start of Cycle (Day 1)"
-                                    >
-                                        <ChevronsLeft className="h-3.5 w-3.5 mr-1 text-slate-500" />
-                                        Start (01)
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => scrollTable(-280)}
-                                        className="h-8 px-2.5 rounded-xl border-slate-200 hover:bg-slate-100 font-black text-[9px] uppercase tracking-wider text-slate-700 shadow-sm"
-                                        title="Scroll 1 Week Left (-7 Days)"
-                                    >
-                                        <ChevronLeft className="h-3.5 w-3.5 mr-1 text-slate-500" />
-                                        -7 Days
-                                    </Button>
 
-                                    {isTodayInCycle && (
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={scrollToToday}
-                                            className="h-8 px-3 rounded-xl border-emerald-300 bg-emerald-50/90 hover:bg-emerald-100 font-black text-[9px] uppercase tracking-wider text-emerald-800 shadow-sm transition-all hover:scale-105"
-                                            title={`Jump directly to Today (${currentDate.getDate()} ${monthNames[currentDate.getMonth()].slice(0, 3)})`}
-                                        >
-                                            <div className="h-2 w-2 rounded-full bg-emerald-500 animate-ping mr-1.5" />
-                                            <Target className="h-3.5 w-3.5 mr-1 text-emerald-600" />
-                                            Jump to Today ({String(currentDate.getDate()).padStart(2, '0')})
-                                        </Button>
-                                    )}
-
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => scrollTable(280)}
-                                        className="h-8 px-2.5 rounded-xl border-slate-200 hover:bg-slate-100 font-black text-[9px] uppercase tracking-wider text-slate-700 shadow-sm"
-                                        title="Scroll 1 Week Right (+7 Days)"
-                                    >
-                                        +7 Days
-                                        <ChevronRight className="h-3.5 w-3.5 ml-1 text-slate-500" />
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={scrollToEnd}
-                                        className="h-8 px-2.5 rounded-xl border-slate-200 hover:bg-slate-100 font-black text-[9px] uppercase tracking-wider text-slate-700 shadow-sm"
-                                        title={`Jump to End (Day ${daysInSelectedMonth})`}
-                                    >
-                                        End ({daysInSelectedMonth})
-                                        <ChevronsRight className="h-3.5 w-3.5 ml-1 text-slate-500" />
-                                    </Button>
-                                </div>
-
-                                {/* Center: Interactive Visual Scrubber Track */}
-                                <div className="flex items-center gap-3 flex-1 max-w-xs md:max-w-md">
-                                    <span className="text-[8px] font-black uppercase text-slate-400 shrink-0">Scrub Cycle:</span>
-                                    <input
-                                        type="range"
-                                        min={0}
-                                        max={100}
-                                        value={Math.round((scrollLeftPos / (maxScrollLeft || 1)) * 100)}
-                                        onChange={(e) => handleScrubberChange(Number(e.target.value))}
-                                        className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600 transition-all hover:h-2"
-                                        title="Drag to smoothly scrub across all dates in cycle"
-                                    />
-                                    <span className="text-[9px] font-bold text-slate-600 shrink-0 tabular-nums">
-                                        {Math.round((scrollLeftPos / (maxScrollLeft || 1)) * 100)}%
-                                    </span>
-                                </div>
-
-                                {/* Right Tips & Shortcuts */}
-                                <div className="hidden lg:flex items-center gap-2">
-                                    <span className="text-[8px] font-bold text-slate-400 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">
-                                        🖐️ Drag Grid to Pan • ⌨️ Shift + Wheel to Scroll
-                                    </span>
-                                </div>
-                            </div>
                         </Card>
                     </div>
                 )}
@@ -2345,10 +2169,7 @@ export default function AttendancePage() {
 
                         return (
                             <div>
-                                <div className="bg-slate-900 p-7 text-white relative overflow-hidden">
-                                    <div className="absolute inset-0 opacity-10">
-                                        <div className="absolute inset-0 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]" />
-                                    </div>
+                                <div className="bg-slate-900 p-7 text-white relative">
                                     <div className="relative z-10 flex items-center justify-between">
                                         <div className="flex items-center gap-3">
                                             <div className="h-12 w-12 bg-white/10 rounded-2xl flex items-center justify-center font-black italic text-lg text-[#D9F99D] shadow-md">
@@ -2486,10 +2307,7 @@ export default function AttendancePage() {
             <Dialog open={isManualEntryOpen} onOpenChange={setIsManualEntryOpen}>
                 <DialogContent className="sm:max-w-[540px] max-h-[90vh] flex flex-col rounded-[2rem] p-0 overflow-hidden bg-white border-none shadow-2xl">
                     {/* Header: shrink-0 with compact padding */}
-                    <div className="bg-slate-900 px-6 py-5 text-center relative overflow-hidden shrink-0">
-                        <div className="absolute inset-0 opacity-10">
-                            <div className="absolute inset-0 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]" />
-                        </div>
+                    <div className="bg-slate-900 px-6 py-5 text-center relative shrink-0">
                         <div className="relative z-10 flex flex-col items-center">
                             <div className="h-11 w-11 bg-white/10 rounded-2xl flex items-center justify-center mb-2">
                                 <UserCheck className="h-6 w-6 text-[#D9F99D]" />
@@ -2716,10 +2534,7 @@ export default function AttendancePage() {
                 <DialogContent className="sm:max-w-[480px] rounded-[2rem] p-0 overflow-hidden bg-white border-none shadow-2xl">
                     {selectedCellAdjust && (
                         <div>
-                            <div className="bg-slate-900 p-6 text-white relative overflow-hidden">
-                                <div className="absolute inset-0 opacity-10">
-                                    <div className="absolute inset-0 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]" />
-                                </div>
+                            <div className="bg-slate-900 p-6 text-white relative">
                                 <div className="relative z-10 flex items-center justify-between">
                                     <div>
                                         <span className="text-[9px] font-black uppercase tracking-widest text-[#D9F99D]">Manual Attendance Adjustment</span>
@@ -2900,7 +2715,7 @@ export default function AttendancePage() {
             {/* Rotational & Fixed Weekly-Off Schedule Configuration Dialog (Req 2.5 C) */}
             <Dialog open={isWeeklyOffModalOpen} onOpenChange={setIsWeeklyOffModalOpen}>
                 <DialogContent className="sm:max-w-[650px] rounded-[2rem] p-0 overflow-hidden bg-white border-none shadow-2xl max-h-[90vh] flex flex-col">
-                    <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 text-white relative">
+                    <div className="bg-slate-900 p-6 text-white relative">
                         <div className="flex items-center justify-between">
                             <div>
                                 <span className="text-[9px] font-black uppercase tracking-widest text-purple-400">Rotational & Fixed Weekly Offs</span>
@@ -3075,10 +2890,7 @@ export default function AttendancePage() {
             {/* Late Attendance Policy & Threshold Dialog (Req 5.3) */}
             <Dialog open={isLateThresholdOpen} onOpenChange={setIsLateThresholdOpen}>
                 <DialogContent className="sm:max-w-[460px] rounded-[2rem] p-0 overflow-hidden bg-white border-none shadow-2xl">
-                    <div className="bg-amber-500 p-8 text-center relative overflow-hidden">
-                        <div className="absolute inset-0 opacity-10">
-                            <div className="absolute inset-0 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]" />
-                        </div>
+                    <div className="bg-amber-500 p-8 text-center relative">
                         <div className="relative z-10 flex flex-col items-center">
                             <div className="h-14 w-14 bg-white/20 rounded-2xl flex items-center justify-center mb-3">
                                 <Clock className="h-7 w-7 text-white" />
