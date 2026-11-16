@@ -9,9 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
     TrendingUp, Info, Wallet, ArrowUpRight, ChevronRight,
-    ShieldCheck, CreditCard, UserCircle, CalendarCheck, Clock, Download
+    ShieldCheck, CreditCard, UserCircle, CalendarCheck, Clock, Download,
+    SlidersHorizontal, ShieldAlert, CheckCircle2, Loader2, Sparkles, Building2, Percent, Check, AlertCircle
 } from "lucide-react";
-import { apiGet } from "@/lib/api-client";
+import { apiGet, apiPatch, apiPut } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -21,324 +22,617 @@ export function GlobalRulesSheet({
     isOpen, onOpenChange,
     selectedEmployee, setSelectedEmployee,
     globalRules, setGlobalRules,
-    handleSalaryUpdate, calculateProductionNet
+    handleSalaryUpdate, calculateProductionNet,
+    loadLedger
 }: any) {
+    // Local editable fields for selected employee
+    const [fixedGross, setFixedGross] = useState<number>(0);
+    const [hraApplicable, setHraApplicable] = useState<boolean>(true);
+    const [pfApplicable, setPfApplicable] = useState<boolean>(true);
+    const [pfCeiling, setPfCeiling] = useState<boolean>(true);
+    const [pfContributionMode, setPfContributionMode] = useState<string>("shared");
+    const [esicApplicable, setEsicApplicable] = useState<boolean>(false);
+    const [ptApplicable, setPtApplicable] = useState<boolean>(true);
+    const [performanceAllowance, setPerformanceAllowance] = useState<number>(0);
+    const [specialAllowance, setSpecialAllowance] = useState<number>(0);
+    const [conveyance, setConveyance] = useState<number>(0);
+    const [medicalAllowance, setMedicalAllowance] = useState<number>(0);
+
+    const [manualPayableDays, setManualPayableDays] = useState<string>("");
+    const [leaveAdjustmentDays, setLeaveAdjustmentDays] = useState<number>(0);
+    const [leaveCarryForwardDays, setLeaveCarryForwardDays] = useState<number>(0);
+    const [adminNotes, setAdminNotes] = useState<string>("");
+
+    const [previousArrears, setPreviousArrears] = useState<number>(0);
+    const [bonus, setBonus] = useState<number>(0);
+    const [incentive, setIncentive] = useState<number>(0);
+    const [otherDeduction, setOtherDeduction] = useState<number>(0);
+
+    const [saving, setSaving] = useState<boolean>(false);
+    const [activeTab, setActiveTab] = useState<"structure" | "attendance" | "variable">("structure");
+
+    useEffect(() => {
+        if (selectedEmployee) {
+            setFixedGross(Number(selectedEmployee.fixedGross ?? selectedEmployee.fixed_gross) || 0);
+            setHraApplicable((selectedEmployee.hraApplicable ?? selectedEmployee.hra_applicable) !== false);
+            setPfApplicable((selectedEmployee.pfApplicable ?? selectedEmployee.pf_applicable) !== false);
+            setPfCeiling((selectedEmployee.pfCeiling ?? selectedEmployee.pf_ceiling) !== false);
+            setPfContributionMode(selectedEmployee.pfContributionMode ?? selectedEmployee.pf_contribution_mode ?? "shared");
+            setEsicApplicable(Boolean(selectedEmployee.esicApplicable ?? selectedEmployee.esic_applicable));
+            setPtApplicable((selectedEmployee.ptApplicable ?? selectedEmployee.pt_applicable) !== false);
+            setPerformanceAllowance(Number(selectedEmployee.performanceAllowance ?? selectedEmployee.performance_allowance) || 0);
+            setSpecialAllowance(Number(selectedEmployee.specialAllowance ?? selectedEmployee.special_allowance) || 0);
+            setConveyance(Number(selectedEmployee.conveyance) || 0);
+            setMedicalAllowance(Number(selectedEmployee.medicalAllowance ?? selectedEmployee.medical_allowance) || 0);
+
+            const mPayable = selectedEmployee.manualPayableDays ?? selectedEmployee.manual_payable_days;
+            setManualPayableDays(mPayable !== null && mPayable !== undefined ? String(mPayable) : "");
+            setLeaveAdjustmentDays(Number(selectedEmployee.leaveAdjustmentDays ?? selectedEmployee.leave_adjustment_days) || 0);
+            setLeaveCarryForwardDays(Number(selectedEmployee.leaveCarryForwardDays ?? selectedEmployee.leave_carry_forward_days) || 0);
+            setAdminNotes(selectedEmployee.adminNotes ?? selectedEmployee.admin_notes ?? "");
+
+            setPreviousArrears(Number(selectedEmployee.previousArrears ?? selectedEmployee.previous_arrears) || 0);
+            setBonus(Number(selectedEmployee.bonus) || 0);
+            setIncentive(Number(selectedEmployee.incentive) || 0);
+            setOtherDeduction(Number(selectedEmployee.otherDeduction ?? selectedEmployee.other_deduction) || 0);
+            setActiveTab("structure");
+        }
+    }, [selectedEmployee, isOpen]);
+
+    // Live calculation for the drawer
+    const calc = (() => {
+        const dynamicDays = Number(selectedEmployee?.dynamicDays) || 30;
+        const elapsedDays = selectedEmployee?.elapsedDays != null ? Math.min(Number(selectedEmployee.elapsedDays), dynamicDays) : dynamicDays;
+        const absentDays = Number(selectedEmployee?.absentDays ?? selectedEmployee?.absent_days ?? 0);
+        const effectiveAbsent = Math.max(0, absentDays + leaveAdjustmentDays - leaveCarryForwardDays);
+
+        const hasManual = manualPayableDays !== "" && !isNaN(Number(manualPayableDays));
+        const payableDays = hasManual
+            ? Math.max(0, Math.min(dynamicDays, Number(manualPayableDays)))
+            : Math.max(0, elapsedDays - effectiveAbsent);
+
+        // 50% Basic Salary formula (Req 2.4)
+        const basicSalary = Math.round(fixedGross * 0.50);
+        const hra = hraApplicable ? Math.round(basicSalary * 0.40) : 0;
+        const otherAllowance = Math.max(0, fixedGross - (basicSalary + hra + conveyance + medicalAllowance + specialAllowance + performanceAllowance));
+
+        // Prorated components
+        const pBasic = Math.round((basicSalary / dynamicDays) * payableDays);
+        const pHra = Math.round((hra / dynamicDays) * payableDays);
+        const pConv = Math.round((conveyance / dynamicDays) * payableDays);
+        const pMed = Math.round((medicalAllowance / dynamicDays) * payableDays);
+        const pSpec = Math.round((specialAllowance / dynamicDays) * payableDays);
+        const pPerf = Math.round((performanceAllowance / dynamicDays) * payableDays);
+        const pOther = Math.round((otherAllowance / dynamicDays) * payableDays);
+
+        const proratedGross = pBasic + pHra + pConv + pMed + pSpec + pPerf + pOther;
+        const totalEarnings = proratedGross + previousArrears + bonus + incentive;
+
+        // PF
+        let pf = 0;
+        let pfEmployer = 0;
+        if (pfApplicable) {
+            const pfBase = pfCeiling ? Math.min(pBasic, 15000) : pBasic;
+            if (pfContributionMode === "shared" || pfContributionMode === "employee_only") {
+                pf = Math.round(pfBase * 0.12);
+            }
+            if (pfContributionMode === "shared" || pfContributionMode === "employer_only") {
+                pfEmployer = Math.round(pfBase * 0.12);
+            }
+        }
+
+        // ESI (threshold: fixedGross <= 21000)
+        let esi = 0;
+        let esiEmployer = 0;
+        if (esicApplicable && fixedGross <= 21000) {
+            esi = Math.ceil(totalEarnings * 0.0075);
+            esiEmployer = Math.ceil(totalEarnings * 0.0325);
+        }
+
+        // PT
+        let pt = 0;
+        if (ptApplicable) {
+            if (fixedGross > 33333) pt = 208;
+            else if (fixedGross > 25000) pt = 150;
+            else if (fixedGross > 15000) pt = 100;
+        }
+
+        const loanDeduction = Number(selectedEmployee?.loanDeduction) || 0;
+        const grossDeductions = pf + esi + pt + loanDeduction + otherDeduction;
+        const net = Math.max(0, totalEarnings - grossDeductions);
+        const lop = Math.round((fixedGross / dynamicDays) * (dynamicDays - payableDays));
+
+        return {
+            dynamicDays,
+            elapsedDays,
+            absentDays,
+            effectiveAbsent,
+            payableDays,
+            hasManual,
+            basicSalary,
+            hra,
+            otherAllowance,
+            proratedGross,
+            totalEarnings,
+            pf,
+            pfEmployer,
+            esi,
+            esiEmployer,
+            pt,
+            loanDeduction,
+            grossDeductions,
+            net,
+            lop
+        };
+    })();
+
+    const handleSave = async () => {
+        if (!selectedEmployee) return;
+        setSaving(true);
+        try {
+            // 1. Update Payroll Entry
+            const entryPayload: any = {
+                manual_payable_days: manualPayableDays === "" ? null : Number(manualPayableDays),
+                leave_adjustment_days: leaveAdjustmentDays,
+                leave_carry_forward_days: leaveCarryForwardDays,
+                admin_notes: adminNotes.trim(),
+                bonus: bonus,
+                previous_arrears: previousArrears,
+                incentive: incentive,
+                other_deduction: otherDeduction
+            };
+            await apiPatch(`/payroll/entry/${selectedEmployee.id}`, entryPayload);
+
+            // 2. Update Employee Salary Structure (if employeeId exists)
+            const empId = selectedEmployee.employeeId || selectedEmployee.employee_id;
+            if (empId) {
+                const salaryPayload: any = {
+                    fixed_gross: fixedGross,
+                    hra_applicable: hraApplicable,
+                    pf_applicable: pfApplicable,
+                    pf_ceiling: pfCeiling,
+                    pf_contribution_mode: pfContributionMode,
+                    esic_applicable: esicApplicable,
+                    pt_applicable: ptApplicable,
+                    performance_allowance: performanceAllowance,
+                    special_allowance: specialAllowance,
+                    conveyance: conveyance,
+                    medical_allowance: medicalAllowance
+                };
+                await apiPut(`/employees/${empId}/salary`, salaryPayload);
+            }
+
+            if (loadLedger) await loadLedger();
+            onOpenChange(false);
+        } catch (err: any) {
+            console.error("Failed to save payroll configuration:", err);
+            alert(err?.response?.data?.message || "Failed to save payroll configuration");
+        } finally {
+            setSaving(false);
+        }
+    };
+
     return (
         <Sheet open={isOpen} onOpenChange={(open) => {
             onOpenChange(open);
             if (!open) setSelectedEmployee(null);
         }}>
-            <SheetContent className="sm:max-w-[540px] border-none shadow-2xl p-0 overflow-y-auto">
-                <div className="h-2 bg-[#D9F99D]" />
-                <div className="p-8 space-y-10">
-                    <SheetHeader className="text-left space-y-2">
-                        <div className="h-12 w-12 rounded-2xl bg-slate-50 flex items-center justify-center">
-                            <TrendingUp className="h-6 w-6 text-indigo-500" />
+            <SheetContent className="sm:max-w-[620px] w-full p-0 flex flex-col h-full max-h-screen bg-white border-l border-slate-200 shadow-2xl">
+                {/* Pinned Header */}
+                <div className="shrink-0 px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white">
+                    <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-xl bg-indigo-50 border border-indigo-100/80 flex items-center justify-center text-indigo-600 shrink-0">
+                            <SlidersHorizontal className="h-5 w-5" />
                         </div>
-                        <SheetTitle className="text-2xl font-black italic uppercase text-slate-900 tracking-tighter">
-                            {selectedEmployee ? `Configure: ${selectedEmployee.name}` : "Global Salary Rules"}
-                        </SheetTitle>
-                        {selectedEmployee && (
-                            <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                <Badge className="bg-slate-900 text-white font-bold text-[8px] uppercase tracking-wider px-2 py-0.5">
-                                    {selectedEmployee.company || 'Apaar Logistics & Cold Supply Chain Pvt Ltd'}
-                                </Badge>
-                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                                    {selectedEmployee.employeeCode} • {selectedEmployee.designation || 'Employee'} • {selectedEmployee.location || 'Location'}
-                                </span>
-                            </div>
-                        )}
-                        <SheetDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-loose">
-                            Define CTC components, PF rules, and Tax overrides for this employee.
-                        </SheetDescription>
-                    </SheetHeader>
+                        <div>
+                            <SheetTitle className="text-base font-bold text-slate-900 tracking-tight">
+                                {selectedEmployee ? `Configure: ${selectedEmployee.name}` : "Global Salary Rules"}
+                            </SheetTitle>
+                            {selectedEmployee ? (
+                                <SheetDescription className="text-xs text-slate-500 font-normal mt-0.5">
+                                    {selectedEmployee.employeeCode} • {selectedEmployee.designation || 'Staff'} • {selectedEmployee.company || 'Company Entity'}
+                                </SheetDescription>
+                            ) : (
+                                <SheetDescription className="text-xs text-slate-500 font-normal mt-0.5">
+                                    Define global PF, ESI, and monthly cycle configuration
+                                </SheetDescription>
+                            )}
+                        </div>
+                    </div>
+                    {selectedEmployee && (
+                        <Badge variant="outline" className="text-[11px] font-semibold text-slate-600 bg-slate-50 border-slate-200 px-2.5 py-1">
+                            {selectedEmployee.location || "Indore HQ"}
+                        </Badge>
+                    )}
+                </div>
 
                     {selectedEmployee ? (
-                        <div className="grid gap-8 animate-in slide-in-from-right-4 duration-300">
-                            <div className="space-y-6">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <div className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
-                                    <span className="text-[9px] font-black text-slate-900 uppercase tracking-widest">Earnings Breakdown</span>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2 relative group">
-                                        <div className="flex justify-between items-center ml-1">
-                                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Monthly CTC</Label>
-                                            <Badge className="bg-slate-100 text-slate-500 border-none font-bold text-[7px] uppercase tracking-widest px-1.5 h-3.5">Locked</Badge>
-                                        </div>
-                                        <Input
-                                            type="number"
-                                            disabled
-                                            value={selectedEmployee.fixedGross || 0}
-                                            className="h-12 rounded-xl bg-slate-50/50 border-slate-100 font-bold text-[11px] text-slate-500 cursor-not-allowed opacity-70"
-                                        />
-                                        <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest ml-1">Managed via Profile Update</p>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Previous Arrears</Label>
-                                        <Input
-                                            type="number"
-                                            value={selectedEmployee.previousArrears || 0}
-                                            onChange={(e) => handleSalaryUpdate(selectedEmployee.id, 'previousArrears', parseInt(e.target.value) || 0)}
-                                            className="h-12 rounded-xl bg-slate-50 border-slate-100 font-bold text-[11px] focus:bg-white transition-all"
-                                        />
-                                        <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest ml-1">One-time addition</p>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Bonus</Label>
-                                        <Input
-                                            type="number"
-                                            value={selectedEmployee.bonus || 0}
-                                            onChange={(e) => handleSalaryUpdate(selectedEmployee.id, 'bonus', parseInt(e.target.value) || 0)}
-                                            className="h-10 rounded-xl bg-slate-50 border-slate-100 font-bold text-[10px] focus:bg-white transition-all"
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Incentive</Label>
-                                        <Input
-                                            type="number"
-                                            value={selectedEmployee.incentive || 0}
-                                            onChange={(e) => handleSalaryUpdate(selectedEmployee.id, 'incentive', parseInt(e.target.value) || 0)}
-                                            className="h-10 rounded-xl bg-slate-50 border-slate-100 font-bold text-[10px] focus:bg-white transition-all"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-2 mb-2 pt-4 border-t border-slate-100">
-                                    <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                                    <span className="text-[9px] font-black text-slate-900 uppercase tracking-widest">Deductions & Recoveries</span>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2 relative">
-                                        <div className="flex justify-between items-center ml-1">
-                                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Advance / Loan EMI</Label>
-                                            <Badge className="bg-emerald-50 text-emerald-600 border-none font-bold text-[7px] uppercase tracking-widest px-1.5 h-3.5">Auto</Badge>
-                                        </div>
-                                        <Input
-                                            type="number"
-                                            disabled
-                                            value={selectedEmployee.loanDeduction || 0}
-                                            className="h-10 rounded-xl bg-emerald-50/30 border-emerald-100/50 font-bold text-[10px] text-emerald-700 cursor-not-allowed"
-                                        />
-                                        <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest ml-1">Synced from Loan Module</p>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <div className="flex justify-between items-center ml-1">
-                                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Other Deduction</Label>
-                                        </div>
-                                        <Input
-                                            type="number"
-                                            value={selectedEmployee.otherDeduction || 0}
-                                            onChange={(e) => handleSalaryUpdate(selectedEmployee.id, 'otherDeduction', parseInt(e.target.value) || 0)}
-                                            className="h-10 rounded-xl bg-slate-50 border-slate-100 font-bold text-[10px] focus:bg-white transition-all"
-                                        />
-                                        <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest ml-1">Manual recovery</p>
-                                    </div>
-                                </div>
+                    <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+                        {/* Tabs Navigation */}
+                        <div className="flex border-b border-slate-200 gap-1 pb-1">
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab("structure")}
+                                className={cn(
+                                    "px-3 py-1.5 text-xs font-semibold rounded-lg transition-all",
+                                    activeTab === "structure"
+                                        ? "bg-slate-900 text-white"
+                                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                                )}
+                            >
+                                CTC & Compliance
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab("attendance")}
+                                className={cn(
+                                    "px-3 py-1.5 text-xs font-semibold rounded-lg transition-all",
+                                    activeTab === "attendance"
+                                        ? "bg-slate-900 text-white"
+                                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                                )}
+                            >
+                                Attendance Control
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab("variable")}
+                                className={cn(
+                                    "px-3 py-1.5 text-xs font-semibold rounded-lg transition-all",
+                                    activeTab === "variable"
+                                        ? "bg-slate-900 text-white"
+                                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                                )}
+                            >
+                                Arrears & Deductions
+                            </button>
+                        </div>
 
-                                <div className="flex items-center gap-2 mb-2 pt-4 border-t border-slate-100">
-                                    <div className="h-1.5 w-1.5 rounded-full bg-rose-500" />
-                                    <span className="text-[9px] font-black text-slate-900 uppercase tracking-widest">Attendance & Manual Payroll Control (Req 4.1, 4.2 & 10)</span>
-                                </div>
-                                <div className="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-100/90 text-[10px] text-indigo-950 leading-relaxed space-y-1">
-                                    <p className="font-bold uppercase tracking-wider text-[9px] text-indigo-800">Administrative Manual Control (Req 10):</p>
-                                    <p className="text-slate-600 text-[10px]">
-                                        Pending or unapproved leaves never automatically deduct an employee&apos;s salary. As Admin/Owner, you hold complete authority over leave approval, paid/unpaid status, balance adjustment, and current vs. future-month salary deductions.
+                        {/* TAB 1: CTC & Statutory Compliance */}
+                        {activeTab === "structure" && (
+                            <div className="space-y-4">
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs font-semibold text-slate-800">Monthly Fixed CTC / Gross (₹)</Label>
+                                        <span className="text-[10px] text-slate-400">Annual: ₹{(fixedGross * 12).toLocaleString()}</span>
+                                    </div>
+                                    <Input
+                                        type="number"
+                                        value={fixedGross || ""}
+                                        onChange={(e) => setFixedGross(parseFloat(e.target.value) || 0)}
+                                        placeholder="Enter monthly CTC (e.g. 50000)"
+                                        className="h-11 rounded-xl bg-slate-50 border-slate-200 text-sm font-bold text-slate-900 focus:bg-white"
+                                    />
+                                    <p className="text-[11px] text-slate-500">
+                                        Standard Indian CTC Structure: Basic is automatically computed as 50% of Fixed CTC.
                                     </p>
                                 </div>
 
-                                {/* Active Cycle Leave Records (Req 10) */}
-                                {selectedEmployee.cycle_leaves && selectedEmployee.cycle_leaves.length > 0 && (
-                                    <div className="space-y-2 p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
-                                        <span className="text-[8px] font-black uppercase tracking-wider text-slate-500 block">
-                                            Leave Requests in this Cycle ({selectedEmployee.cycle_leaves.length})
-                                        </span>
-                                        <div className="space-y-2">
-                                            {selectedEmployee.cycle_leaves.map((l: any, idx: number) => {
-                                                const isPending = l.status === 'pending';
-                                                const isUnpaid = l.payroll_treatment === 'unpaid';
-                                                const isCarry = l.payroll_treatment === 'carry_forward_next';
-                                                return (
-                                                    <div key={l.id || idx} className="p-2.5 rounded-lg bg-white border border-slate-200/80 flex items-center justify-between text-[9px]">
-                                                        <div>
-                                                            <div className="flex items-center gap-1.5 font-bold text-slate-800">
-                                                                <Badge className="text-[7px] font-black uppercase px-1.5 h-4 rounded">
-                                                                    {(l.leave_type || 'EL').toUpperCase()}
-                                                                </Badge>
-                                                                <span>{l.duration || 1} Day{l.duration > 1 ? 's' : ''}</span>
-                                                                <span className="text-slate-400 font-normal">
-                                                                    ({new Date(l.from_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })} – {new Date(l.to_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })})
-                                                                </span>
-                                                            </div>
-                                                            {l.reason && <p className="text-[8px] text-slate-500 italic mt-0.5 truncate max-w-[280px]">&ldquo;{l.reason}&rdquo;</p>}
-                                                        </div>
-                                                        <Badge className={cn(
-                                                            "text-[7px] font-black uppercase px-2 h-4 rounded border-none",
-                                                            isPending ? "bg-amber-100 text-amber-800" :
-                                                            isUnpaid ? "bg-rose-100 text-rose-800" :
-                                                            isCarry ? "bg-indigo-100 text-indigo-800" :
-                                                            "bg-emerald-100 text-emerald-800"
-                                                        )}>
-                                                            {isPending ? "Pending (No Cut)" :
-                                                             isUnpaid ? "Unpaid (LWP)" :
-                                                             isCarry ? "Carry Next" : "Paid"}
-                                                        </Badge>
-                                                    </div>
-                                                );
-                                            })}
+                                {/* Computed Structure Card */}
+                                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                                    <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
+                                        <span>Standard Earnings Breakdown</span>
+                                        <span className="text-[11px] text-indigo-600 font-medium">Monthly CTC: ₹{fixedGross.toLocaleString()}</span>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-3 pt-1 text-xs">
+                                        <div className="p-2.5 rounded-lg bg-white border border-slate-100">
+                                            <span className="text-[10px] text-slate-400 block uppercase font-medium">Basic (50%)</span>
+                                            <span className="font-bold text-slate-800 text-sm">₹{calc.basicSalary.toLocaleString()}</span>
+                                        </div>
+                                        <div className="p-2.5 rounded-lg bg-white border border-slate-100">
+                                            <span className="text-[10px] text-slate-400 block uppercase font-medium">HRA ({hraApplicable ? "40%" : "0%"})</span>
+                                            <span className="font-bold text-slate-800 text-sm">₹{calc.hra.toLocaleString()}</span>
+                                        </div>
+                                        <div className="p-2.5 rounded-lg bg-white border border-slate-100">
+                                            <span className="text-[10px] text-slate-400 block uppercase font-medium">Other / Special</span>
+                                            <span className="font-bold text-slate-800 text-sm">₹{calc.otherAllowance.toLocaleString()}</span>
                                         </div>
                                     </div>
-                                )}
+                                </div>
 
-                                <div className="space-y-4">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <div className="flex justify-between items-center ml-1">
-                                                <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Recorded Absences</Label>
-                                                <Badge className="bg-blue-50 text-blue-600 border-none font-bold text-[7px] uppercase tracking-widest px-1.5 h-3.5">Attendance Sync</Badge>
+                                {/* Statutory Toggles */}
+                                <div className="space-y-3 pt-2">
+                                    <Label className="text-xs font-semibold text-slate-800 block">Statutory Compliance Rules</Label>
+                                    
+                                    {/* HRA */}
+                                    <label className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer transition-all">
+                                        <div>
+                                            <span className="text-xs font-semibold text-slate-800 block">House Rent Allowance (HRA)</span>
+                                            <span className="text-[11px] text-slate-500">40% of Basic salary component</span>
+                                        </div>
+                                        <input
+                                            type="checkbox"
+                                            checked={hraApplicable}
+                                            onChange={(e) => setHraApplicable(e.target.checked)}
+                                            className="h-4 w-4 rounded text-slate-900 border-slate-300 focus:ring-slate-900 cursor-pointer"
+                                        />
+                                    </label>
+
+                                    {/* PF Configuration */}
+                                    <div className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <span className="text-xs font-semibold text-slate-800 block">Provident Fund (PF)</span>
+                                                <span className="text-[11px] text-slate-500">12% on Basic (deduction ₹{calc.pf.toLocaleString()})</span>
                                             </div>
-                                            <Input
-                                                type="number"
-                                                disabled
-                                                value={selectedEmployee.absentDays}
-                                                className="h-10 rounded-xl bg-blue-50/30 border-blue-100/50 font-bold text-[10px] text-blue-700 cursor-not-allowed"
+                                            <input
+                                                type="checkbox"
+                                                checked={pfApplicable}
+                                                onChange={(e) => setPfApplicable(e.target.checked)}
+                                                className="h-4 w-4 rounded text-slate-900 border-slate-300 focus:ring-slate-900 cursor-pointer"
                                             />
-                                            <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest ml-1">Live muster absent days</p>
                                         </div>
 
-                                        <div className="space-y-2">
-                                            <div className="flex justify-between items-center ml-1">
-                                                <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Direct Payable Days Override (Req 4.1)</Label>
-                                                <Badge className="bg-amber-100 text-amber-800 border-none font-bold text-[7px] uppercase tracking-widest px-1.5 h-3.5">Admin</Badge>
+                                        {pfApplicable && (
+                                            <div className="pt-2 border-t border-slate-100 grid grid-cols-2 gap-3 text-xs">
+                                                <div>
+                                                    <Label className="text-[10px] font-semibold text-slate-500 uppercase block mb-1">Cap Basic at ₹15,000</Label>
+                                                    <select
+                                                        value={pfCeiling ? "yes" : "no"}
+                                                        onChange={(e) => setPfCeiling(e.target.value === "yes")}
+                                                        className="w-full h-9 rounded-lg border border-slate-200 px-2.5 text-xs bg-slate-50 font-medium"
+                                                    >
+                                                        <option value="yes">Yes (Statutory ₹15k Cap)</option>
+                                                        <option value="no">No (Uncapped 12% on Full Basic)</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <Label className="text-[10px] font-semibold text-slate-500 uppercase block mb-1">Contribution Mode</Label>
+                                                    <select
+                                                        value={pfContributionMode}
+                                                        onChange={(e) => setPfContributionMode(e.target.value)}
+                                                        className="w-full h-9 rounded-lg border border-slate-200 px-2.5 text-xs bg-slate-50 font-medium"
+                                                    >
+                                                        <option value="shared">Shared (Emp 12% + Empr 12%)</option>
+                                                        <option value="employee_only">Employee Only (12%)</option>
+                                                        <option value="employer_only">Employer Only (12%)</option>
+                                                    </select>
+                                                </div>
                                             </div>
-                                            <Input
-                                                type="number"
-                                                placeholder="Override days (e.g. 28)"
-                                                value={selectedEmployee.manualPayableDays ?? selectedEmployee.manual_payable_days ?? ""}
-                                                onChange={(e) => handleSalaryUpdate(selectedEmployee.id, 'manualPayableDays', e.target.value === "" ? null : parseFloat(e.target.value))}
-                                                className="h-10 rounded-xl bg-slate-50 border-slate-100 font-bold text-[10px] focus:bg-white transition-all"
-                                            />
-                                            <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest ml-1">Directly locks payable days</p>
-                                        </div>
+                                        )}
                                     </div>
 
-                                    {/* Leave Adjustment Controls (Req 4.2) */}
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Deduct This Month (Days)</Label>
-                                            <Input
-                                                type="number"
-                                                value={selectedEmployee.leaveAdjustmentDays ?? selectedEmployee.leave_adjustment_days ?? 0}
-                                                onChange={(e) => handleSalaryUpdate(selectedEmployee.id, 'leaveAdjustmentDays', parseFloat(e.target.value) || 0)}
-                                                className="h-10 rounded-xl bg-slate-50 border-slate-100 font-bold text-[10px] focus:bg-white transition-all"
-                                            />
-                                            <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest ml-1">e.g. Deduct 2 days now</p>
+                                    {/* ESIC */}
+                                    <label className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer transition-all">
+                                        <div>
+                                            <span className="text-xs font-semibold text-slate-800 block">ESIC Applicable</span>
+                                            <span className="text-[11px] text-slate-500">0.75% Employee + 3.25% Employer (deduction ₹{calc.esi.toLocaleString()})</span>
                                         </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Carry Forward To Next (Days)</Label>
-                                            <Input
-                                                type="number"
-                                                value={selectedEmployee.leaveCarryForwardDays ?? selectedEmployee.leave_carry_forward_days ?? 0}
-                                                onChange={(e) => handleSalaryUpdate(selectedEmployee.id, 'leaveCarryForwardDays', parseFloat(e.target.value) || 0)}
-                                                className="h-10 rounded-xl bg-slate-50 border-slate-100 font-bold text-[10px] focus:bg-white transition-all"
-                                            />
-                                            <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest ml-1">e.g. Carry 2 days forward</p>
-                                        </div>
-                                    </div>
+                                        <input
+                                            type="checkbox"
+                                            checked={esicApplicable}
+                                            onChange={(e) => setEsicApplicable(e.target.checked)}
+                                            className="h-4 w-4 rounded text-slate-900 border-slate-300 focus:ring-slate-900 cursor-pointer"
+                                        />
+                                    </label>
 
-                                    <div className="space-y-2">
-                                        <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Admin Audit Reason / Note</Label>
+                                    {/* Professional Tax (PT) */}
+                                    <label className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer transition-all">
+                                        <div>
+                                            <span className="text-xs font-semibold text-slate-800 block">Professional Tax (PT)</span>
+                                            <span className="text-[11px] text-slate-500">Standard state PT slab deduction (₹{calc.pt})</span>
+                                        </div>
+                                        <input
+                                            type="checkbox"
+                                            checked={ptApplicable}
+                                            onChange={(e) => setPtApplicable(e.target.checked)}
+                                            className="h-4 w-4 rounded text-slate-900 border-slate-300 focus:ring-slate-900 cursor-pointer"
+                                        />
+                                    </label>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* TAB 2: Attendance Control (Req 4.1, 4.2 & 10) */}
+                        {activeTab === "attendance" && (
+                            <div className="space-y-4">
+                                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-relaxed">
+                                    <p className="font-semibold text-slate-900 mb-0.5">Admin Discretion Policy (Req 10):</p>
+                                    Unapproved or pending leaves never auto-deduct salary. The Admin has full authority to override payable days, deduct this cycle, or carry forward deductions.
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs font-semibold text-slate-700">Muster Absent Days</Label>
                                         <Input
-                                            placeholder="Reason for manual adjustment..."
-                                            value={selectedEmployee.adminNotes ?? selectedEmployee.admin_notes ?? ""}
-                                            onChange={(e) => handleSalaryUpdate(selectedEmployee.id, 'adminNotes', e.target.value)}
-                                            className="h-10 rounded-xl bg-slate-50 border-slate-100 font-bold text-[10px] focus:bg-white transition-all"
+                                            disabled
+                                            value={selectedEmployee.absentDays || 0}
+                                            className="h-10 rounded-xl bg-slate-100 border-slate-200 font-bold text-xs text-slate-600 cursor-not-allowed"
+                                        />
+                                        <p className="text-[10px] text-slate-400">Live attendance sync</p>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <div className="flex items-center justify-between">
+                                            <Label className="text-xs font-semibold text-slate-700">Payable Days Override</Label>
+                                            <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-800 border-amber-200 px-1 py-0">Req 4.1</Badge>
+                                        </div>
+                                        <Input
+                                            type="number"
+                                            step="0.5"
+                                            placeholder={`Auto: ${calc.payableDays}`}
+                                            value={manualPayableDays}
+                                            onChange={(e) => setManualPayableDays(e.target.value)}
+                                            className="h-10 rounded-xl bg-white border-slate-200 font-bold text-xs text-slate-900 focus:border-slate-900"
+                                        />
+                                        <p className="text-[10px] text-slate-400">Leave blank for automatic calculation</p>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3 pt-2">
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs font-semibold text-slate-700">Deduct Now (Days)</Label>
+                                        <Input
+                                            type="number"
+                                            step="0.5"
+                                            value={leaveAdjustmentDays || ""}
+                                            onChange={(e) => setLeaveAdjustmentDays(parseFloat(e.target.value) || 0)}
+                                            placeholder="0"
+                                            className="h-10 rounded-xl bg-white border-slate-200 font-bold text-xs text-slate-900"
+                                        />
+                                        <p className="text-[10px] text-slate-400">Deduct from this cycle</p>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs font-semibold text-slate-700">Carry Forward (Days)</Label>
+                                        <Input
+                                            type="number"
+                                            step="0.5"
+                                            value={leaveCarryForwardDays || ""}
+                                            onChange={(e) => setLeaveCarryForwardDays(parseFloat(e.target.value) || 0)}
+                                            placeholder="0"
+                                            className="h-10 rounded-xl bg-white border-slate-200 font-bold text-xs text-slate-900"
+                                        />
+                                        <p className="text-[10px] text-slate-400">Defer deduction to next cycle</p>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1.5 pt-2">
+                                    <Label className="text-xs font-semibold text-slate-700">Admin Audit Reason / Note</Label>
+                                    <Input
+                                        placeholder="Reason for adjustment (e.g. approved medical waiver)"
+                                        value={adminNotes}
+                                        onChange={(e) => setAdminNotes(e.target.value)}
+                                        className="h-10 rounded-xl bg-white border-slate-200 text-xs"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* TAB 3: Variable & Recoveries */}
+                        {activeTab === "variable" && (
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs font-semibold text-slate-700">Previous Arrears (₹)</Label>
+                                        <Input
+                                            type="number"
+                                            value={previousArrears || ""}
+                                            onChange={(e) => setPreviousArrears(parseFloat(e.target.value) || 0)}
+                                            placeholder="0"
+                                            className="h-10 rounded-xl bg-white border-slate-200 font-bold text-xs text-slate-900"
+                                        />
+                                        <p className="text-[10px] text-slate-400">One-time addition</p>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs font-semibold text-slate-700">Bonus (₹)</Label>
+                                        <Input
+                                            type="number"
+                                            value={bonus || ""}
+                                            onChange={(e) => setBonus(parseFloat(e.target.value) || 0)}
+                                            placeholder="0"
+                                            className="h-10 rounded-xl bg-white border-slate-200 font-bold text-xs text-slate-900"
                                         />
                                     </div>
                                 </div>
-                            </div>
 
-                            <div className="p-6 rounded-[2rem] bg-slate-950 text-white shadow-2xl relative overflow-hidden border border-white/5">
-                                <div className="absolute top-0 right-0 p-6 opacity-5">
-                                    <TrendingUp className="h-20 w-20" />
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs font-semibold text-slate-700">Incentive / Performance (₹)</Label>
+                                        <Input
+                                            type="number"
+                                            value={incentive || ""}
+                                            onChange={(e) => setIncentive(parseFloat(e.target.value) || 0)}
+                                            placeholder="0"
+                                            className="h-10 rounded-xl bg-white border-slate-200 font-bold text-xs text-slate-900"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs font-semibold text-slate-700">Other Deductions / Fine (₹)</Label>
+                                        <Input
+                                            type="number"
+                                            value={otherDeduction || ""}
+                                            onChange={(e) => setOtherDeduction(parseFloat(e.target.value) || 0)}
+                                            placeholder="0"
+                                            className="h-10 rounded-xl bg-white border-slate-200 font-bold text-xs text-slate-900"
+                                        />
+                                        <p className="text-[10px] text-slate-400">Manual recovery</p>
+                                    </div>
                                 </div>
-                                <div className="grid grid-cols-3 gap-4 relative z-10">
-                                    <div>
-                                        <p className="text-[8px] font-black uppercase text-indigo-300 tracking-[0.2em] mb-1">Payable Days</p>
-                                        <h4 className="text-xl font-black text-white tracking-tight italic">
-                                            {calculateProductionNet(selectedEmployee)?.payableDays} <span className="text-xs text-slate-400 font-normal">/ {selectedEmployee.dynamicDays || 30}</span>
-                                        </h4>
+
+                                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                                    <div className="flex items-center justify-between text-xs">
+                                        <span className="font-semibold text-slate-700">Loan / Advance EMI:</span>
+                                        <span className="font-bold text-slate-900">₹{(selectedEmployee.loanDeduction || 0).toLocaleString()}</span>
                                     </div>
-                                    <div>
-                                        <p className="text-[8px] font-black uppercase text-rose-300 tracking-[0.2em] mb-1">LOP Deduction</p>
-                                        <h4 className="text-xl font-black text-rose-400 tracking-tight italic">₹{calculateProductionNet(selectedEmployee)?.lop?.toLocaleString()}</h4>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className="text-[8px] font-black uppercase text-[#D9F99D] tracking-[0.2em] mb-1">Net In-Hand</p>
-                                        <h4 className="text-2xl font-black italic tracking-tighter text-[#D9F99D]">₹{calculateProductionNet(selectedEmployee).net.toLocaleString()}</h4>
-                                    </div>
+                                    <p className="text-[11px] text-slate-400">Automatically synced from active loan schedule.</p>
                                 </div>
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    /* Global Rules Fallback */
+                    <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+                        <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800">
+                            These default rules apply to any employee without explicit custom contract terms.
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                                <Label className="text-xs font-semibold text-slate-700">Employer PF %</Label>
+                                <Input
+                                    type="number"
+                                    value={globalRules.pfEmployer}
+                                    onChange={(e) => setGlobalRules({ ...globalRules, pfEmployer: parseInt(e.target.value) || 0 })}
+                                    className="h-10 rounded-xl"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-xs font-semibold text-slate-700">Employee PF %</Label>
+                                <Input
+                                    type="number"
+                                    value={globalRules.pfEmployee}
+                                    onChange={(e) => setGlobalRules({ ...globalRules, pfEmployee: parseInt(e.target.value) || 0 })}
+                                    className="h-10 rounded-xl"
+                                />
                             </div>
                         </div>
-                    ) : (
-                        <div className="grid gap-8 animate-in slide-in-from-right-4 duration-300">
-                            <div className="space-y-6">
-                                <div className="p-4 rounded-2xl bg-amber-50 border border-amber-100 flex gap-3">
-                                    <Info className="h-5 w-5 text-amber-500 shrink-0" />
-                                    <p className="text-[9px] font-bold text-amber-800 uppercase tracking-widest leading-relaxed">
-                                        Warning: These rules will apply to all employees who don't have custom overrides.
-                                    </p>
-                                </div>
+                    </div>
+                )}
 
-                                <div className="space-y-4">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Employer PF %</Label>
-                                            <Input
-                                                type="number"
-                                                value={globalRules.pfEmployer}
-                                                onChange={(e) => setGlobalRules({ ...globalRules, pfEmployer: parseInt(e.target.value) || 0 })}
-                                                className="h-12 rounded-xl bg-slate-50 border-slate-100 font-bold text-[11px]"
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Employee PF %</Label>
-                                            <Input
-                                                type="number"
-                                                value={globalRules.pfEmployee}
-                                                onChange={(e) => setGlobalRules({ ...globalRules, pfEmployee: parseInt(e.target.value) || 0 })}
-                                                className="h-12 rounded-xl bg-slate-50 border-slate-100 font-bold text-[11px]"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">HRA % of Basic</Label>
-                                            <Input
-                                                type="number"
-                                                value={globalRules.hraPercent}
-                                                onChange={(e) => setGlobalRules({ ...globalRules, hraPercent: parseInt(e.target.value) || 0 })}
-                                                className="h-12 rounded-xl bg-slate-50 border-slate-100 font-bold text-[11px]"
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Monthly Cycle</Label>
-                                            <Input
-                                                value={globalRules.cycle}
-                                                onChange={(e) => setGlobalRules({ ...globalRules, cycle: e.target.value })}
-                                                className="h-12 rounded-xl bg-slate-50 border-slate-100 font-bold text-[11px]"
-                                            />
-                                        </div>
-                                    </div>
+                {/* Pinned Bottom Matrix & Footer */}
+                <div className="shrink-0 px-6 py-4 border-t border-slate-200 bg-white space-y-3">
+                    {selectedEmployee && (
+                        <div className="p-3.5 rounded-xl bg-slate-900 text-white">
+                            <div className="grid grid-cols-3 gap-2 text-center">
+                                <div className="border-r border-slate-800 pr-2">
+                                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">Payable Days</span>
+                                    <span className="text-sm font-bold text-white">{calc.payableDays} / {selectedEmployee.dynamicDays || 30}</span>
+                                </div>
+                                <div className="border-r border-slate-800 px-2">
+                                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">Gross Payable</span>
+                                    <span className="text-sm font-bold text-white">₹{calc.proratedGross.toLocaleString()}</span>
+                                </div>
+                                <div className="pl-2">
+                                    <span className="text-[10px] text-emerald-400 uppercase font-semibold block">Net In-Hand</span>
+                                    <span className="text-base font-bold text-emerald-400">₹{calc.net.toLocaleString()}</span>
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    <SheetFooter className="pt-6">
-                        <Button onClick={() => onOpenChange(false)} className="w-full h-12 rounded-2xl bg-slate-900 text-white font-black uppercase text-[9px] tracking-widest shadow-xl">Save Configuration</Button>
-                    </SheetFooter>
+                    <div className="flex items-center gap-3">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => onOpenChange(false)}
+                            className="flex-1 h-11 rounded-xl border-slate-200 font-semibold text-xs text-slate-700"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="button"
+                            disabled={saving}
+                            onClick={handleSave}
+                            className="flex-1 h-11 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs shadow-sm flex items-center justify-center gap-2"
+                        >
+                            {saving ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 animate-spin text-white" />
+                                    Saving...
+                                </>
+                            ) : (
+                                "Save Configuration"
+                            )}
+                        </Button>
+                    </div>
                 </div>
             </SheetContent>
         </Sheet>

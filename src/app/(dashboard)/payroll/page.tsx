@@ -1074,6 +1074,7 @@ export default function PayrollPage() {
                     setGlobalRules={setGlobalRules}
                     handleSalaryUpdate={handleSalaryUpdate}
                     calculateProductionNet={calculateProductionNet}
+                    loadLedger={loadLedger}
                 />
 
                 <DisbursementDialog
