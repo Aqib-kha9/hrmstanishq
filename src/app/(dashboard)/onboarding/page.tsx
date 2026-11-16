@@ -340,7 +340,8 @@ const validateField = (id: string, value: string): string | null => {
             if (v && v.length > 30) return "PF number must be under 30 characters";
             return null;
         case "uan":
-            if (v && !UAN_RE.test(v)) return "UAN must be exactly 12 digits";
+            if (!v) return "Universal Account Number (UAN) is required";
+            if (!UAN_RE.test(v.replace(/\s/g, ""))) return "UAN must be exactly 12 digits (e.g. 101234567890)";
             return null;
         case "licDetails":
             if (v && v.length > 100) return "LIC details must be under 100 characters";
@@ -747,6 +748,10 @@ function OnboardingForm() {
 
     const approveCandidateSubmission = async (invitationId: number) => {
         if (approveLoading) return;
+        if (!approvalOverrides.uan || !/^\d{12}$/.test(approvalOverrides.uan.trim())) {
+            alert("Universal Account Number (UAN) is required and must be exactly 12 digits (e.g. 101234567890).");
+            return;
+        }
         setApproveLoading(true);
         try {
             const result = await apiPost<any>(`/onboarding/approve/${invitationId}`, {
@@ -2840,14 +2845,16 @@ function OnboardingForm() {
                                                 {fieldErrorEl("pfNo")}
                                             </div>
                                             <div className="space-y-3">
-                                                <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                    UAN ID
+                                                <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                                                    <span>Universal Account Number (UAN)</span>
+                                                    <span className="text-red-500 font-bold">*</span>
                                                 </Label>
                                                 <Input
-                                                    placeholder="1000 0000 0000"
-                                                    className={inputClass("uan", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs tracking-widest")}
+                                                    placeholder="12-digit UAN (e.g. 101234567890)"
+                                                    maxLength={12}
+                                                    className={inputClass("uan", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs tracking-widest font-mono")}
                                                     value={formData.uan}
-                                                    onChange={(e) => updateField("uan", e.target.value)}
+                                                    onChange={(e) => updateField("uan", e.target.value.replace(/\D/g, ""))}
                                                     onBlur={() => handleBlur("uan")}
                                                 />
                                                 {fieldErrorEl("uan")}
@@ -4214,11 +4221,15 @@ function OnboardingForm() {
                                         />
                                     </div>
                                     <div>
-                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">UAN ID</Label>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 flex items-center gap-1">
+                                            <span>UAN ID</span>
+                                            <span className="text-red-500 font-bold">*</span>
+                                        </Label>
                                         <Input
                                             value={approvalOverrides.uan}
-                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, uan: e.target.value }))}
-                                            placeholder="1000 0000 0000"
+                                            maxLength={12}
+                                            onChange={(e) => setApprovalOverrides(a => ({ ...a, uan: e.target.value.replace(/\D/g, "") }))}
+                                            placeholder="12-digit UAN"
                                             className="h-10 rounded-xl bg-slate-50 font-bold text-xs font-mono"
                                         />
                                     </div>
