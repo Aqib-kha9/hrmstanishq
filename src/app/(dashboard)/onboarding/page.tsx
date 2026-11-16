@@ -55,7 +55,7 @@ import { apiGet, apiPost, apiPatch, apiPut, getApiErrorMessage } from "@/lib/api
 
 const steps = ["Personal Info", "Employment Information", "Salary & Bank", "Documentation", "Review"];
 
-// ── 8 Verification Documents per SOW Req 2.3 D ──
+// ── Verification Documents & Resume per SOW Req 2.3 D ──
 const SOW_ONBOARDING_DOCUMENTS = [
     {
         key: "aadhaar",
@@ -112,13 +112,22 @@ const SOW_ONBOARDING_DOCUMENTS = [
         icon: Briefcase,
     },
     {
-        key: "salary_slips_statement",
-        title: "Last 3 Months' Salary Slips / Bank Statement",
-        shortName: "Salary Slips / Statement",
+        key: "salary_slips",
+        title: "Last 3 Months' Salary Slips",
+        shortName: "Salary Slips (3 Mos)",
         mandatory: false,
-        description: "Last 3 months salary slips or bank statements (Optional for freshers)",
+        description: "Payslips for previous 3 consecutive months (Optional for freshers)",
         accept: ".pdf,.png,.jpg,.jpeg",
         icon: FileSpreadsheet,
+    },
+    {
+        key: "bank_statement",
+        title: "Last 6 Months' Bank Statement",
+        shortName: "Bank Statement (6 Mos)",
+        mandatory: false,
+        description: "Bank statement showing salary credits for last 6 months (Optional for freshers)",
+        accept: ".pdf,.png,.jpg,.jpeg",
+        icon: Banknote,
     },
     {
         key: "signed_offer_letter",
@@ -128,6 +137,15 @@ const SOW_ONBOARDING_DOCUMENTS = [
         description: "Signed & accepted copy of offer letter or appointment letter",
         accept: ".pdf,.png,.jpg,.jpeg",
         icon: CheckSquare,
+    },
+    {
+        key: "resume",
+        title: "Updated Resume / Curriculum Vitae (CV)",
+        shortName: "Resume / CV",
+        mandatory: false,
+        description: "Candidate's updated resume or CV document (Optional)",
+        accept: ".pdf,.doc,.docx,.png,.jpg,.jpeg",
+        icon: FileCheck,
     },
 ];
 
@@ -953,7 +971,7 @@ function OnboardingForm() {
     /** Handle files selected via the hidden input */
     const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
-        // Auto-detect doc type from filename among all 8 SOW categories
+        // Auto-detect doc type from filename among all verification categories
         const detectType = (name: string): string => {
             const n = name.toLowerCase();
             if (n.includes("aadhar") || n.includes("adhaar") || n.includes("uid")) return "Aadhaar Card Front & Back (Combined)";
@@ -962,7 +980,9 @@ function OnboardingForm() {
             if (n.includes("passbook") || n.includes("cheque") || (n.includes("bank") && !n.includes("statement"))) return "Cancelled Cheque / Passbook Copy";
             if (n.includes("education") || n.includes("degree") || n.includes("qualification") || n.includes("marksheet") || n.includes("diploma")) return "Highest Educational Qualification Certificate";
             if (n.includes("relieving") || n.includes("experience") || n.includes("service")) return "Previous Employer Relieving Letter / Experience Letter";
-            if (n.includes("salary") || n.includes("payslip") || n.includes("statement")) return "Last 3 Months' Salary Slips / Bank Statement";
+            if (n.includes("statement") || n.includes("bank statement") || n.includes("bank_statement") || n.includes("bankstmt")) return "Last 6 Months' Bank Statement";
+            if (n.includes("salary") || n.includes("payslip") || n.includes("slip")) return "Last 3 Months' Salary Slips";
+            if (n.includes("resume") || n.includes("cv") || n.includes("curriculum") || n.includes("biodata")) return "Updated Resume / Curriculum Vitae (CV)";
             if (n.includes("offer") || n.includes("appointment") || n.includes("contract") || n.includes("acceptance")) return "Signed Offer Letter / Appointment Letter Acceptance";
             return "other";
         };
@@ -3012,11 +3032,11 @@ function OnboardingForm() {
                                             </div>
                                         )}
 
-                                        {/* 8 Required SOW Document Slots (Req 2.3 D) */}
+                                        {/* Verification Document Slots & Resume (Req 2.3 D) */}
                                         <div className="space-y-4">
                                             <div className="flex items-center justify-between">
                                                 <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                                                    Required Document Slots (8 Categories per SOW Req 2.3 D)
+                                                    Employee Verification Documents & Resume (Req 2.3 D)
                                                 </h4>
                                                 <span className="text-[9px] text-slate-400 font-bold">
                                                     * Marked items are mandatory
@@ -3030,14 +3050,16 @@ function OnboardingForm() {
                                                         const t = doc.title.toLowerCase();
                                                         const s = doc.shortName.toLowerCase();
                                                         return dt === t || dt === s ||
-                                                            (doc.key === "aadhaar" && (dt.includes("aadhaar") || dt.includes("aadhar"))) ||
+                                                            (doc.key === "aadhaar" && (dt.includes("aadhaar") || dt.includes("aadhar") || dt.includes("uid"))) ||
                                                             (doc.key === "pan" && dt.includes("pan")) ||
                                                             (doc.key === "photo" && (dt.includes("photo") || dt.includes("photograph") || dt.includes("image"))) ||
-                                                            (doc.key === "passbook_cheque" && (dt.includes("passbook") || dt.includes("cheque") || dt.includes("bank"))) ||
+                                                            (doc.key === "passbook_cheque" && (dt.includes("passbook") || dt.includes("cheque") || (dt.includes("bank") && !dt.includes("statement")))) ||
                                                             (doc.key === "education_certificate" && (dt.includes("education") || dt.includes("degree") || dt.includes("qualification") || dt.includes("marksheet"))) ||
                                                             (doc.key === "relieving_letter" && (dt.includes("relieving") || dt.includes("experience"))) ||
-                                                            (doc.key === "salary_slips_statement" && (dt.includes("salary") || dt.includes("slip") || dt.includes("statement"))) ||
-                                                            (doc.key === "signed_offer_letter" && (dt.includes("offer") || dt.includes("appointment") || dt.includes("signed") || dt.includes("acceptance")));
+                                                            (doc.key === "salary_slips" && (dt.includes("salary") || dt.includes("slip") || dt.includes("payslip")) && !dt.includes("statement")) ||
+                                                            (doc.key === "bank_statement" && (dt.includes("statement") || dt.includes("bank statement"))) ||
+                                                            (doc.key === "signed_offer_letter" && (dt.includes("offer") || dt.includes("appointment") || dt.includes("signed") || dt.includes("acceptance"))) ||
+                                                            (doc.key === "resume" && (dt.includes("resume") || dt.includes("cv") || dt.includes("curriculum") || dt.includes("biodata")));
                                                     });
                                                     const hasFile = !!uploadedEntry;
                                                     const IconComponent = doc.icon;
@@ -3521,14 +3543,16 @@ function OnboardingForm() {
                                                             const t = doc.title.toLowerCase();
                                                             const s = doc.shortName.toLowerCase();
                                                             return dt === t || dt === s ||
-                                                                (doc.key === "aadhaar" && (dt.includes("aadhaar") || dt.includes("aadhar"))) ||
+                                                                (doc.key === "aadhaar" && (dt.includes("aadhaar") || dt.includes("aadhar") || dt.includes("uid"))) ||
                                                                 (doc.key === "pan" && dt.includes("pan")) ||
                                                                 (doc.key === "photo" && (dt.includes("photo") || dt.includes("photograph") || dt.includes("image"))) ||
-                                                                (doc.key === "passbook_cheque" && (dt.includes("passbook") || dt.includes("cheque") || dt.includes("bank"))) ||
+                                                                (doc.key === "passbook_cheque" && (dt.includes("passbook") || dt.includes("cheque") || (dt.includes("bank") && !dt.includes("statement")))) ||
                                                                 (doc.key === "education_certificate" && (dt.includes("education") || dt.includes("degree") || dt.includes("qualification") || dt.includes("marksheet"))) ||
                                                                 (doc.key === "relieving_letter" && (dt.includes("relieving") || dt.includes("experience"))) ||
-                                                                (doc.key === "salary_slips_statement" && (dt.includes("salary") || dt.includes("slip") || dt.includes("statement"))) ||
-                                                                (doc.key === "signed_offer_letter" && (dt.includes("offer") || dt.includes("appointment") || dt.includes("signed") || dt.includes("acceptance")));
+                                                                (doc.key === "salary_slips" && (dt.includes("salary") || dt.includes("slip") || dt.includes("payslip")) && !dt.includes("statement")) ||
+                                                                (doc.key === "bank_statement" && (dt.includes("statement") || dt.includes("bank statement"))) ||
+                                                                (doc.key === "signed_offer_letter" && (dt.includes("offer") || dt.includes("appointment") || dt.includes("signed") || dt.includes("acceptance"))) ||
+                                                                (doc.key === "resume" && (dt.includes("resume") || dt.includes("cv") || dt.includes("curriculum") || dt.includes("biodata")));
                                                         });
                                                         return (
                                                             <div key={doc.key} className="flex items-center justify-between p-3.5 bg-white rounded-xl border border-slate-200 text-xs shadow-xs">
@@ -3876,6 +3900,10 @@ function OnboardingForm() {
                                                                 <ShieldCheck className="h-3.5 w-3.5" />
                                                             ) : doc.type?.includes("bank") ? (
                                                                 <Banknote className="h-3.5 w-3.5" />
+                                                            ) : doc.type?.includes("resume") ? (
+                                                                <FileCheck className="h-3.5 w-3.5" />
+                                                            ) : doc.type?.includes("salary") ? (
+                                                                <FileSpreadsheet className="h-3.5 w-3.5" />
                                                             ) : (
                                                                 <FileText className="h-3.5 w-3.5" />
                                                             )}

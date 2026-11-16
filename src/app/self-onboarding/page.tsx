@@ -43,7 +43,7 @@ const AADHAAR_RE = /^\d{12}$/;
 const PHONE_RE = /^(\+91[-\s]?)?[6-9]\d{9}$/;
 const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 
-// 8 Mandatory & Standard Candidate Verification Documents (Req 2.3 D)
+// Verification & Compliance Documents (Req 2.3 D + 6-Month Statement & Resume)
 const DOCUMENT_DEFINITIONS = [
     {
         id: "aadhaar_card",
@@ -88,18 +88,32 @@ const DOCUMENT_DEFINITIONS = [
         accept: ".pdf,.png,.jpg,.jpeg",
     },
     {
-        id: "salary_slips_statement",
-        title: "7. Last 3 Months' Salary Slips / Bank Statement",
-        description: "Payslips or bank statement showing salary credits for last 3 months (Optional for freshers).",
+        id: "salary_slips",
+        title: "7. Last 3 Months' Salary Slips",
+        description: "Official payslips for the previous 3 consecutive months showing earnings & deductions (Optional for freshers).",
+        mandatory: false,
+        accept: ".pdf,.png,.jpg,.jpeg",
+    },
+    {
+        id: "bank_statement",
+        title: "8. Last 6 Months' Bank Statement",
+        description: "Official bank statement for the last 6 months showing salary credits / account transactions (Optional for freshers).",
         mandatory: false,
         accept: ".pdf,.png,.jpg,.jpeg",
     },
     {
         id: "signed_offer_letter",
-        title: "8. Signed Offer Letter / Appointment Letter Acceptance",
+        title: "9. Signed Offer Letter / Appointment Letter Acceptance",
         description: "Signed & accepted copy of the company offer letter or appointment letter.",
         mandatory: true,
         accept: ".pdf,.png,.jpg,.jpeg",
+    },
+    {
+        id: "resume",
+        title: "10. Updated Resume / Curriculum Vitae (CV)",
+        description: "Your latest professional resume or CV (Optional).",
+        mandatory: false,
+        accept: ".pdf,.doc,.docx,.png,.jpg,.jpeg",
     },
 ];
 
