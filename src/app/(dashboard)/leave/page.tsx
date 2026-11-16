@@ -919,7 +919,7 @@ export default function LeavePage() {
                                         <div>
                                             <SheetTitle className="text-base font-bold text-slate-900 tracking-tight">Apply for Leave</SheetTitle>
                                             <SheetDescription className="text-xs text-slate-500 font-normal mt-0.5">
-                                                Annual Quota: 12 PL + 12 EL + 12 CL = 36 Total Paid Days/Year (Req 2.6)
+                                                Annual Quota: 12 PL / EL + 12 CL = 24 Total Paid Days/Year • Max 2 Paid/Mo
                                             </SheetDescription>
                                         </div>
                                     </div>
