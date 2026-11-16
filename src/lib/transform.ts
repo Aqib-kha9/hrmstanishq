@@ -54,6 +54,7 @@ export interface BackendEmployee {
   shift_end_time?: string | null;
   is_rotational_shift?: boolean | null;
   half_day_late_minutes?: number | null;
+  is_leave_allowed?: boolean | null;
   // Additional
   company_name: string | null;
   emergency_contact_name: string | null;
@@ -80,6 +81,7 @@ export interface FrontendEmployee {
   hr_manager?: string;
   color: string;
   employeeId: number; // numeric DB id for API calls
+  is_leave_allowed?: boolean;
 }
 
 const ROLE_COLORS: Record<string, string> = {
@@ -131,5 +133,6 @@ export function toFrontendEmployee(be: BackendEmployee): FrontendEmployee {
     hr_manager: be.hr_manager || "HR Operations",
     color: ROLE_COLORS[role] || "blue",
     employeeId: be.id,
+    is_leave_allowed: be.is_leave_allowed !== false,
   };
 }

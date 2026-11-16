@@ -31,7 +31,9 @@ import {
     ClipboardCheck,
     Loader2,
     CheckCircle2,
-    FileSpreadsheet
+    FileSpreadsheet,
+    Eye,
+    EyeOff
 } from "lucide-react";
 import {
     Card,
@@ -265,6 +267,24 @@ export default function EmployeesPage() {
             console.error("Failed to update status:", err);
             const msg = err.response?.data?.message || err.message || "Failed to update employee status.";
             alert(msg);
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const toggleLeaveAccess = async (emp: FrontendEmployee) => {
+        const newStatus = !emp.is_leave_allowed;
+        setActionLoading(`${newStatus ? 'Enabling' : 'Disabling'} mobile leave access for ${emp.name}...`);
+        try {
+            await apiPatch(`/employees/${emp.employeeId}/leave-access`, { is_leave_allowed: newStatus });
+            setPersonnel(prev => prev.map(p =>
+                p.employeeId === emp.employeeId
+                    ? { ...p, is_leave_allowed: newStatus }
+                    : p
+            ));
+        } catch (err: any) {
+            console.error("Failed to toggle leave access:", err);
+            alert(err?.response?.data?.message || "Failed to update leave access");
         } finally {
             setActionLoading(null);
         }
@@ -606,6 +626,24 @@ export default function EmployeesPage() {
 
 
 
+                                                            )}
+                                                            {hasPermission('EMPLOYEES', 'UPDATE') && (
+                                                                <DropdownMenuItem onClick={() => toggleLeaveAccess(emp)} className={cn(
+                                                                    "font-bold text-[9px] uppercase tracking-widest p-2.5 rounded-xl cursor-pointer flex items-center",
+                                                                    emp.is_leave_allowed ? "text-amber-600" : "text-emerald-600"
+                                                                )}>
+                                                                    {emp.is_leave_allowed ? (
+                                                                        <>
+                                                                            <EyeOff className="mr-2 h-3.5 w-3.5 text-amber-500" />
+                                                                            Hide Leave in App
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <Eye className="mr-2 h-3.5 w-3.5 text-emerald-500" />
+                                                                            Enable Leave in App
+                                                                        </>
+                                                                    )}
+                                                                </DropdownMenuItem>
                                                             )}
                                                             {hasPermission('EMPLOYEES', 'UPDATE') && (
                                                                 <DropdownMenuItem onClick={() => handleAdminResetPassword(emp)} className="font-bold text-[9px] uppercase tracking-widest p-2.5 rounded-xl cursor-pointer text-indigo-600">

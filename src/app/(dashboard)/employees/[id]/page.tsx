@@ -38,6 +38,8 @@ import {
     Compass,
     Sparkles,
     History,
+    Eye,
+    EyeOff,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -599,6 +601,24 @@ export default function EmployeeProfilePage() {
             alert(msg);
         } finally {
             setActionLoading(null);
+        }
+    };
+
+    const [togglingLeaveAccess, setTogglingLeaveAccess] = useState(false);
+    const handleToggleLeaveAccess = async () => {
+        if (!employee) return;
+        const currentAllowed = employee.is_leave_allowed !== false;
+        const newStatus = !currentAllowed;
+        setTogglingLeaveAccess(true);
+        try {
+            await apiPatch(`/employees/${employee.employeeId}/leave-access`, { is_leave_allowed: newStatus });
+            setEmployee({ ...employee, is_leave_allowed: newStatus });
+            if (rawEmployee) setRawEmployee({ ...rawEmployee, is_leave_allowed: newStatus });
+        } catch (err: any) {
+            console.error("Failed to toggle leave access:", err);
+            alert(err?.response?.data?.message || "Failed to update leave access");
+        } finally {
+            setTogglingLeaveAccess(false);
         }
     };
 
@@ -1211,6 +1231,44 @@ export default function EmployeeProfilePage() {
                                 <div className="p-3 rounded-xl bg-slate-100/70 flex items-center justify-between text-xs font-bold text-slate-700">
                                     <span>Total Balance Available</span>
                                     <span className="text-slate-900 font-black">{leaveMetrics.totalAvailable} Days</span>
+                                </div>
+
+                                {/* Mobile App Leave Visibility Control */}
+                                <div className="p-3.5 rounded-2xl bg-indigo-50/50 border border-indigo-100 flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                                            {employee?.is_leave_allowed !== false ? (
+                                                <Eye className="h-3.5 w-3.5 text-emerald-600" />
+                                            ) : (
+                                                <EyeOff className="h-3.5 w-3.5 text-rose-500" />
+                                            )}
+                                            Mobile App Visibility
+                                        </span>
+                                        <span className="text-[10px] text-slate-500 block">
+                                            {employee?.is_leave_allowed !== false
+                                                ? "Visible in app (Leave tab & Dashboard active)"
+                                                : "Hidden from app (Leave tab & Dashboard hidden)"}
+                                        </span>
+                                    </div>
+                                    {hasPermission('EMPLOYEES', 'UPDATE') && (
+                                        <Button
+                                            size="sm"
+                                            onClick={handleToggleLeaveAccess}
+                                            disabled={togglingLeaveAccess}
+                                            variant="outline"
+                                            className={cn(
+                                                "h-8 px-3 rounded-xl font-black text-[9px] uppercase tracking-wider transition-all border shadow-none",
+                                                employee?.is_leave_allowed !== false
+                                                    ? "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 hover:text-rose-800"
+                                                    : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:text-emerald-800"
+                                            )}
+                                        >
+                                            {togglingLeaveAccess ? (
+                                                <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                            ) : null}
+                                            {employee?.is_leave_allowed !== false ? "Hide from App" : "Show in App"}
+                                        </Button>
+                                    )}
                                 </div>
 
                                 <Link href="/leave" className="block pt-1">

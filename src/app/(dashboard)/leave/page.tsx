@@ -35,6 +35,8 @@ import {
     RefreshCw,
     FileSpreadsheet,
     CalendarCheck,
+    Eye,
+    EyeOff,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -159,6 +161,30 @@ export default function LeavePage() {
     const [staffSummaryLoading, setStaffSummaryLoading] = useState(false);
     const [staffSelectedMonth, setStaffSelectedMonth] = useState<number | "all">("all");
     const [staffSearchTerm, setStaffSearchTerm] = useState("");
+    const [togglingAccessId, setTogglingAccessId] = useState<number | null>(null);
+
+    const handleToggleMobileLeaveAccess = async (emp: any) => {
+        const currentAllowed = emp.is_leave_allowed !== false;
+        const newStatus = !currentAllowed;
+        const empId = emp.employee_id || emp.id;
+        setTogglingAccessId(empId);
+        try {
+            await apiPatch(`/employees/${empId}/leave-access`, {
+                is_leave_allowed: newStatus,
+            });
+            setStaffSummaryList(prev => prev.map(item => {
+                if ((item.employee_id || item.id) === empId) {
+                    return { ...item, is_leave_allowed: newStatus };
+                }
+                return item;
+            }));
+        } catch (err: any) {
+            console.error("Failed to toggle leave access:", err);
+            alert(err?.response?.data?.message || "Failed to update leave access");
+        } finally {
+            setTogglingAccessId(null);
+        }
+    };
 
     // Leave Policy Configuration Dialog (Req 2.6)
     const [isPolicyOpen, setIsPolicyOpen] = useState(false);
@@ -1633,13 +1659,14 @@ export default function LeavePage() {
                                                 </th>
                                             )}
                                             <th className="text-left py-4 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Carry-Forward / Lapse</th>
+                                            <th className="text-center py-4 px-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Mobile App Access</th>
                                             <th className="text-right py-4 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">History Log</th>
                                         </tr>
                                     </TableHeader>
                                     <TableBody>
                                         {staffSummaryLoading ? (
                                             <tr>
-                                                <td colSpan={10} className="py-20 text-center">
+                                                <td colSpan={11} className="py-20 text-center">
                                                     <Loader2 className="h-8 w-8 text-indigo-500 animate-spin mx-auto mb-3" />
                                                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Loading employee leave records...</p>
                                                 </td>
@@ -1731,6 +1758,32 @@ export default function LeavePage() {
                                                             CL: Lapses
                                                         </Badge>
                                                     </div>
+                                                </td>
+
+                                                {/* Mobile App Leave Access Toggle */}
+                                                <td className="py-4 px-3 text-center">
+                                                    <Button
+                                                        onClick={() => handleToggleMobileLeaveAccess(emp)}
+                                                        disabled={togglingAccessId === (emp.employee_id || emp.id)}
+                                                        variant="outline"
+                                                        size="sm"
+                                                        title={emp.is_leave_allowed !== false ? "Leave is visible in employee's mobile app. Click to hide." : "Leave is hidden from employee's mobile app. Click to show."}
+                                                        className={cn(
+                                                            "h-7 px-2.5 rounded-lg font-black text-[8px] uppercase tracking-wider transition-all border shadow-none",
+                                                            emp.is_leave_allowed !== false
+                                                                ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:text-emerald-800"
+                                                                : "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 hover:text-rose-800"
+                                                        )}
+                                                    >
+                                                        {togglingAccessId === (emp.employee_id || emp.id) ? (
+                                                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                                        ) : emp.is_leave_allowed !== false ? (
+                                                            <Eye className="h-3 w-3 mr-1 text-emerald-600" />
+                                                        ) : (
+                                                            <EyeOff className="h-3 w-3 mr-1 text-rose-500" />
+                                                        )}
+                                                        {emp.is_leave_allowed !== false ? "Visible" : "Hidden"}
+                                                    </Button>
                                                 </td>
 
                                                 {/* Action: Month-wise review */}
