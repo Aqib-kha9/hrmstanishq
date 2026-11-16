@@ -717,6 +717,7 @@ function OnboardingForm() {
     };
 
     const approveCandidateSubmission = async (invitationId: number) => {
+        if (approveLoading) return;
         setApproveLoading(true);
         try {
             const result = await apiPost<any>(`/onboarding/approve/${invitationId}`, {
