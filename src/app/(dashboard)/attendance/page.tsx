@@ -4,7 +4,7 @@ import { useRole } from "@/context/RoleContext";
 import MonthYearPicker from "@/components/MonthYearPicker";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { apiGet, apiPost, apiPut } from "@/lib/api-client";
+import { apiGet, apiPost, apiPut, apiPatch } from "@/lib/api-client";
 import dynamic from "next/dynamic";
 import {
     Clock,
@@ -15,6 +15,7 @@ import {
     ArrowUpRight,
     CheckCircle2,
     XCircle,
+    X,
     AlertCircle,
     MoreHorizontal,
     LayoutGrid,
@@ -92,7 +93,7 @@ const AttendanceMap = dynamic(() => import("@/components/AttendanceMap"), {
 
 export default function AttendancePage() {
     const { hasPermission } = useRole();
-    const [activeTab, setActiveTab] = useState<"live" | "history" | "monthly">("monthly");
+    const [activeTab, setActiveTab] = useState<"live" | "history" | "monthly" | "regularize">("monthly");
     const [searchTerm, setSearchTerm] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
     const [selectedCompanyId, setSelectedCompanyId] = useState("");
@@ -106,6 +107,30 @@ export default function AttendancePage() {
     const [manualInputMode, setManualInputMode] = useState<"dropdown" | "custom">("dropdown");
     const [tourInputMode, setTourInputMode] = useState<"dropdown" | "custom">("dropdown");
     const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Attendance Regularisation State
+    const [regularizeRequests, setRegularizeRequests] = useState<any[]>([]);
+    const [regularizeLoading, setRegularizeLoading] = useState(false);
+    const [regularizeStatusFilter, setRegularizeStatusFilter] = useState<string>("all");
+    const [regularizeSearch, setRegularizeSearch] = useState("");
+    const [regularizeSummary, setRegularizeSummary] = useState({ pending: 0, approved: 0, rejected: 0, total: 0 });
+    const [regularizePage, setRegularizePage] = useState(1);
+    const [regularizeTotalPages, setRegularizeTotalPages] = useState(1);
+    const [reviewingRequest, setReviewingRequest] = useState<any | null>(null);
+    const [reviewAction, setReviewAction] = useState<"approved" | "rejected">("approved");
+    const [reviewStatus, setReviewStatus] = useState<"present" | "half_day">("present");
+    const [reviewRemarks, setReviewRemarks] = useState("");
+    const [isReviewSubmitting, setIsReviewSubmitting] = useState(false);
+
+    // Apply regularisation modal state
+    const [isApplyRegularizeOpen, setIsApplyRegularizeOpen] = useState(false);
+    const [applyRegEmployeeId, setApplyRegEmployeeId] = useState("");
+    const [applyRegDate, setApplyRegDate] = useState("");
+    const [applyRegType, setApplyRegType] = useState("forgot_punch");
+    const [applyRegInTime, setApplyRegInTime] = useState("09:30");
+    const [applyRegOutTime, setApplyRegOutTime] = useState("18:30");
+    const [applyRegReason, setApplyRegReason] = useState("");
+    const [isApplyRegSubmitting, setIsApplyRegSubmitting] = useState(false);
 
     // Fetch companies, offices, departments, late threshold and active employees for selector (Req 5.3)
     useEffect(() => {
@@ -690,6 +715,94 @@ export default function AttendancePage() {
     useEffect(() => { if (activeTab === "history") { setHistoryPage(1); fetchHistory(1); } }, [historyFrom, historyTo, selectedCompanyId, selectedOfficeId, historyDebouncedSearch, selectedDepartment]);
     useEffect(() => { if (activeTab === "monthly") fetchMonthly(); }, [activeTab, selectedMonth, selectedYear, cycleType, fetchMonthly]);
 
+    // Attendance Regularisation Requests Loader
+    const fetchRegularizations = useCallback(async (page = 1) => {
+        setRegularizeLoading(true);
+        try {
+            const data: any = await apiGet("/attendance/admin/regularize/requests", {
+                page,
+                limit: 15,
+                status: regularizeStatusFilter === "all" ? undefined : regularizeStatusFilter,
+                company_id: selectedCompanyId || undefined,
+                office_id: selectedOfficeId || undefined,
+                department: selectedDepartment || undefined,
+                search: regularizeSearch || undefined,
+                month: selectedMonth + 1,
+                year: selectedYear,
+            });
+            setRegularizeRequests(data.requests || []);
+            setRegularizeSummary(data.summary || { pending: 0, approved: 0, rejected: 0, total: 0 });
+            setRegularizePage(data.pagination?.page || 1);
+            setRegularizeTotalPages(data.pagination?.totalPages || 1);
+        } catch (err) {
+            console.error("Failed to fetch regularisations:", err);
+        } finally {
+            setRegularizeLoading(false);
+        }
+    }, [regularizeStatusFilter, selectedCompanyId, selectedOfficeId, selectedDepartment, regularizeSearch, selectedMonth, selectedYear]);
+
+    useEffect(() => {
+        if (activeTab === "regularize") {
+            fetchRegularizations(1);
+        }
+    }, [activeTab, fetchRegularizations]);
+
+    // Initial fetch of regularisation summary badge counts
+    useEffect(() => {
+        apiGet("/attendance/admin/regularize/requests", { limit: 1 })
+            .then((data: any) => {
+                if (data?.summary) setRegularizeSummary(data.summary);
+            })
+            .catch(() => {});
+    }, []);
+
+    const handleReviewRegularization = async () => {
+        if (!reviewingRequest) return;
+        setIsReviewSubmitting(true);
+        try {
+            await apiPatch(`/attendance/admin/regularize/${reviewingRequest.id}/action`, {
+                action: reviewAction,
+                status: reviewStatus,
+                admin_remarks: reviewRemarks || undefined,
+            });
+            setReviewingRequest(null);
+            setReviewRemarks("");
+            fetchRegularizations(regularizePage);
+            if (activeTab === "monthly") fetchMonthly();
+        } catch (err: any) {
+            alert(err?.message || "Failed to review regularisation request");
+        } finally {
+            setIsReviewSubmitting(false);
+        }
+    };
+
+    const handleApplyRegularization = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!applyRegDate || !applyRegReason.trim()) {
+            alert("Please provide the attendance date and justification reason.");
+            return;
+        }
+        setIsApplyRegSubmitting(true);
+        try {
+            await apiPost("/attendance/regularize", {
+                date: applyRegDate,
+                regularization_type: applyRegType,
+                requested_check_in: applyRegInTime ? `${applyRegInTime}:00` : undefined,
+                requested_check_out: applyRegOutTime ? `${applyRegOutTime}:00` : undefined,
+                reason: applyRegReason.trim(),
+            });
+            setIsApplyRegularizeOpen(false);
+            setApplyRegReason("");
+            setApplyRegDate("");
+            fetchRegularizations(1);
+            alert("Attendance regularisation request submitted successfully!");
+        } catch (err: any) {
+            alert(err?.message || "Failed to submit regularisation request");
+        } finally {
+            setIsApplyRegSubmitting(false);
+        }
+    };
+
     // Manual & Authorized entry submit (Req 5.1, 5.2, 2.5 B, 2.5 D)
     const handleManualSubmit = async () => {
         if (!manualEmpId || !manualEmpId.trim()) {
@@ -965,6 +1078,21 @@ export default function AttendancePage() {
                                 )}
                             >
                                 <Calendar className="h-4 w-4 mr-2" /> Monthly Grid
+                            </Button>
+                            <Button
+                                onClick={() => setActiveTab("regularize")}
+                                variant="ghost"
+                                className={cn(
+                                    "h-10 px-5 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all flex items-center gap-1.5",
+                                    activeTab === "regularize" ? "bg-white shadow-sm text-slate-900" : "text-slate-400 hover:text-slate-900"
+                                )}
+                            >
+                                <Clock className="h-4 w-4 text-amber-500" /> Regularize
+                                {regularizeSummary.pending > 0 && (
+                                    <span className="ml-1 bg-amber-500 text-white font-black text-[8px] px-1.5 py-0.5 rounded-full leading-none">
+                                        {regularizeSummary.pending}
+                                    </span>
+                                )}
                             </Button>
                         </div>
                     </div>
@@ -2165,6 +2293,319 @@ export default function AttendancePage() {
                         </Card>
                     </div>
                 )}
+
+                {activeTab === "regularize" && (
+                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 mx-2">
+                        {/* 4 Summary Cards */}
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                            <Card className="bg-amber-500 text-white rounded-2xl p-4 shadow-sm border-none relative overflow-hidden">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-amber-100">1. Pending Review</p>
+                                    <Badge className="bg-white/20 text-white font-bold text-[8px] px-2 py-0.5 border-none uppercase">Requires Action</Badge>
+                                </div>
+                                <h4 className="text-3xl font-black italic tracking-tighter text-white mt-1">
+                                    {regularizeSummary.pending}
+                                </h4>
+                                <span className="text-[8px] text-amber-100 font-bold uppercase block mt-0.5">Awaiting Manager / HR Verification</span>
+                            </Card>
+
+                            <Card className="bg-emerald-950 text-white rounded-2xl p-4 shadow-sm border-none relative overflow-hidden">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-emerald-400">2. Approved</p>
+                                    <Badge className="bg-emerald-500/20 text-emerald-300 font-bold text-[8px] px-2 py-0.5 border-none uppercase">Adjusted</Badge>
+                                </div>
+                                <h4 className="text-3xl font-black italic tracking-tighter text-white mt-1">
+                                    {regularizeSummary.approved}
+                                </h4>
+                                <span className="text-[8px] text-emerald-400/80 font-bold uppercase block mt-0.5">Updated in Attendance & Payroll</span>
+                            </Card>
+
+                            <Card className="bg-rose-50/90 rounded-2xl p-4 shadow-sm border border-rose-100">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-rose-600">3. Rejected</p>
+                                    <Badge className="bg-rose-100 text-rose-800 font-bold text-[8px] px-2 py-0.5 border-none uppercase">Declined</Badge>
+                                </div>
+                                <h4 className="text-3xl font-black italic tracking-tighter text-rose-950 mt-1">
+                                    {regularizeSummary.rejected}
+                                </h4>
+                                <span className="text-[8px] text-rose-600 font-bold uppercase block mt-0.5">Declined with HR Feedback</span>
+                            </Card>
+
+                            <Card className="bg-slate-900 text-white rounded-2xl p-4 shadow-sm border border-slate-800">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">4. Total Requests</p>
+                                    <Badge className="bg-white/10 text-slate-300 font-bold text-[8px] px-2 py-0.5 border-none uppercase">Recorded</Badge>
+                                </div>
+                                <h4 className="text-3xl font-black italic tracking-tighter text-white mt-1">
+                                    {regularizeSummary.total}
+                                </h4>
+                                <span className="text-[8px] text-slate-400 font-bold uppercase block mt-0.5">All Attendance Regularisations</span>
+                            </Card>
+                        </div>
+
+                        {/* Filter Bar & Quick Action */}
+                        <Card className="border border-slate-200 shadow-sm rounded-2xl bg-white p-4">
+                            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+                                <div className="flex flex-wrap items-center gap-3">
+                                    {/* Status Filter Tabs */}
+                                    <div className="flex bg-slate-100 p-1 rounded-xl">
+                                        {[
+                                            { id: "all", label: `All (${regularizeSummary.total})` },
+                                            { id: "pending", label: `Pending (${regularizeSummary.pending})` },
+                                            { id: "approved", label: `Approved (${regularizeSummary.approved})` },
+                                            { id: "rejected", label: `Rejected (${regularizeSummary.rejected})` },
+                                        ].map((tab) => (
+                                            <button
+                                                key={tab.id}
+                                                type="button"
+                                                onClick={() => setRegularizeStatusFilter(tab.id)}
+                                                className={cn(
+                                                    "px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all",
+                                                    regularizeStatusFilter === tab.id
+                                                        ? "bg-white text-slate-900 shadow-xs"
+                                                        : "text-slate-500 hover:text-slate-900"
+                                                )}
+                                            >
+                                                {tab.label}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    {/* Department filter */}
+                                    <select
+                                        value={selectedDepartment}
+                                        onChange={(e) => setSelectedDepartment(e.target.value)}
+                                        className="h-9 px-3 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 outline-none"
+                                    >
+                                        <option value="">All Departments</option>
+                                        {departments.map((dept) => (
+                                            <option key={dept} value={dept}>{dept}</option>
+                                        ))}
+                                    </select>
+
+                                    {/* Search input */}
+                                    <div className="relative min-w-[200px]">
+                                        <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                                        <input
+                                            type="text"
+                                            placeholder="Search employee / code..."
+                                            value={regularizeSearch}
+                                            onChange={(e) => setRegularizeSearch(e.target.value)}
+                                            className="h-9 pl-9 pr-3 rounded-xl border border-slate-200 bg-white text-xs font-medium text-slate-700 outline-none w-full"
+                                        />
+                                    </div>
+
+                                    <Button
+                                        onClick={() => fetchRegularizations(regularizePage)}
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-9 rounded-xl border-slate-200 text-slate-600 hover:bg-slate-50"
+                                        title="Refresh"
+                                    >
+                                        <RefreshCw className={cn("h-3.5 w-3.5", regularizeLoading && "animate-spin")} />
+                                    </Button>
+                                </div>
+
+                                <Button
+                                    onClick={() => {
+                                        setApplyRegEmployeeId("");
+                                        setApplyRegDate(new Date().toISOString().split('T')[0]);
+                                        setApplyRegType("forgot_punch");
+                                        setApplyRegInTime("09:30");
+                                        setApplyRegOutTime("18:30");
+                                        setApplyRegReason("");
+                                        setIsApplyRegularizeOpen(true);
+                                    }}
+                                    className="bg-slate-900 text-white hover:bg-black font-black uppercase text-[9px] tracking-widest px-4 h-9 rounded-xl shadow-sm gap-1.5"
+                                >
+                                    <Plus className="h-4 w-4" /> Raise Regularisation
+                                </Button>
+                            </div>
+                        </Card>
+
+                        {/* Table / Requests List */}
+                        <Card className="border border-slate-200 shadow-sm rounded-2xl bg-white overflow-hidden">
+                            <CardContent className="p-0">
+                                {regularizeLoading ? (
+                                    <div className="p-12 text-center text-slate-400 text-xs font-bold flex items-center justify-center gap-2">
+                                        <RefreshCw className="h-4 w-4 animate-spin text-slate-400" /> Loading regularisation requests...
+                                    </div>
+                                ) : regularizeRequests.length === 0 ? (
+                                    <div className="p-16 text-center">
+                                        <Clock className="h-10 w-10 text-slate-300 mx-auto mb-3" />
+                                        <p className="text-sm font-bold text-slate-700">No Regularisation Requests</p>
+                                        <p className="text-xs text-slate-400 mt-1">There are no attendance regularisation requests matching this filter.</p>
+                                    </div>
+                                ) : (
+                                    <div className="overflow-x-auto">
+                                        <Table>
+                                            <TableHeader className="bg-slate-50/80 border-b border-slate-100">
+                                                <TableRow>
+                                                    <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 pl-6 py-4">Employee Details</TableHead>
+                                                    <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 py-4">Date</TableHead>
+                                                    <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 py-4">Category</TableHead>
+                                                    <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 py-4">Proposed Timing</TableHead>
+                                                    <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 py-4">Employee Reason</TableHead>
+                                                    <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 py-4">Status</TableHead>
+                                                    <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 pr-6 py-4 text-right">Action / Audit</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody className="divide-y divide-slate-100">
+                                                {regularizeRequests.map((req: any) => {
+                                                    const emp = req.employee || {};
+                                                    const categoryLabels: Record<string, string> = {
+                                                        forgot_punch: "Missed Punch (In & Out)",
+                                                        forgot_check_in: "Forgot Check-In",
+                                                        forgot_check_out: "Forgot Check-Out",
+                                                        on_duty: "On Duty / Client Duty",
+                                                        wfh: "Remote / WFH",
+                                                        technical_issue: "GPS / Technical Issue",
+                                                        other: "Other Reason",
+                                                    };
+                                                    const categoryLabel = categoryLabels[req.regularization_type] || req.regularization_type;
+
+                                                    const dateObj = new Date(req.date + "T00:00:00");
+                                                    const formattedDate = dateObj.toLocaleDateString("en-GB", {
+                                                        day: "2-digit",
+                                                        month: "short",
+                                                        year: "numeric",
+                                                    });
+                                                    const dayOfWeek = dateObj.toLocaleDateString("en-GB", { weekday: "short" });
+
+                                                    return (
+                                                        <TableRow key={req.id} className="hover:bg-slate-50/60 transition-colors">
+                                                            <TableCell className="pl-6 py-4">
+                                                                <div className="flex items-center gap-3">
+                                                                    <Avatar className="h-9 w-9 rounded-xl border border-slate-200">
+                                                                        <AvatarFallback className="bg-slate-100 text-slate-800 text-xs font-bold uppercase">
+                                                                            {emp.name ? emp.name.charAt(0) : "E"}
+                                                                        </AvatarFallback>
+                                                                    </Avatar>
+                                                                    <div>
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            <span className="font-bold text-slate-900 text-xs">{emp.name || "Employee"}</span>
+                                                                            <Badge variant="outline" className="text-[8px] font-mono px-1 py-0 h-4 border-slate-200 text-slate-500">
+                                                                                {emp.emp_code || "---"}
+                                                                            </Badge>
+                                                                        </div>
+                                                                        <span className="text-[9px] text-slate-400 font-medium block">
+                                                                            {emp.department || "Operations"} • {emp.company?.name || "Company"}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            </TableCell>
+
+                                                            <TableCell className="py-4">
+                                                                <div className="flex flex-col">
+                                                                    <span className="font-bold text-slate-900 text-xs">{formattedDate}</span>
+                                                                    <span className="text-[9px] font-semibold text-slate-400">{dayOfWeek}</span>
+                                                                </div>
+                                                            </TableCell>
+
+                                                            <TableCell className="py-4">
+                                                                <Badge className={cn(
+                                                                    "text-[9px] font-bold px-2 py-0.5 rounded-md border",
+                                                                    req.regularization_type === "on_duty" ? "bg-violet-50 text-violet-700 border-violet-200" :
+                                                                    req.regularization_type === "wfh" ? "bg-blue-50 text-blue-700 border-blue-200" :
+                                                                    req.regularization_type === "technical_issue" ? "bg-amber-50 text-amber-800 border-amber-200" :
+                                                                    "bg-slate-100 text-slate-700 border-slate-200"
+                                                                )}>
+                                                                    {categoryLabel}
+                                                                </Badge>
+                                                            </TableCell>
+
+                                                            <TableCell className="py-4">
+                                                                <div className="text-xs font-medium text-slate-700">
+                                                                    <span className="font-mono text-emerald-700 font-bold">{req.requested_check_in || "09:30"}</span>
+                                                                    <span className="text-slate-400 mx-1">—</span>
+                                                                    <span className="font-mono text-rose-700 font-bold">{req.requested_check_out || "18:30"}</span>
+                                                                </div>
+                                                            </TableCell>
+
+                                                            <TableCell className="py-4 max-w-[240px]">
+                                                                <p className="text-xs text-slate-600 line-clamp-2 italic" title={req.reason}>
+                                                                    &ldquo;{req.reason}&rdquo;
+                                                                </p>
+                                                            </TableCell>
+
+                                                            <TableCell className="py-4">
+                                                                {req.status === "pending" && (
+                                                                    <Badge className="bg-amber-100 text-amber-900 border border-amber-200 text-[9px] font-black uppercase px-2 py-0.5 rounded-md flex items-center gap-1 w-fit">
+                                                                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                                                        Pending Review
+                                                                    </Badge>
+                                                                )}
+                                                                {req.status === "approved" && (
+                                                                    <Badge className="bg-emerald-100 text-emerald-900 border border-emerald-200 text-[9px] font-black uppercase px-2 py-0.5 rounded-md flex items-center gap-1 w-fit">
+                                                                        <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                                                                        Approved
+                                                                    </Badge>
+                                                                )}
+                                                                {req.status === "rejected" && (
+                                                                    <Badge className="bg-rose-100 text-rose-900 border border-rose-200 text-[9px] font-black uppercase px-2 py-0.5 rounded-md flex items-center gap-1 w-fit">
+                                                                        <XCircle className="h-3 w-3 text-rose-600" />
+                                                                        Rejected
+                                                                    </Badge>
+                                                                )}
+                                                                {req.status === "cancelled" && (
+                                                                    <Badge className="bg-slate-100 text-slate-500 text-[9px] font-bold uppercase px-2 py-0.5 rounded-md w-fit">
+                                                                        Cancelled
+                                                                    </Badge>
+                                                                )}
+                                                            </TableCell>
+
+                                                            <TableCell className="pr-6 py-4 text-right">
+                                                                {req.status === "pending" ? (
+                                                                    <div className="flex items-center justify-end gap-1.5">
+                                                                        <Button
+                                                                            size="sm"
+                                                                            onClick={() => {
+                                                                                setReviewingRequest(req);
+                                                                                setReviewAction("approved");
+                                                                                setReviewStatus("present");
+                                                                                setReviewRemarks("");
+                                                                            }}
+                                                                            className="h-7 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded-lg shadow-xs"
+                                                                        >
+                                                                            <Check className="h-3.5 w-3.5 mr-1" /> Approve
+                                                                        </Button>
+                                                                        <Button
+                                                                            size="sm"
+                                                                            variant="outline"
+                                                                            onClick={() => {
+                                                                                setReviewingRequest(req);
+                                                                                setReviewAction("rejected");
+                                                                                setReviewRemarks("");
+                                                                            }}
+                                                                            className="h-7 px-2.5 border-rose-200 bg-rose-50/50 hover:bg-rose-100 text-rose-700 font-bold text-[10px] rounded-lg shadow-xs"
+                                                                        >
+                                                                            <X className="h-3.5 w-3.5 mr-1" /> Reject
+                                                                        </Button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="flex flex-col items-end text-[9px]">
+                                                                        <span className="font-semibold text-slate-700">
+                                                                            {req.status === "approved" ? "Approved by" : "Reviewed by"}: {req.approver?.name || "HR Admin"}
+                                                                        </span>
+                                                                        {req.admin_remarks && (
+                                                                            <span className="text-slate-400 italic line-clamp-1 max-w-[150px]" title={req.admin_remarks}>
+                                                                                {req.admin_remarks}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    );
+                                                })}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
+                )}
             </div>
 
             {/* Attendance & Payroll Calculation Breakdown Dialog (Req 8) */}
@@ -3211,6 +3652,226 @@ export default function AttendancePage() {
                             Export Excel
                         </Button>
                     </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Review Regularisation Dialog (Approve or Reject) */}
+            <Dialog open={!!reviewingRequest} onOpenChange={(open) => !open && setReviewingRequest(null)}>
+                <DialogContent className="sm:max-w-[480px] rounded-2xl p-0 overflow-hidden bg-white border border-slate-200 shadow-xl">
+                    <div className={cn(
+                        "px-6 py-4 border-b flex items-center justify-between text-white shrink-0",
+                        reviewAction === "approved" ? "bg-emerald-900 border-emerald-800" : "bg-rose-900 border-rose-800"
+                    )}>
+                        <div className="flex items-center gap-2.5">
+                            <div className="h-8 w-8 rounded-xl bg-white/10 flex items-center justify-center">
+                                {reviewAction === "approved" ? <CheckCircle2 className="h-4 w-4 text-emerald-300" /> : <XCircle className="h-4 w-4 text-rose-300" />}
+                            </div>
+                            <div>
+                                <DialogTitle className="text-sm font-black uppercase tracking-wider text-white">
+                                    {reviewAction === "approved" ? "Approve Regularisation" : "Reject Regularisation"}
+                                </DialogTitle>
+                                <DialogDescription className="text-[10px] text-white/70">
+                                    {reviewingRequest?.employee?.name} ({reviewingRequest?.employee?.emp_code}) • {reviewingRequest?.date}
+                                </DialogDescription>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-6 space-y-4 text-xs">
+                        {/* Summary Box */}
+                        <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-2 text-slate-700">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase">Category</span>
+                                <Badge className="text-[9px] font-bold bg-white text-slate-800 border-slate-200">
+                                    {reviewingRequest?.regularization_type}
+                                </Badge>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase">Requested Timings</span>
+                                <span className="font-mono font-bold text-slate-900">
+                                    {reviewingRequest?.requested_check_in || "09:30"} — {reviewingRequest?.requested_check_out || "18:30"}
+                                </span>
+                            </div>
+                            <div className="pt-1 border-t border-slate-200/60">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Employee Reason</span>
+                                <p className="italic text-slate-600 font-medium bg-white p-2 rounded-lg border border-slate-200/60">
+                                    &ldquo;{reviewingRequest?.reason}&rdquo;
+                                </p>
+                            </div>
+                        </div>
+
+                        {reviewAction === "approved" && (
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold text-slate-700">Attendance Treatment</Label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setReviewStatus("present")}
+                                        className={cn(
+                                            "h-10 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5",
+                                            reviewStatus === "present"
+                                                ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                                                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                                        )}
+                                    >
+                                        <CheckCircle2 className="h-4 w-4" /> Full Day Present (1.0)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setReviewStatus("half_day")}
+                                        className={cn(
+                                            "h-10 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5",
+                                            reviewStatus === "half_day"
+                                                ? "bg-amber-600 text-white border-amber-600 shadow-xs"
+                                                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                                        )}
+                                    >
+                                        <Clock className="h-4 w-4" /> Half Day (0.5)
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-slate-700">
+                                {reviewAction === "approved" ? "Approval Remarks (Optional)" : "Rejection Reason *"}
+                            </Label>
+                            <textarea
+                                value={reviewRemarks}
+                                onChange={(e) => setReviewRemarks(e.target.value)}
+                                placeholder={reviewAction === "approved" ? "e.g. Verified with manager, approved..." : "Specify reason for employee feedback..."}
+                                rows={2}
+                                className="w-full p-2.5 rounded-xl bg-white border border-slate-200 text-xs outline-none focus:border-slate-900 resize-none font-medium"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="p-4 px-6 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2.5 shrink-0">
+                        <Button
+                            variant="outline"
+                            onClick={() => setReviewingRequest(null)}
+                            disabled={isReviewSubmitting}
+                            className="h-9 px-4 rounded-xl border-slate-200 text-xs font-bold text-slate-600"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleReviewRegularization}
+                            disabled={isReviewSubmitting || (reviewAction === "rejected" && !reviewRemarks.trim())}
+                            className={cn(
+                                "h-9 px-5 rounded-xl font-black uppercase text-[10px] tracking-wider text-white shadow-sm",
+                                reviewAction === "approved" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-rose-600 hover:bg-rose-700"
+                            )}
+                        >
+                            {isReviewSubmitting ? "Processing..." : reviewAction === "approved" ? "Confirm & Mark Present" : "Confirm Rejection"}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Raise Regularisation Dialog */}
+            <Dialog open={isApplyRegularizeOpen} onOpenChange={setIsApplyRegularizeOpen}>
+                <DialogContent className="sm:max-w-[480px] rounded-2xl p-0 overflow-hidden bg-white border border-slate-200 shadow-xl">
+                    <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-900 text-white shrink-0">
+                        <div className="flex items-center gap-2.5">
+                            <div className="h-8 w-8 rounded-xl bg-white/10 flex items-center justify-center">
+                                <Clock className="h-4 w-4 text-[#D9F99D]" />
+                            </div>
+                            <div>
+                                <DialogTitle className="text-sm font-black uppercase tracking-wider text-white">Raise Regularisation</DialogTitle>
+                                <DialogDescription className="text-[10px] text-white/70">
+                                    Request attendance regularisation for missed punch or on-duty hours
+                                </DialogDescription>
+                            </div>
+                        </div>
+                    </div>
+
+                    <form onSubmit={handleApplyRegularization} className="p-6 space-y-4 text-xs">
+                        {/* Date selection */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-slate-700">Attendance Date *</Label>
+                            <Input
+                                type="date"
+                                max={new Date().toISOString().split('T')[0]}
+                                value={applyRegDate}
+                                onChange={(e) => setApplyRegDate(e.target.value)}
+                                required
+                                className="h-10 rounded-xl bg-white border border-slate-200 text-xs font-medium"
+                            />
+                        </div>
+
+                        {/* Category */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-slate-700">Reason Category *</Label>
+                            <select
+                                value={applyRegType}
+                                onChange={(e) => setApplyRegType(e.target.value)}
+                                className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-800 outline-none w-full"
+                            >
+                                <option value="forgot_punch">Missed Punch (Forgot In & Out)</option>
+                                <option value="forgot_check_in">Forgot Check-In (Punched Out Only)</option>
+                                <option value="forgot_check_out">Forgot Check-Out (Punched In Only)</option>
+                                <option value="on_duty">On Duty / Client / Field Visit</option>
+                                <option value="wfh">Work From Home / Remote</option>
+                                <option value="technical_issue">Device / GPS / Network Glitch</option>
+                                <option value="other">Other Legitimate Reason</option>
+                            </select>
+                        </div>
+
+                        {/* Timing */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold text-slate-700">Proposed Check-In</Label>
+                                <Input
+                                    type="time"
+                                    value={applyRegInTime}
+                                    onChange={(e) => setApplyRegInTime(e.target.value)}
+                                    className="h-10 rounded-xl bg-white border border-slate-200 text-xs font-mono font-medium"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold text-slate-700">Proposed Check-Out</Label>
+                                <Input
+                                    type="time"
+                                    value={applyRegOutTime}
+                                    onChange={(e) => setApplyRegOutTime(e.target.value)}
+                                    className="h-10 rounded-xl bg-white border border-slate-200 text-xs font-mono font-medium"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Justification Reason */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-slate-700">Detailed Justification / Remarks *</Label>
+                            <textarea
+                                value={applyRegReason}
+                                onChange={(e) => setApplyRegReason(e.target.value)}
+                                placeholder="Explain why attendance could not be marked on time..."
+                                rows={3}
+                                required
+                                className="w-full p-2.5 rounded-xl bg-white border border-slate-200 text-xs outline-none focus:border-slate-900 resize-none font-medium"
+                            />
+                        </div>
+
+                        <div className="pt-2 flex items-center justify-end gap-2.5">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setIsApplyRegularizeOpen(false)}
+                                disabled={isApplyRegSubmitting}
+                                className="h-9 px-4 rounded-xl border-slate-200 text-xs font-bold text-slate-600"
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="submit"
+                                disabled={isApplyRegSubmitting || !applyRegDate || !applyRegReason.trim()}
+                                className="h-9 px-5 rounded-xl bg-slate-900 hover:bg-black font-black uppercase text-[10px] tracking-wider text-white shadow-sm"
+                            >
+                                {isApplyRegSubmitting ? "Submitting..." : "Submit Request"}
+                            </Button>
+                        </div>
+                    </form>
                 </DialogContent>
             </Dialog>
 
