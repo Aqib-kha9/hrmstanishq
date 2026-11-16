@@ -2892,10 +2892,10 @@ function OnboardingForm() {
                                             </div>
                                             <div className="space-y-3">
                                                 <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                    ESIC IP / Registration Number
+                                                    ESIC IP / Registration Number (Optional)
                                                 </Label>
                                                 <Input
-                                                    placeholder="e.g. ESIC IP: 1234567890"
+                                                    placeholder="e.g. ESIC IP: 1234567890 (Optional)"
                                                     className={inputClass("licDetails", "h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-xs uppercase tracking-widest")}
                                                     value={formData.licDetails}
                                                     onChange={(e) => updateField("licDetails", e.target.value)}
@@ -3489,9 +3489,9 @@ function OnboardingForm() {
                                                         </p>
                                                     </div>
                                                     <div className="col-span-2">
-                                                        <p className="text-[8px] font-black text-blue-600 uppercase tracking-wider">ESIC IP / Registration Number</p>
+                                                        <p className="text-[8px] font-black text-blue-600 uppercase tracking-wider">ESIC IP / Registration Number (Optional)</p>
                                                         <p className="text-xs font-bold text-slate-900 font-mono mt-0.5">
-                                                            {formData.esicNumber || "Not Allocated / New IP"}
+                                                            {formData.esicNumber || formData.licDetails || "Not Allocated / Optional"}
                                                         </p>
                                                     </div>
                                                     <div>
@@ -4262,11 +4262,11 @@ function OnboardingForm() {
                                         />
                                     </div>
                                     <div>
-                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">ESIC IP / Registration Number</Label>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">ESIC IP / Registration Number (Optional)</Label>
                                         <Input
                                             value={approvalOverrides.esic_number}
                                             onChange={(e) => setApprovalOverrides(a => ({ ...a, esic_number: e.target.value.toUpperCase() }))}
-                                            placeholder="ESIC IP Number"
+                                            placeholder="ESIC IP Number (Optional)"
                                             className="h-10 rounded-xl bg-slate-50 font-bold text-xs"
                                         />
                                     </div>

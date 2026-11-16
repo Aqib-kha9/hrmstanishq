@@ -385,11 +385,7 @@ function CandidateOnboardingContent() {
                     errors.uan = "Valid 12-digit Universal Account Number (UAN) is required for existing PF members";
                 }
             }
-            if (formData.has_existing_esic) {
-                if (!formData.esic_number.trim() || formData.esic_number.trim().length < 8) {
-                    errors.esic_number = "Valid ESIC Insurance Number (IP) is required for existing insured members";
-                }
-            }
+            // ESIC IP number is completely optional
         }
 
         // ── STEP 2: Mandatory Document Uploads (Page 3) ──
@@ -1300,13 +1296,13 @@ function CandidateOnboardingContent() {
                                     {formData.has_existing_esic ? (
                                         <div className="pt-2 border-t border-slate-200 animate-in fade-in duration-200">
                                             <Label className="text-[11px] font-bold text-slate-700">
-                                                Existing ESIC IP Number <span className="text-rose-500">*</span>
+                                                Existing ESIC IP Number (Optional)
                                             </Label>
                                             <Input
                                                 value={formData.esic_number}
                                                 onChange={(e) => updateField("esic_number", e.target.value.replace(/\D/g, ""))}
                                                 className="h-10 rounded-xl bg-white mt-1 font-mono font-bold text-xs"
-                                                placeholder="10 or 17 digit ESIC Insurance (IP) Number"
+                                                placeholder="10 or 17 digit ESIC Insurance (IP) Number (Optional)"
                                                 maxLength={17}
                                             />
                                             {fieldErrors.esic_number && (
