@@ -32,6 +32,7 @@ import {
     GraduationCap,
     FileSpreadsheet,
     CheckSquare,
+    Pencil,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1951,26 +1952,33 @@ function OnboardingForm() {
                                 <div className="relative flex justify-between items-center px-6 md:px-12">
                             <div className="absolute top-1/2 left-0 w-full h-[1px] bg-slate-100 -translate-y-1/2 z-0" />
                             {steps.map((step, i) => (
-                                <div key={i} className="relative z-10 flex flex-col items-center gap-3">
+                                <button
+                                    key={i}
+                                    type="button"
+                                    onClick={() => setCurrentStep(i)}
+                                    className="relative z-10 flex flex-col items-center gap-3 cursor-pointer group focus:outline-hidden"
+                                >
                                     <div
                                         className={cn(
-                                            "h-10 w-10 md:h-11 md:w-11 rounded-2xl flex items-center justify-center font-black text-xs transition-all duration-500 border-4",
-                                            currentStep >= i
-                                                ? "bg-slate-900 border-white text-[#D9F99D] shadow-lg"
-                                                : "bg-white border-slate-50 text-slate-200",
+                                            "h-10 w-10 md:h-11 md:w-11 rounded-2xl flex items-center justify-center font-black text-xs transition-all duration-300 border-4 group-hover:scale-105",
+                                            currentStep === i
+                                                ? "bg-slate-900 border-white text-[#D9F99D] shadow-lg ring-2 ring-slate-900"
+                                                : currentStep > i
+                                                ? "bg-slate-900 border-white text-[#D9F99D] shadow-md"
+                                                : "bg-white border-slate-50 text-slate-300 hover:border-slate-300",
                                         )}
                                     >
                                         {currentStep > i ? <CheckCircle className="h-5 w-5" /> : i + 1}
                                     </div>
                                     <span
                                         className={cn(
-                                            "text-[7px] md:text-[8px] font-black uppercase tracking-widest hidden md:block",
-                                            currentStep >= i ? "text-slate-900" : "text-slate-300",
+                                            "text-[7px] md:text-[8px] font-black uppercase tracking-widest hidden md:block transition-colors",
+                                            currentStep === i ? "text-slate-900 font-extrabold" : currentStep > i ? "text-slate-700" : "text-slate-300 group-hover:text-slate-600",
                                         )}
                                     >
                                         {step}
                                     </span>
-                                </div>
+                                </button>
                             ))}
                         </div>
 
@@ -3068,199 +3076,369 @@ function OnboardingForm() {
                                                 Check everything before adding the employee.
                                             </p>
                                         </div>
-                                        <div className="w-full max-w-3xl grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
-                                            {/* Personal Details (Req 2.3 A) */}
-                                            <div className="p-8 bg-slate-50 rounded-[2rem] space-y-5">
-                                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] border-b border-slate-200 pb-3">
-                                                    Personal Details (Req 2.3 A)
-                                                </p>
-                                                <div className="grid grid-cols-2 gap-4">
+                                        <div className="w-full max-w-4xl space-y-6 text-left">
+                                            {/* ── CARD 1: Personal Details (Req 2.3 A) ── */}
+                                            <div className="p-6 md:p-8 bg-slate-50/90 rounded-[2rem] border border-slate-200/80 shadow-xs space-y-5">
+                                                <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                                                    <span className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-700 flex items-center gap-2">
+                                                        <UserPlus className="h-4 w-4 text-indigo-600" /> 1. Personal Details (Req 2.3 A)
+                                                    </span>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => setCurrentStep(0)}
+                                                        className="h-7 px-3 rounded-xl border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5 shadow-none transition-all cursor-pointer"
+                                                    >
+                                                        <Pencil className="h-3 w-3 text-indigo-600" /> Edit Personal Info
+                                                    </Button>
+                                                </div>
+                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                                     <div className="col-span-2">
-                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Full Name (as per Aadhaar)</p>
-                                                        <p className="text-sm font-black italic uppercase text-slate-900">
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Full Name (as per Aadhaar)</p>
+                                                        <p className="text-sm font-black italic uppercase text-slate-900 mt-0.5">
                                                             {formData.name || "N/A"}
                                                         </p>
                                                     </div>
                                                     <div>
-                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Email</p>
-                                                        <p className="text-xs font-black text-slate-900 lowercase truncate">
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Email Address</p>
+                                                        <p className="text-xs font-bold text-slate-900 lowercase truncate mt-0.5">
                                                             {formData.email || "N/A"}
                                                         </p>
                                                     </div>
                                                     <div>
-                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Mobile Phone</p>
-                                                        <p className="text-xs font-black text-slate-900">
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Mobile Phone</p>
+                                                        <p className="text-xs font-bold text-slate-900 mt-0.5 font-mono">
                                                             {formData.phone || "N/A"}
                                                         </p>
                                                     </div>
                                                     <div>
-                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Gender & Marital Status</p>
-                                                        <p className="text-xs font-black text-slate-900 uppercase">
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Gender & Marital Status</p>
+                                                        <p className="text-xs font-bold text-slate-900 uppercase mt-0.5">
                                                             {formData.gender} • {formData.maritalStatus}
                                                         </p>
                                                     </div>
                                                     <div>
-                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Father&apos;s / Husband&apos;s Name</p>
-                                                        <p className="text-xs font-black text-slate-900 uppercase">
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Father&apos;s / Husband&apos;s Name</p>
+                                                        <p className="text-xs font-bold text-slate-900 uppercase mt-0.5">
                                                             {formData.fatherOrHusbandName || "N/A"}
                                                         </p>
                                                     </div>
                                                     <div>
-                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Date of Birth</p>
-                                                        <p className="text-xs font-black text-slate-900">
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Date of Birth</p>
+                                                        <p className="text-xs font-bold text-slate-900 mt-0.5 font-mono">
                                                             {formData.dob || "N/A"}
                                                         </p>
                                                     </div>
                                                     <div>
-                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Date of Joining</p>
-                                                        <p className="text-xs font-black text-slate-900">
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Date of Joining</p>
+                                                        <p className="text-xs font-bold text-slate-900 mt-0.5 font-mono">
                                                             {formData.doj || "N/A"}
                                                         </p>
                                                     </div>
-                                                    <div>
-                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Aadhaar Number</p>
-                                                        <p className="text-xs font-black text-slate-900 font-mono">
-                                                            {formData.aadhaar || "N/A"}
-                                                        </p>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-[7px] font-black text-slate-400 uppercase">PAN Number</p>
-                                                        <p className="text-xs font-black text-slate-900 font-mono">
-                                                            {formData.pan ? formData.pan.toUpperCase() : "N/A (Optional)"}
-                                                        </p>
-                                                    </div>
-                                                    <div className="col-span-2 pt-2 border-t border-slate-200/60">
-                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Emergency Contact</p>
-                                                        <p className="text-xs font-black text-slate-900">
-                                                            {formData.emergencyName || "N/A"} ({formData.emergencyRelation || "N/A"}) • {formData.emergencyPhone || "N/A"}
+                                                    <div className="col-span-2">
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Aadhaar Card (12 Digits)</p>
+                                                        <p className="text-xs font-bold text-slate-900 font-mono mt-0.5">
+                                                            {formData.aadhaar ? `${formData.aadhaar.slice(0, 4)} ${formData.aadhaar.slice(4, 8)} ${formData.aadhaar.slice(8, 12)}` : "N/A"}
                                                         </p>
                                                     </div>
                                                     <div className="col-span-2">
-                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Address as per Aadhaar</p>
-                                                        <p className="text-xs font-bold text-slate-700 leading-snug">
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">PAN Card Number</p>
+                                                        <p className="text-xs font-bold text-slate-900 font-mono mt-0.5 uppercase">
+                                                            {formData.pan ? formData.pan.toUpperCase() : "N/A (Optional)"}
+                                                        </p>
+                                                    </div>
+                                                    <div className="col-span-2 md:col-span-4 pt-2 border-t border-slate-200/60">
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Emergency Contact Particulars</p>
+                                                        <p className="text-xs font-bold text-slate-900 mt-0.5">
+                                                            {formData.emergencyName || "N/A"} {formData.emergencyRelation && `(${formData.emergencyRelation})`} {formData.emergencyPhone && `• Phone: ${formData.emergencyPhone}`}
+                                                        </p>
+                                                    </div>
+                                                    <div className="col-span-2 md:col-span-4">
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Address (as per Aadhaar)</p>
+                                                        <p className="text-xs font-medium text-slate-800 leading-snug mt-0.5">
                                                             {formData.address || "N/A"}
                                                         </p>
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            {/* Employment Information (Req 2.3 B) */}
-                                            <div className="p-8 bg-slate-50 rounded-[2rem] space-y-5">
-                                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] border-b border-slate-200 pb-3">
-                                                    Employment Information (Req 2.3 B)
-                                                </p>
-                                                <div className="grid grid-cols-2 gap-4">
+                                            {/* ── CARD 2: Employment Information (Req 2.3 B) ── */}
+                                            <div className="p-6 md:p-8 bg-slate-50/90 rounded-[2rem] border border-slate-200/80 shadow-xs space-y-5">
+                                                <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                                                    <span className="text-[11px] font-black uppercase tracking-[0.2em] text-indigo-700 flex items-center gap-2">
+                                                        <Briefcase className="h-4 w-4 text-indigo-600" /> 2. Employment Information (Req 2.3 B)
+                                                    </span>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => setCurrentStep(1)}
+                                                        className="h-7 px-3 rounded-xl border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5 shadow-none transition-all cursor-pointer"
+                                                    >
+                                                        <Pencil className="h-3 w-3 text-indigo-600" /> Edit Employment Info
+                                                    </Button>
+                                                </div>
+                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                                     <div className="col-span-2">
-                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Company Entity</p>
-                                                        <p className="text-sm font-black italic uppercase text-slate-900">
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Company Entity</p>
+                                                        <p className="text-sm font-black italic uppercase text-slate-900 mt-0.5">
                                                             {companies.find((c) => c.id.toString() === formData.company)?.name || formData.company || "N/A"}
                                                         </p>
                                                     </div>
                                                     <div className="col-span-2">
-                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Working Location</p>
-                                                        <p className="text-sm font-black italic uppercase text-slate-900">
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Working Location / Depot</p>
+                                                        <p className="text-sm font-black italic uppercase text-slate-900 mt-0.5">
                                                             {offices.find((o) => o.id.toString() === formData.location)?.name || formData.location || "N/A"}
                                                         </p>
                                                     </div>
                                                     <div>
-                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Role</p>
-                                                        <p className="text-xs font-black text-slate-900 uppercase tracking-widest">
-                                                            {formData.role}
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Department</p>
+                                                        <p className="text-xs font-bold text-slate-900 uppercase mt-0.5">
+                                                            {formData.dept || "Operations"}
                                                         </p>
                                                     </div>
                                                     <div>
-                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Designation</p>
-                                                        <p className="text-xs font-black text-slate-900 uppercase tracking-widest">
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Designation / Job Title</p>
+                                                        <p className="text-xs font-bold text-slate-900 uppercase mt-0.5">
                                                             {formData.jobTitle || "N/A"}
                                                         </p>
                                                     </div>
-                                                    <div className="col-span-2">
-                                                        <p className="text-[7px] font-black text-slate-400 uppercase">HR / Reporting Manager</p>
-                                                        <p className="text-xs font-black text-slate-900">
+                                                    <div>
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">System Role</p>
+                                                        <p className="text-xs font-bold text-slate-900 uppercase mt-0.5 tracking-wider">
+                                                            {formData.role || "EMPLOYEE"}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">HR / Reporting Manager</p>
+                                                        <p className="text-xs font-bold text-slate-900 mt-0.5">
                                                             {formData.hrManager || "N/A"}
                                                         </p>
                                                     </div>
                                                     <div className="col-span-2 pt-2 border-t border-slate-200/60">
-                                                        <p className="text-[7px] font-black text-indigo-600 uppercase">Shift Configuration</p>
-                                                        <p className="text-xs font-black text-slate-900">
-                                                            {formData.shiftStartTime} - {formData.shiftEndTime} (Threshold: {formData.halfDayLateMinutes}m)
+                                                        <p className="text-[8px] font-black text-indigo-600 uppercase tracking-wider">Shift Working Timings</p>
+                                                        <p className="text-xs font-bold text-slate-900 font-mono mt-0.5">
+                                                            {formData.shiftStartTime} - {formData.shiftEndTime} (Threshold: {formData.halfDayLateMinutes || 60}m)
                                                         </p>
                                                     </div>
-                                                    <div className="col-span-2">
-                                                        <p className="text-[7px] font-black text-indigo-600 uppercase">Rotational Shift</p>
-                                                        <p className="text-xs font-black text-slate-900">
-                                                            {formData.isRotationalShift === "Yes" ? "Yes (Rotational Shift Roster)" : "No (Fixed Regular Shift)"}
+                                                    <div className="col-span-2 pt-2 border-t border-slate-200/60">
+                                                        <p className="text-[8px] font-black text-indigo-600 uppercase tracking-wider">Rotational Shift Classification</p>
+                                                        <p className="text-xs font-bold text-slate-900 mt-0.5">
+                                                            {formData.isRotationalShift === "Yes" ? "Yes (Rotational Shift Roster Employee)" : "No (Fixed Regular Shift)"}
                                                         </p>
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            {/* Compensation & Compliance (Req 2.4) */}
-                                            <div className="p-8 bg-slate-50 rounded-[2rem] space-y-5 md:col-span-2">
-                                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] border-b border-slate-200 pb-3">
-                                                    Compensation & Compliance (Req 2.4)
-                                                </p>
+                                            {/* ── CARD 3: Compensation & Banking Details (Req 2.4) ── */}
+                                            <div className="p-6 md:p-8 bg-slate-50/90 rounded-[2rem] border border-slate-200/80 shadow-xs space-y-5">
+                                                <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                                                    <span className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-700 flex items-center gap-2">
+                                                        <Banknote className="h-4 w-4 text-emerald-600" /> 3. Compensation & Banking (Req 2.4)
+                                                    </span>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => setCurrentStep(2)}
+                                                        className="h-7 px-3 rounded-xl border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5 shadow-none transition-all cursor-pointer"
+                                                    >
+                                                        <Pencil className="h-3 w-3 text-emerald-600" /> Edit Compensation
+                                                    </Button>
+                                                </div>
                                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                                     <div>
-                                                        <p className="text-[7px] font-black text-emerald-500 uppercase">Monthly Fixed CTC</p>
-                                                        <p className="text-sm font-black text-emerald-600 uppercase tracking-widest">
+                                                        <p className="text-[8px] font-black text-emerald-600 uppercase tracking-wider">Monthly Fixed CTC</p>
+                                                        <p className="text-base font-black text-emerald-700 uppercase mt-0.5">
                                                             ₹{formData.fixedGross ? Number(formData.fixedGross).toLocaleString("en-IN") : "0"}
                                                         </p>
                                                     </div>
                                                     <div>
-                                                        <p className="text-[7px] font-black text-slate-400 uppercase">HRA Applicable</p>
-                                                        <p className="text-sm font-black text-slate-900 uppercase tracking-widest">
-                                                            {formData.hraApplicable}
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Payment Mode</p>
+                                                        <p className="text-xs font-bold text-slate-900 uppercase mt-0.5">
+                                                            {formData.paymentMode || "Bank Transfer"}
                                                         </p>
                                                     </div>
                                                     <div>
-                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Bank Name</p>
-                                                        <p className="text-sm font-black text-slate-900 uppercase tracking-widest">
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">HRA Applicable</p>
+                                                        <p className="text-xs font-bold text-slate-900 uppercase mt-0.5">
+                                                            {formData.hraApplicable || "Yes"}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Bank Name</p>
+                                                        <p className="text-xs font-bold text-slate-900 uppercase mt-0.5">
                                                             {formData.bankName || "N/A"}
                                                         </p>
                                                     </div>
-                                                    <div>
-                                                        <p className="text-[7px] font-black text-slate-400 uppercase">Account & IFSC</p>
-                                                        <p className="text-xs font-black text-slate-900 font-mono">
-                                                            {formData.accountNo || "N/A"} • {formData.ifsc || "N/A"}
+                                                    <div className="col-span-2">
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Bank Account Number</p>
+                                                        <p className="text-xs font-bold text-slate-900 font-mono mt-0.5">
+                                                            {formData.accountNo || "N/A"}
                                                         </p>
                                                     </div>
+                                                    <div className="col-span-2">
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Bank IFSC Code</p>
+                                                        <p className="text-xs font-bold text-slate-900 font-mono uppercase mt-0.5">
+                                                            {formData.ifsc || "N/A"}
+                                                        </p>
+                                                    </div>
+
+                                                    {/* Monthly Salary Breakdown Elements */}
+                                                    <div className="col-span-2 md:col-span-4 p-4 bg-emerald-50/60 rounded-2xl border border-emerald-100 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-emerald-700 block uppercase">Basic Salary (50%)</span>
+                                                            <span className="font-mono font-bold text-emerald-900">
+                                                                ₹{Math.round(Number(formData.fixedGross || 0) * 0.5).toLocaleString("en-IN")}
+                                                            </span>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-emerald-700 block uppercase">HRA (40% of Basic)</span>
+                                                            <span className="font-mono font-bold text-emerald-900">
+                                                                ₹{formData.hraApplicable === "Yes" ? Math.round(Number(formData.fixedGross || 0) * 0.5 * 0.4).toLocaleString("en-IN") : "0"}
+                                                            </span>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-emerald-700 block uppercase">Conveyance Allowance</span>
+                                                            <span className="font-mono font-bold text-emerald-900">
+                                                                ₹{Number(formData.conveyance || 0).toLocaleString("en-IN")}
+                                                            </span>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-emerald-700 block uppercase">Medical Allowance</span>
+                                                            <span className="font-mono font-bold text-emerald-900">
+                                                                ₹{Number(formData.medicalAllowance || 0).toLocaleString("en-IN")}
+                                                            </span>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-emerald-700 block uppercase">Special Allowance</span>
+                                                            <span className="font-mono font-bold text-emerald-900">
+                                                                ₹{Number(formData.specialAllowance || 0).toLocaleString("en-IN")}
+                                                            </span>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-[9px] font-bold text-emerald-700 block uppercase">Performance Allowance</span>
+                                                            <span className="font-mono font-bold text-emerald-900">
+                                                                ₹{Number(formData.performanceAllowance || 0).toLocaleString("en-IN")}
+                                                            </span>
+                                                        </div>
+                                                        <div className="col-span-2">
+                                                            <span className="text-[9px] font-bold text-emerald-700 block uppercase">Annual Fixed Gross</span>
+                                                            <span className="font-mono font-black text-emerald-900">
+                                                                ₹{(Number(formData.fixedGross || 0) * 12).toLocaleString("en-IN")} / year
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* ── CARD 4: Statutory & Compliance Setup ── */}
+                                            <div className="p-6 md:p-8 bg-slate-50/90 rounded-[2rem] border border-slate-200/80 shadow-xs space-y-5">
+                                                <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                                                    <span className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-700 flex items-center gap-2">
+                                                        <ShieldCheck className="h-4 w-4 text-blue-600" /> 4. Statutory & Compliance Setup
+                                                    </span>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => setCurrentStep(2)}
+                                                        className="h-7 px-3 rounded-xl border-blue-200 bg-white text-blue-700 hover:bg-blue-50 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5 shadow-none transition-all cursor-pointer"
+                                                    >
+                                                        <Pencil className="h-3 w-3 text-blue-600" /> Edit Compliance
+                                                    </Button>
+                                                </div>
+                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                                     <div>
-                                                        <p className="text-[7px] font-black text-indigo-400 uppercase">PF Applicable & Mode</p>
-                                                        <p className="text-xs font-black text-indigo-600 uppercase tracking-widest">
+                                                        <p className="text-[8px] font-black text-indigo-600 uppercase tracking-wider">PF Applicable & Mode</p>
+                                                        <p className="text-xs font-bold text-slate-900 uppercase mt-0.5">
                                                             {formData.pfApplicable} ({formData.pfContributionMode})
                                                         </p>
                                                     </div>
                                                     <div>
-                                                        <p className="text-[7px] font-black text-indigo-400 uppercase">PF Ceiling Limit</p>
-                                                        <p className="text-xs font-black text-indigo-600 uppercase tracking-widest">
+                                                        <p className="text-[8px] font-black text-indigo-600 uppercase tracking-wider">PF Ceiling Limit</p>
+                                                        <p className="text-xs font-bold text-slate-900 uppercase mt-0.5">
                                                             {formData.pfCeiling === "Yes" ? "₹15,000 Cap" : "Actual Basic"}
                                                         </p>
                                                     </div>
                                                     <div>
-                                                        <p className="text-[7px] font-black text-blue-400 uppercase">ESIC Applicable & Mode</p>
-                                                        <p className="text-xs font-black text-blue-600 uppercase tracking-widest">
-                                                            {formData.esicApplicable} ({formData.esicContributionMode})
+                                                        <p className="text-[8px] font-black text-indigo-600 uppercase tracking-wider">PF Member Number</p>
+                                                        <p className="text-xs font-bold text-slate-900 font-mono mt-0.5 uppercase">
+                                                            {formData.pfNo || "Not Allocated / New"}
                                                         </p>
                                                     </div>
                                                     <div>
-                                                        <p className="text-[7px] font-black text-indigo-400 uppercase">PT Applicable</p>
-                                                        <p className="text-xs font-black text-indigo-600 uppercase tracking-widest">
-                                                            {formData.ptApplicable}
+                                                        <p className="text-[8px] font-black text-indigo-600 uppercase tracking-wider">PF Employment Date</p>
+                                                        <p className="text-xs font-bold text-slate-900 font-mono mt-0.5">
+                                                            {formData.pfEmploymentDate || "N/A"}
+                                                        </p>
+                                                    </div>
+                                                    <div className="col-span-2">
+                                                        <p className="text-[8px] font-black text-indigo-600 uppercase tracking-wider">Universal Account Number (UAN)</p>
+                                                        <p className="text-xs font-bold text-slate-900 font-mono mt-0.5">
+                                                            {formData.uan || "Not Allocated / First Employment"}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[8px] font-black text-indigo-600 uppercase tracking-wider">PF Rates (EE / ER)</p>
+                                                        <p className="text-xs font-bold text-slate-900 font-mono mt-0.5">
+                                                            {(Number(formData.pfEmployeeRate || 0.12) * 100).toFixed(0)}% / {(Number(formData.pfEmployerRate || 0.12) * 100).toFixed(0)}%
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[8px] font-black text-blue-600 uppercase tracking-wider">ESIC Applicable & Mode</p>
+                                                        <p className="text-xs font-bold text-slate-900 uppercase mt-0.5">
+                                                            {formData.esicApplicable} ({formData.esicContributionMode})
+                                                        </p>
+                                                    </div>
+                                                    <div className="col-span-2">
+                                                        <p className="text-[8px] font-black text-blue-600 uppercase tracking-wider">ESIC IP / Registration Number</p>
+                                                        <p className="text-xs font-bold text-slate-900 font-mono mt-0.5">
+                                                            {formData.esicNumber || "Not Allocated / New IP"}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[8px] font-black text-blue-600 uppercase tracking-wider">ESIC Rates (EE / ER)</p>
+                                                        <p className="text-xs font-bold text-slate-900 font-mono mt-0.5">
+                                                            {(Number(formData.esicEmployeeRate || 0.0075) * 100).toFixed(2)}% / {(Number(formData.esicEmployerRate || 0.0325) * 100).toFixed(2)}%
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[8px] font-black text-indigo-600 uppercase tracking-wider">Professional Tax (PT)</p>
+                                                        <p className="text-xs font-bold text-slate-900 uppercase mt-0.5">
+                                                            {formData.ptApplicable === "Yes" ? "Applicable" : "Exempt"}
+                                                        </p>
+                                                    </div>
+                                                    <div className="col-span-2 md:col-span-4">
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">LIC / Statutory Policy Details</p>
+                                                        <p className="text-xs font-bold text-slate-900 mt-0.5">
+                                                            {formData.licDetails || "None"}
                                                         </p>
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            {/* Attached Verification Documents (Req 2.3 D) */}
-                                            <div className="p-8 bg-slate-50 rounded-[2rem] space-y-5 md:col-span-2">
+                                            {/* ── CARD 5: Attached Verification Documents (Req 2.3 D) ── */}
+                                            <div className="p-6 md:p-8 bg-slate-50/90 rounded-[2rem] border border-slate-200/80 shadow-xs space-y-5">
                                                 <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-                                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">
-                                                        Attached Verification Documents (Req 2.3 D)
-                                                    </p>
-                                                    <Badge className="bg-emerald-100 text-emerald-800 font-black text-[8px] px-2.5 py-0.5 uppercase tracking-wider">
-                                                        {uploadedFiles.length} of {SOW_ONBOARDING_DOCUMENTS.length} Attached
-                                                    </Badge>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-700 flex items-center gap-2">
+                                                            <FileText className="h-4 w-4 text-slate-600" /> 5. Attached Verification Documents (Req 2.3 D)
+                                                        </span>
+                                                        <Badge className="bg-emerald-100 text-emerald-800 font-black text-[8px] px-2.5 py-0.5 uppercase tracking-wider">
+                                                            {uploadedFiles.length} of {SOW_ONBOARDING_DOCUMENTS.length} Attached
+                                                        </Badge>
+                                                    </div>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => setCurrentStep(3)}
+                                                        className="h-7 px-3 rounded-xl border-slate-300 bg-white text-slate-700 hover:bg-slate-200/60 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5 shadow-none transition-all cursor-pointer"
+                                                    >
+                                                        <Pencil className="h-3 w-3 text-slate-600" /> Edit Documents
+                                                    </Button>
                                                 </div>
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                     {SOW_ONBOARDING_DOCUMENTS.map((doc, idx) => {
@@ -3279,12 +3457,19 @@ function OnboardingForm() {
                                                                 (doc.key === "signed_offer_letter" && (dt.includes("offer") || dt.includes("appointment") || dt.includes("signed") || dt.includes("acceptance")));
                                                         });
                                                         return (
-                                                            <div key={doc.key} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200/70 text-xs">
-                                                                <span className="font-bold text-slate-700 truncate max-w-[240px]">
-                                                                    {idx + 1}. {doc.shortName} {doc.mandatory ? "*" : "(Opt)"}
-                                                                </span>
+                                                            <div key={doc.key} className="flex items-center justify-between p-3.5 bg-white rounded-xl border border-slate-200 text-xs shadow-xs">
+                                                                <div className="min-w-0 pr-2">
+                                                                    <span className="font-bold text-slate-800 truncate block">
+                                                                        {idx + 1}. {doc.shortName} {doc.mandatory ? "*" : "(Optional)"}
+                                                                    </span>
+                                                                    {up && up.file?.name && (
+                                                                        <span className="text-[10px] text-slate-400 font-mono truncate block">
+                                                                            {up.file.name}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
                                                                 <span className={cn(
-                                                                    "text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded",
+                                                                    "text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg shrink-0",
                                                                     up ? "bg-emerald-100 text-emerald-800" : doc.mandatory ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-500"
                                                                 )}>
                                                                     {up ? "Attached" : doc.mandatory ? "Pending" : "Not Provided"}
@@ -3304,21 +3489,33 @@ function OnboardingForm() {
                                     variant="ghost"
                                     onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}
                                     disabled={currentStep === 0 || submitting}
-                                    className="h-12 px-8 rounded-xl gap-3 text-slate-400 hover:text-slate-900 font-black uppercase tracking-widest text-[9px] transition-all"
+                                    className="h-12 px-8 rounded-xl gap-3 text-slate-400 hover:text-slate-900 font-black uppercase tracking-widest text-[9px] transition-all cursor-pointer"
                                 >
                                     <ArrowLeft className="h-4 w-4" /> Go Back
                                 </Button>
-                                <Button
-                                    onClick={() => {
-                                        if (currentStep === steps.length - 1) {
-                                            handleFinish();
-                                        } else {
-                                            handleNextStep();
-                                        }
-                                    }}
-                                    disabled={submitting}
-                                    className="h-12 px-12 rounded-xl bg-slate-900 text-white font-black uppercase tracking-[0.3em] text-[10px] shadow-2xl shadow-slate-200 hover:bg-black transition-all flex items-center gap-3 disabled:opacity-50"
-                                >
+                                <div className="flex items-center gap-3">
+                                    {currentStep < steps.length - 1 && formData.name && (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => setCurrentStep(steps.length - 1)}
+                                            className="h-12 px-5 rounded-xl border-indigo-200 bg-indigo-50/70 text-indigo-700 hover:bg-indigo-100 font-black uppercase tracking-widest text-[9px] transition-all flex items-center gap-2 cursor-pointer shadow-xs"
+                                        >
+                                            <span>Review & Finish</span>
+                                            <ChevronRight className="h-3.5 w-3.5 text-indigo-500" />
+                                        </Button>
+                                    )}
+                                    <Button
+                                        onClick={() => {
+                                            if (currentStep === steps.length - 1) {
+                                                handleFinish();
+                                            } else {
+                                                handleNextStep();
+                                            }
+                                        }}
+                                        disabled={submitting}
+                                        className="h-12 px-12 rounded-xl bg-slate-900 text-white font-black uppercase tracking-[0.3em] text-[10px] shadow-2xl shadow-slate-200 hover:bg-black transition-all flex items-center gap-3 disabled:opacity-50 cursor-pointer"
+                                    >
                                     {submitting ? (
                                         <>
                                             <Loader2 className="h-4 w-4 animate-spin" /> Creating...
@@ -3333,6 +3530,7 @@ function OnboardingForm() {
                                         </>
                                     )}
                                 </Button>
+                                </div>
                             </CardFooter>
                         </Card>
                             </>
