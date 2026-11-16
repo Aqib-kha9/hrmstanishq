@@ -102,26 +102,33 @@ export default function AttendancePage() {
     const [offices, setOffices] = useState<{ id: number; name: string }[]>([]);
     const [departments, setDepartments] = useState<string[]>([]);
     const [selectedDepartment, setSelectedDepartment] = useState("");
+    const [allEmployees, setAllEmployees] = useState<any[]>([]);
+    const [manualInputMode, setManualInputMode] = useState<"dropdown" | "custom">("dropdown");
     const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Fetch companies, offices, departments and late threshold for filter dropdowns (Req 5.3)
+    // Fetch companies, offices, departments, late threshold and active employees for selector (Req 5.3)
     useEffect(() => {
         Promise.all([
             apiGet<{ id: number; name: string }[]>("/companies"),
             apiGet<{ id: number; name: string }[]>("/offices", { limit: 100 }),
             apiGet<string[]>("/leave/departments"),
             apiGet<any>("/config/late-threshold").catch(() => null),
+            apiGet<any>("/employees?limit=500&status=active").catch(() => null),
         ])
-            .then(([compRes, offRes, deptRes, lateRes]) => {
+            .then(([compRes, offRes, deptRes, lateRes, empRes]) => {
                 setCompanies(Array.isArray(compRes) ? compRes : []);
                 setOffices(Array.isArray(offRes) ? offRes : []);
                 setDepartments(Array.isArray(deptRes) ? deptRes : []);
+                if (empRes) {
+                    const list = Array.isArray(empRes) ? empRes : (empRes.data || empRes.employees || []);
+                    setAllEmployees(list);
+                }
                 if (lateRes && lateRes.lateThresholdMinutes) {
                     setLateThresholdMinutes(lateRes.lateThresholdMinutes);
                     setTempLateThreshold(lateRes.lateThresholdMinutes);
                 }
             })
-            .catch(() => { setCompanies([]); setOffices([]); setDepartments([]); });
+            .catch(() => { setCompanies([]); setOffices([]); setDepartments([]); setAllEmployees([]); });
     }, []);
 
     const handleUpdateLateThreshold = async (minutes: number) => {
@@ -754,7 +761,18 @@ export default function AttendancePage() {
 
     // Manual & Authorized entry submit (Req 5.1, 5.2, 2.5 B, 2.5 D)
     const handleManualSubmit = async () => {
-        if (!manualEmpId || !manualDate || !manualStatus) return;
+        if (!manualEmpId || !manualEmpId.trim()) {
+            alert("Please select or enter an employee.");
+            return;
+        }
+        if (!manualDate) {
+            alert("Please select an attendance date.");
+            return;
+        }
+        if (!manualStatus) {
+            alert("Please select an attendance status.");
+            return;
+        }
         setManualSubmitting(true);
         try {
             const isOutdoorDuty = manualIsOutdoor || manualStatus === "Present - Outdoor";
@@ -2466,51 +2484,100 @@ export default function AttendancePage() {
 
             {/* Authorized Attendance & Outdoor Duty Dialog (Req 5.1 & 5.2) */}
             <Dialog open={isManualEntryOpen} onOpenChange={setIsManualEntryOpen}>
-                <DialogContent className="sm:max-w-[500px] rounded-[2rem] p-0 overflow-hidden bg-white border-none shadow-2xl">
-                    <div className="bg-slate-900 p-8 text-center relative overflow-hidden">
+                <DialogContent className="sm:max-w-[540px] max-h-[90vh] flex flex-col rounded-[2rem] p-0 overflow-hidden bg-white border-none shadow-2xl">
+                    {/* Header: shrink-0 with compact padding */}
+                    <div className="bg-slate-900 px-6 py-5 text-center relative overflow-hidden shrink-0">
                         <div className="absolute inset-0 opacity-10">
                             <div className="absolute inset-0 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]" />
                         </div>
                         <div className="relative z-10 flex flex-col items-center">
-                            <div className="h-14 w-14 bg-white/10 rounded-2xl flex items-center justify-center mb-3">
-                                <UserCheck className="h-7 w-7 text-[#D9F99D]" />
+                            <div className="h-11 w-11 bg-white/10 rounded-2xl flex items-center justify-center mb-2">
+                                <UserCheck className="h-6 w-6 text-[#D9F99D]" />
                             </div>
-                            <DialogTitle className="text-2xl font-black italic uppercase tracking-tighter text-white">Authorized Marking</DialogTitle>
-                            <DialogDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                                Mark Attendance on Employee's Behalf & Outdoor Duty
+                            <DialogTitle className="text-xl font-black italic uppercase tracking-tighter text-white">Authorized Marking</DialogTitle>
+                            <DialogDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                                Mark Attendance on Employee&apos;s Behalf & Outdoor Duty
                             </DialogDescription>
                         </div>
                     </div>
 
-                    <div className="p-8 space-y-4">
-                        <div className="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-100 text-[10px] text-indigo-950">
+                    {/* Body: Scrollable, responsive, padded */}
+                    <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                        <div className="p-3 rounded-xl bg-indigo-50/70 border border-indigo-100 text-[10px] text-indigo-950">
                             <p className="font-bold">Administrative Access Control (Req 5.1 & 5.2):</p>
                             <p className="text-slate-600 text-[9px] mt-0.5">
                                 Logged under your authorized credentials with audit history. For outdoor duties or field operations, geofence checks are automatically bypassed.
                             </p>
                         </div>
 
+                        {/* Employee Selector (Dropdown with Search or Custom ID fallback) */}
                         <div className="space-y-1.5">
-                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Employee Code or Numeric ID</Label>
-                            <Input
-                                placeholder="e.g. EMP118196 or 6"
-                                value={manualEmpId}
-                                onChange={(e) => setManualEmpId(e.target.value)}
-                                className="h-11 rounded-xl bg-slate-50 border-none font-bold text-xs uppercase"
-                            />
+                            <div className="flex items-center justify-between">
+                                <Label className="text-[10px] font-bold text-slate-700">Select Employee *</Label>
+                                <button
+                                    type="button"
+                                    onClick={() => setManualInputMode(m => m === "dropdown" ? "custom" : "dropdown")}
+                                    className="text-[9px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
+                                >
+                                    {manualInputMode === "dropdown" ? "Type ID manually" : "Select from list"}
+                                </button>
+                            </div>
+                            {manualInputMode === "dropdown" && allEmployees.length > 0 ? (
+                                <select
+                                    value={manualEmpId}
+                                    onChange={(e) => setManualEmpId(e.target.value)}
+                                    className="h-11 w-full px-3 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs text-slate-800 outline-none focus:ring-2 ring-indigo-200 cursor-pointer"
+                                >
+                                    <option value="">-- Choose Employee (Name / Code) --</option>
+                                    {allEmployees.map((emp: any) => (
+                                        <option key={emp.id} value={emp.emp_code || emp.id}>
+                                            {emp.emp_code} — {emp.name} ({emp.department || "Operations"})
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <Input
+                                    placeholder="Enter Emp Code (e.g. APA001) or Numeric ID"
+                                    value={manualEmpId}
+                                    onChange={(e) => setManualEmpId(e.target.value)}
+                                    className="h-11 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs uppercase"
+                                />
+                            )}
+                            {/* Selected Employee Preview Pill */}
+                            {(function () {
+                                const selected = allEmployees.find(e => 
+                                    String(e.id) === String(manualEmpId) || 
+                                    (e.emp_code && e.emp_code.toUpperCase() === String(manualEmpId).toUpperCase())
+                                );
+                                if (!selected) return null;
+                                return (
+                                    <div className="mt-1 p-2 rounded-xl bg-indigo-50/80 border border-indigo-200/60 flex items-center justify-between animate-in fade-in">
+                                        <div className="flex items-center gap-2">
+                                            <div className="h-6 w-6 rounded-md bg-indigo-600 text-white flex items-center justify-center font-bold text-[10px]">
+                                                {selected.name?.charAt(0).toUpperCase()}
+                                            </div>
+                                            <span className="text-xs font-bold text-slate-800">{selected.name}</span>
+                                            <span className="text-[10px] font-mono text-indigo-700 bg-white px-1.5 py-0.5 rounded border border-indigo-100">{selected.emp_code}</span>
+                                        </div>
+                                        <span className="text-[9px] font-bold text-slate-500">{selected.department || "Operations"}</span>
+                                    </div>
+                                );
+                            })()}
                         </div>
+
+                        {/* Date & Status */}
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1.5">
-                                <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Date</Label>
+                                <Label className="text-[10px] font-bold text-slate-700">Date *</Label>
                                 <Input
                                     type="date"
                                     value={manualDate}
                                     onChange={(e) => setManualDate(e.target.value)}
-                                    className="h-11 rounded-xl bg-slate-50 border-none font-bold text-xs uppercase"
+                                    className="h-11 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs"
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Status</Label>
+                                <Label className="text-[10px] font-bold text-slate-700">Status *</Label>
                                 <select
                                     value={manualStatus}
                                     onChange={(e) => {
@@ -2518,16 +2585,31 @@ export default function AttendancePage() {
                                         setManualStatus(val);
                                         if (val === "Present - Outdoor") {
                                             setManualIsOutdoor(true);
+                                            if (!manualCheckInTime) setManualCheckInTime("10:00");
+                                            if (!manualCheckOutTime) setManualCheckOutTime("19:00");
+                                        } else if (val === "Absent") {
+                                            setManualCheckInTime("");
+                                            setManualCheckOutTime("");
+                                            setManualIsOutdoor(false);
+                                        } else if (val === "Half Day") {
+                                            setManualCheckInTime("10:00");
+                                            setManualCheckOutTime("14:30");
+                                        } else if (val === "Late") {
+                                            setManualCheckInTime("10:45");
+                                            setManualCheckOutTime("19:00");
+                                        } else {
+                                            if (!manualCheckInTime) setManualCheckInTime("10:00");
+                                            if (!manualCheckOutTime) setManualCheckOutTime("19:00");
                                         }
                                     }}
-                                    className="h-11 w-full px-3 rounded-xl bg-slate-50 border-none font-bold text-[10px] uppercase outline-none focus:ring-2 ring-indigo-100"
+                                    className="h-11 w-full px-3 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs outline-none focus:ring-2 ring-indigo-200 cursor-pointer"
                                 >
                                     <option value="Present">Present (Standard In-Office)</option>
                                     <option value="Present - Outdoor">Present (Outdoor / Field Duty)</option>
                                     <option value="Late">Late Arrival</option>
                                     <option value="Half Day">Half Day (0.5)</option>
                                     <option value="Absent">Absent (LWP)</option>
-                                    <option value="Weekly Off Worked">Weekly Off / Sunday Worked (Compensated)</option>
+                                    <option value="Weekly Off Worked">Weekly Off Worked (Compensated)</option>
                                 </select>
                             </div>
                         </div>
@@ -2541,7 +2623,7 @@ export default function AttendancePage() {
                                 <select
                                     value={manualWoComp}
                                     onChange={(e: any) => setManualWoComp(e.target.value)}
-                                    className="h-10 w-full px-3 rounded-xl bg-white border border-purple-200 font-bold text-[10px] uppercase outline-none focus:ring-2 ring-purple-200"
+                                    className="h-10 w-full px-3 rounded-xl bg-white border border-purple-200 font-bold text-xs uppercase outline-none focus:ring-2 ring-purple-200 cursor-pointer"
                                 >
                                     <option value="additional_payable_day">Additional Payable Day (+1 Day Payout in Salary)</option>
                                     <option value="comp_off">Compensatory Off (+1 Day Credited to Leave Balance)</option>
@@ -2549,29 +2631,33 @@ export default function AttendancePage() {
                             </div>
                         )}
 
+                        {/* Check-In and Check-Out Time */}
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1.5">
-                                <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Check-In Time</Label>
+                                <Label className="text-[10px] font-bold text-slate-700">Check-In Time</Label>
                                 <Input
                                     type="time"
                                     value={manualCheckInTime}
                                     onChange={(e) => setManualCheckInTime(e.target.value)}
-                                    className="h-10 rounded-xl bg-slate-50 border-none font-bold text-xs"
+                                    className="h-10 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs font-mono"
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Check-Out Time</Label>
+                                <Label className="text-[10px] font-bold text-slate-700">Check-Out Time</Label>
                                 <Input
                                     type="time"
                                     value={manualCheckOutTime}
                                     onChange={(e) => setManualCheckOutTime(e.target.value)}
-                                    className="h-10 rounded-xl bg-slate-50 border-none font-bold text-xs"
+                                    className="h-10 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs font-mono"
                                 />
                             </div>
                         </div>
 
                         {/* Outdoor / Field Duty Geofence Bypass Option (Req 5.1) */}
-                        <div className="flex items-center gap-3 p-3.5 rounded-xl bg-slate-50 border border-slate-100 cursor-pointer" onClick={() => setManualIsOutdoor(!manualIsOutdoor)}>
+                        <div
+                            className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200 hover:border-slate-300 transition-all cursor-pointer"
+                            onClick={() => setManualIsOutdoor(!manualIsOutdoor)}
+                        >
                             <input
                                 type="checkbox"
                                 id="manualIsOutdoor"
@@ -2581,30 +2667,43 @@ export default function AttendancePage() {
                             />
                             <div className="flex flex-col cursor-pointer">
                                 <label htmlFor="manualIsOutdoor" className="text-[10px] font-black uppercase tracking-wider text-slate-900 cursor-pointer flex items-center gap-1.5">
-                                    <Compass className="h-3 w-3 text-emerald-600" /> Outdoor / Field Duty Punch
+                                    <Compass className="h-3.5 w-3.5 text-emerald-600" /> Outdoor / Field Duty Punch
                                 </label>
-                                <span className="text-[8px] font-bold text-slate-400">Bypasses office geofence verification (for client visits, audits, site work)</span>
+                                <span className="text-[8px] font-bold text-slate-500">Bypasses office geofence verification (for client visits, audits, site work)</span>
                             </div>
                         </div>
 
+                        {/* Authorized Reason / Audit Rationale */}
                         <div className="space-y-1.5">
-                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Authorized Reason / Audit Rationale</Label>
+                            <Label className="text-[10px] font-bold text-slate-700">Authorized Reason / Audit Rationale</Label>
                             <textarea
                                 placeholder="State reason for marking on behalf (e.g. Client site meeting at Delhi Branch, field duty authorization)..."
                                 value={manualReason}
                                 onChange={(e) => setManualReason(e.target.value)}
-                                className="w-full h-18 p-3 rounded-xl bg-slate-50 border-none font-bold text-xs resize-none outline-none focus:ring-2 ring-indigo-100"
+                                rows={2}
+                                className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs resize-none outline-none focus:ring-2 ring-indigo-200"
                             />
                         </div>
                     </div>
 
-                    <div className="p-6 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                    {/* Footer: Pinned at bottom with shrink-0, always 100% visible */}
+                    <div className="p-4 px-6 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
                         <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
                             <ShieldCheck className="h-3.5 w-3.5 text-indigo-500" /> Recorded in Audit Log
                         </span>
-                        <div className="flex gap-3">
-                            <Button variant="ghost" onClick={() => setIsManualEntryOpen(false)} className="text-[9px] font-black uppercase tracking-widest text-slate-500 rounded-xl hover:bg-slate-200">Cancel</Button>
-                            <Button onClick={handleManualSubmit} disabled={manualSubmitting} className="bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-[9px] tracking-widest rounded-xl px-6 shadow-md transition-all hover:translate-y-[-2px] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0">
+                        <div className="flex gap-2.5">
+                            <Button
+                                variant="ghost"
+                                onClick={() => setIsManualEntryOpen(false)}
+                                className="text-[9px] font-black uppercase tracking-widest text-slate-500 rounded-xl hover:bg-slate-200 h-10 px-4 cursor-pointer"
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={handleManualSubmit}
+                                disabled={manualSubmitting}
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-[9px] tracking-widest rounded-xl px-6 h-10 shadow-md transition-all hover:translate-y-[-1px] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                            >
                                 {manualSubmitting ? "Submitting..." : "Authorize Entry"}
                             </Button>
                         </div>
