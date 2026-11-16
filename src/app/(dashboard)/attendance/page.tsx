@@ -2151,7 +2151,7 @@ export default function AttendancePage() {
 
             {/* Attendance & Payroll Calculation Breakdown Dialog (Req 8) */}
             <Dialog open={isPayrollBreakdownOpen} onOpenChange={setIsPayrollBreakdownOpen}>
-                <DialogContent className="sm:max-w-[560px] rounded-[2rem] p-0 overflow-hidden bg-white border-none shadow-2xl">
+                <DialogContent className="sm:max-w-[560px] max-h-[90vh] flex flex-col rounded-2xl p-0 overflow-hidden bg-white border border-slate-200 shadow-xl">
                     {selectedPayrollBreakdown && (() => {
                         const emp = selectedPayrollBreakdown;
                         const musterDays = emp.muster_days ?? daysInSelectedMonth;
@@ -2169,134 +2169,132 @@ export default function AttendancePage() {
                         const isBalanced = (payableDays + lwpDays) === musterDays;
 
                         return (
-                            <div>
-                                <div className="bg-slate-900 p-7 text-white relative">
-                                    <div className="relative z-10 flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="h-12 w-12 bg-white/10 rounded-2xl flex items-center justify-center font-black italic text-lg text-[#D9F99D] shadow-md">
-                                                {emp.name.charAt(0)}
+                            <div className="flex flex-col h-full overflow-hidden">
+                                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center font-bold text-sm text-slate-800 shrink-0">
+                                            {emp.name.charAt(0)}
+                                        </div>
+                                        <div>
+                                            <DialogTitle className="text-base font-bold text-slate-900 tracking-tight">
+                                                {emp.name}
+                                            </DialogTitle>
+                                            <DialogDescription className="text-xs text-slate-500 font-normal mt-0.5">
+                                                {emp.id} • {emp.role} • {emp.company || "Company Entity"}
+                                            </DialogDescription>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="text-[10px] text-slate-400 font-medium uppercase block">Monthly CTC</span>
+                                        <span className="text-sm font-bold text-slate-900">₹{fixedGross.toLocaleString('en-IN')}</span>
+                                    </div>
+                                </div>
+
+                                <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                                    {/* 3 Main Stat Cards */}
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
+                                            <span className="text-[10px] font-semibold uppercase text-slate-500 block">Muster Days</span>
+                                            <span className="text-xl font-bold text-slate-900 block mt-1">{musterDays}</span>
+                                            <span className="text-[10px] text-slate-400">Total in cycle</span>
+                                        </div>
+                                        <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3 text-center">
+                                            <span className="text-[10px] font-semibold uppercase text-emerald-700 block">Payable Days</span>
+                                            <span className="text-xl font-bold text-emerald-900 block mt-1">{payableDays}</span>
+                                            <span className="text-[10px] text-emerald-600 font-medium">Salary eligible</span>
+                                        </div>
+                                        <div className="bg-rose-50/70 border border-rose-200 rounded-xl p-3 text-center">
+                                            <span className="text-[10px] font-semibold uppercase text-rose-700 block">LWP Days</span>
+                                            <span className="text-xl font-bold text-rose-900 block mt-1">{lwpDays}</span>
+                                            <span className="text-[10px] text-rose-600 font-medium">Unpaid absence</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Payroll Balance Equation */}
+                                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
+                                        <div className="flex items-center justify-between text-xs">
+                                            <span className="font-semibold text-slate-700">Cycle Reconciliation:</span>
+                                            <Badge variant="outline" className={cn("text-[10px] font-semibold px-2 py-0.5", isBalanced ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-800 border-amber-200")}>
+                                                {isBalanced ? "✓ Balanced (Payable + LWP = Muster)" : "⚠️ Cycle Incomplete"}
+                                            </Badge>
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs font-mono font-semibold bg-white p-2.5 rounded-lg border border-slate-200 text-slate-800">
+                                            <span>Muster: {musterDays}d</span>
+                                            <span className="text-slate-400">=</span>
+                                            <span className="text-emerald-700">Payable: {payableDays}d</span>
+                                            <span className="text-slate-400">+</span>
+                                            <span className="text-rose-700">LWP: {lwpDays}d</span>
+                                        </div>
+                                        <p className="text-[11px] text-slate-500">
+                                            Per-Day Rate: <strong className="text-slate-700">₹{fixedGross.toLocaleString('en-IN')} ÷ {musterDays} = ₹{dailyRate.toLocaleString('en-IN')}/day</strong>
+                                        </p>
+                                    </div>
+
+                                    {/* Component Breakdown */}
+                                    <div className="space-y-2">
+                                        <span className="text-xs font-semibold text-slate-700 block">Attendance Breakdown</span>
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                                            <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex justify-between items-center">
+                                                <span className="text-slate-500">Present:</span>
+                                                <span className="font-bold text-slate-800">{present} days</span>
                                             </div>
-                                            <div>
-                                                <DialogTitle className="text-xl font-black italic tracking-tight text-white">
-                                                    {emp.name}
-                                                </DialogTitle>
-                                                <DialogDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-                                                    {emp.id} • {emp.role} • {emp.company || "Company"}
-                                                </DialogDescription>
+                                            <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex justify-between items-center">
+                                                <span className="text-slate-500">Weekly Offs:</span>
+                                                <span className="font-bold text-slate-800">{woff} days</span>
+                                            </div>
+                                            <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex justify-between items-center">
+                                                <span className="text-slate-500">Holidays:</span>
+                                                <span className="font-bold text-slate-800">{holiday} days</span>
+                                            </div>
+                                            <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex justify-between items-center">
+                                                <span className="text-slate-500">Paid Leaves:</span>
+                                                <span className="font-bold text-slate-800">{leave} days</span>
+                                            </div>
+                                            <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex justify-between items-center">
+                                                <span className="text-slate-500">Tours:</span>
+                                                <span className="font-bold text-slate-800">{tour} days</span>
+                                            </div>
+                                            <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 flex justify-between items-center">
+                                                <span className="text-rose-700">LWP:</span>
+                                                <span className="font-bold text-rose-900">{lwpDays} days</span>
                                             </div>
                                         </div>
+                                    </div>
+
+                                    {/* Financial Treatment Preview */}
+                                    <div className="p-3.5 rounded-xl bg-slate-900 text-white flex items-center justify-between">
+                                        <div>
+                                            <span className="text-[10px] text-slate-400 uppercase font-semibold block">Gross Earned</span>
+                                            <span className="text-base font-bold text-white">₹{grossEarned.toLocaleString('en-IN')}</span>
+                                            <span className="text-[10px] text-slate-400 font-normal">{payableDays}d × ₹{dailyRate}/d</span>
+                                        </div>
                                         <div className="text-right">
-                                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">Fixed Gross CTC</span>
-                                            <span className="text-base font-black text-emerald-400">₹{fixedGross.toLocaleString('en-IN')}/mo</span>
+                                            <span className="text-[10px] text-rose-400 uppercase font-semibold block">LWP Deducted</span>
+                                            <span className="text-base font-bold text-rose-400">-₹{lwpDeduction.toLocaleString('en-IN')}</span>
+                                            <span className="text-[10px] text-slate-400 font-normal">{lwpDays}d × ₹{dailyRate}/d</span>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="p-7 space-y-5">
-                                    {/* 3 Core Fields Requirement 8 Summary Cards */}
-                                    <div className="grid grid-cols-3 gap-3">
-                                        <div className="bg-blue-50/70 border border-blue-100 rounded-2xl p-3 text-center">
-                                            <span className="text-[8px] font-black uppercase tracking-wider text-blue-600 block">1. Muster Days</span>
-                                            <span className="text-2xl font-black text-blue-950 block mt-1">{musterDays}</span>
-                                            <span className="text-[8px] text-blue-500 font-bold uppercase">Total In Period</span>
-                                        </div>
-                                        <div className="bg-emerald-50/70 border border-emerald-100 rounded-2xl p-3 text-center">
-                                            <span className="text-[8px] font-black uppercase tracking-wider text-emerald-600 block">2. Payable Days</span>
-                                            <span className="text-2xl font-black text-emerald-950 block mt-1">{payableDays}</span>
-                                            <span className="text-[8px] text-emerald-600 font-bold uppercase">Salary Payable</span>
-                                        </div>
-                                        <div className="bg-rose-50/70 border border-rose-100 rounded-2xl p-3 text-center">
-                                            <span className="text-[8px] font-black uppercase tracking-wider text-rose-600 block">3. LWP (Unpaid)</span>
-                                            <span className="text-2xl font-black text-rose-950 block mt-1">{lwpDays}</span>
-                                            <span className="text-[8px] text-rose-600 font-bold uppercase">Loss of Pay Days</span>
-                                        </div>
-                                    </div>
-
-                                    {/* Approved Payroll Relationship Equation */}
-                                    <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 space-y-2">
-                                        <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider">
-                                            <span className="text-slate-500">Payroll Balance Equation:</span>
-                                            <Badge className={cn("text-[9px] font-black uppercase px-2 py-0.5", isBalanced ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")}>
-                                                {isBalanced ? "✓ Balanced (P + LWP = M)" : "⚠️ Cycle Incomplete"}
-                                            </Badge>
-                                        </div>
-                                        <div className="flex items-center justify-between text-xs font-mono font-bold bg-white p-2.5 rounded-xl border border-slate-100 text-slate-800">
-                                            <span>Muster ({musterDays})</span>
-                                            <span className="text-slate-400">=</span>
-                                            <span className="text-emerald-700">Payable ({payableDays})</span>
-                                            <span className="text-slate-400">+</span>
-                                            <span className="text-rose-700">LWP ({lwpDays})</span>
-                                        </div>
-                                        <p className="text-[9px] text-slate-400 leading-relaxed">
-                                            Per-Day Rate: <strong className="text-slate-700">₹{fixedGross.toLocaleString('en-IN')} ÷ {musterDays} = ₹{dailyRate.toLocaleString('en-IN')}/day</strong>.
-                                        </p>
-                                    </div>
-
-                                    {/* Detailed Component Breakdown */}
-                                    <div className="space-y-2">
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block">Attendance Component Breakdown</span>
-                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-                                            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex justify-between items-center">
-                                                <span className="text-slate-500 font-medium">Present:</span>
-                                                <span className="font-black text-slate-800">{present} days</span>
-                                            </div>
-                                            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex justify-between items-center">
-                                                <span className="text-slate-500 font-medium">Week Offs:</span>
-                                                <span className="font-black text-slate-800">{woff} days</span>
-                                            </div>
-                                            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex justify-between items-center">
-                                                <span className="text-slate-500 font-medium">Holidays:</span>
-                                                <span className="font-black text-slate-800">{holiday} days</span>
-                                            </div>
-                                            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex justify-between items-center">
-                                                <span className="text-slate-500 font-medium">Paid Leaves:</span>
-                                                <span className="font-black text-slate-800">{leave} days</span>
-                                            </div>
-                                            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex justify-between items-center">
-                                                <span className="text-slate-500 font-medium">Tours / Outdoor:</span>
-                                                <span className="font-black text-slate-800">{tour} days</span>
-                                            </div>
-                                            <div className="p-2.5 rounded-xl bg-rose-50/60 border border-rose-100 flex justify-between items-center">
-                                                <span className="text-rose-600 font-medium">LWP / Absent:</span>
-                                                <span className="font-black text-rose-900">{lwpDays} days</span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Final Financial Treatment Preview */}
-                                    <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-100 flex items-center justify-between">
-                                        <div>
-                                            <span className="text-[9px] font-black uppercase tracking-widest text-indigo-600 block">Gross Salary Payable</span>
-                                            <span className="text-lg font-black text-indigo-950 block">₹{grossEarned.toLocaleString('en-IN')}</span>
-                                            <span className="text-[8px] text-slate-400 font-medium">{payableDays} days × ₹{dailyRate.toLocaleString('en-IN')}/day</span>
-                                        </div>
-                                        <div className="text-right">
-                                            <span className="text-[9px] font-black uppercase tracking-widest text-rose-600 block">LWP Deduction</span>
-                                            <span className="text-lg font-black text-rose-900 block">-₹{lwpDeduction.toLocaleString('en-IN')}</span>
-                                            <span className="text-[8px] text-slate-400 font-medium">{lwpDays} days × ₹{dailyRate.toLocaleString('en-IN')}/day</span>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-center justify-end gap-3 pt-2">
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            onClick={() => setIsPayrollBreakdownOpen(false)}
-                                            className="h-10 px-5 rounded-xl border-slate-200 font-black text-[10px] uppercase tracking-wider"
-                                        >
-                                            Close
-                                        </Button>
-                                        <Button
-                                            type="button"
-                                            onClick={() => {
-                                                setIsPayrollBreakdownOpen(false);
-                                                window.location.href = `/payroll`;
-                                            }}
-                                            className="h-10 px-5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-[10px] uppercase tracking-wider shadow-md"
-                                        >
-                                            Open in Payroll Ledger <ArrowUpRight className="h-3.5 w-3.5 ml-1.5" />
-                                        </Button>
-                                    </div>
+                                <div className="p-4 px-6 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2.5 shrink-0">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() => setIsPayrollBreakdownOpen(false)}
+                                        className="h-9 px-4 rounded-lg border-slate-200 text-xs font-medium text-slate-700"
+                                    >
+                                        Close
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        onClick={() => {
+                                            setIsPayrollBreakdownOpen(false);
+                                            window.location.href = `/payroll`;
+                                        }}
+                                        className="h-9 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs"
+                                    >
+                                        Open in Payroll Ledger <ArrowUpRight className="h-3.5 w-3.5 ml-1.5" />
+                                    </Button>
                                 </div>
                             </div>
                         );
@@ -2306,46 +2304,49 @@ export default function AttendancePage() {
 
             {/* Authorized Attendance & Outdoor Duty Dialog (Req 5.1 & 5.2) */}
             <Dialog open={isManualEntryOpen} onOpenChange={setIsManualEntryOpen}>
-                <DialogContent className="sm:max-w-[540px] max-h-[90vh] flex flex-col rounded-[2rem] p-0 overflow-hidden bg-white border-none shadow-2xl">
-                    {/* Header: shrink-0 with compact padding */}
-                    <div className="bg-slate-900 px-6 py-5 text-center relative shrink-0">
-                        <div className="relative z-10 flex flex-col items-center">
-                            <div className="h-11 w-11 bg-white/10 rounded-2xl flex items-center justify-center mb-2">
-                                <UserCheck className="h-6 w-6 text-[#D9F99D]" />
+                <DialogContent className="sm:max-w-[560px] max-h-[90vh] flex flex-col rounded-2xl p-0 overflow-hidden bg-white border border-slate-200 shadow-xl">
+                    {/* Clean Pinned Header */}
+                    <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
+                        <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-800 shrink-0">
+                                <UserCheck className="h-5 w-5" />
                             </div>
-                            <DialogTitle className="text-xl font-black italic uppercase tracking-tighter text-white">Authorized Marking</DialogTitle>
-                            <DialogDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-                                Mark Attendance on Employee&apos;s Behalf & Outdoor Duty
-                            </DialogDescription>
+                            <div>
+                                <DialogTitle className="text-base font-bold text-slate-900 tracking-tight">Authorized Attendance Marking</DialogTitle>
+                                <DialogDescription className="text-xs text-slate-500 font-normal mt-0.5">
+                                    Mark on employee's behalf, record outdoor duty, or override punches
+                                </DialogDescription>
+                            </div>
                         </div>
+                        <Badge variant="outline" className="text-[11px] font-semibold text-slate-600 bg-slate-50 border-slate-200 px-2.5 py-1">
+                            Req 5.1 & 5.2
+                        </Badge>
                     </div>
 
-                    {/* Body: Scrollable, responsive, padded */}
+                    {/* Scrollable Form Body */}
                     <div className="p-6 space-y-4 overflow-y-auto flex-1">
-                        <div className="p-3 rounded-xl bg-indigo-50/70 border border-indigo-100 text-[10px] text-indigo-950">
-                            <p className="font-bold">Administrative Access Control (Req 5.1 & 5.2):</p>
-                            <p className="text-slate-600 text-[9px] mt-0.5">
-                                Logged under your authorized credentials with audit history. For outdoor duties or field operations, geofence checks are automatically bypassed.
-                            </p>
+                        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-relaxed">
+                            <p className="font-semibold text-slate-900 mb-0.5">Administrative Access Control:</p>
+                            Logged under your authorized credentials with audit history. For outdoor duties or field operations, geofence checks are automatically bypassed.
                         </div>
 
-                        {/* Employee Selector (Dropdown with Search or Custom ID fallback) */}
+                        {/* Employee Selector */}
                         <div className="space-y-1.5">
                             <div className="flex items-center justify-between">
-                                <Label className="text-[10px] font-bold text-slate-700">Select Employee *</Label>
+                                <Label className="text-xs font-semibold text-slate-700">Select Employee *</Label>
                                 <button
                                     type="button"
                                     onClick={() => setManualInputMode(m => m === "dropdown" ? "custom" : "dropdown")}
-                                    className="text-[9px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
+                                    className="text-xs font-medium text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
                                 >
-                                    {manualInputMode === "dropdown" ? "Type ID manually" : "Select from list"}
+                                    {manualInputMode === "dropdown" ? "Type ID manually" : "Select from roster"}
                                 </button>
                             </div>
                             {manualInputMode === "dropdown" && allEmployees.length > 0 ? (
                                 <select
                                     value={manualEmpId}
                                     onChange={(e) => setManualEmpId(e.target.value)}
-                                    className="h-11 w-full px-3 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs text-slate-800 outline-none focus:ring-2 ring-indigo-200 cursor-pointer"
+                                    className="h-10 w-full px-3 rounded-lg bg-white border border-slate-200 text-xs font-medium text-slate-800 outline-none focus:border-slate-900 cursor-pointer"
                                 >
                                     <option value="">-- Choose Employee (Name / Code) --</option>
                                     {allEmployees.map((emp: any) => (
@@ -2359,10 +2360,10 @@ export default function AttendancePage() {
                                     placeholder="Enter Emp Code (e.g. APA001) or Numeric ID"
                                     value={manualEmpId}
                                     onChange={(e) => setManualEmpId(e.target.value)}
-                                    className="h-11 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs uppercase"
+                                    className="h-10 rounded-lg bg-white border border-slate-200 text-xs uppercase"
                                 />
                             )}
-                            {/* Selected Employee Preview Pill */}
+                            {/* Selected Employee Preview */}
                             {(function () {
                                 const selected = allEmployees.find(e => 
                                     String(e.id) === String(manualEmpId) || 
@@ -2370,15 +2371,15 @@ export default function AttendancePage() {
                                 );
                                 if (!selected) return null;
                                 return (
-                                    <div className="mt-1 p-2 rounded-xl bg-indigo-50/80 border border-indigo-200/60 flex items-center justify-between animate-in fade-in">
+                                    <div className="mt-1.5 p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
                                         <div className="flex items-center gap-2">
-                                            <div className="h-6 w-6 rounded-md bg-indigo-600 text-white flex items-center justify-center font-bold text-[10px]">
+                                            <div className="h-6 w-6 rounded-md bg-slate-900 text-white flex items-center justify-center font-bold text-[10px]">
                                                 {selected.name?.charAt(0).toUpperCase()}
                                             </div>
-                                            <span className="text-xs font-bold text-slate-800">{selected.name}</span>
-                                            <span className="text-[10px] font-mono text-indigo-700 bg-white px-1.5 py-0.5 rounded border border-indigo-100">{selected.emp_code}</span>
+                                            <span className="font-semibold text-slate-800">{selected.name}</span>
+                                            <span className="font-mono text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200 text-[11px]">{selected.emp_code}</span>
                                         </div>
-                                        <span className="text-[9px] font-bold text-slate-500">{selected.department || "Operations"}</span>
+                                        <span className="text-slate-500">{selected.department || "Operations"}</span>
                                     </div>
                                 );
                             })()}
@@ -2387,16 +2388,16 @@ export default function AttendancePage() {
                         {/* Date & Status */}
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1.5">
-                                <Label className="text-[10px] font-bold text-slate-700">Date *</Label>
+                                <Label className="text-xs font-semibold text-slate-700">Date *</Label>
                                 <Input
                                     type="date"
                                     value={manualDate}
                                     onChange={(e) => setManualDate(e.target.value)}
-                                    className="h-11 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs"
+                                    className="h-10 rounded-lg bg-white border border-slate-200 text-xs font-medium"
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <Label className="text-[10px] font-bold text-slate-700">Status *</Label>
+                                <Label className="text-xs font-semibold text-slate-700">Status *</Label>
                                 <select
                                     value={manualStatus}
                                     onChange={(e) => {
@@ -2421,7 +2422,7 @@ export default function AttendancePage() {
                                             if (!manualCheckOutTime) setManualCheckOutTime("19:00");
                                         }
                                     }}
-                                    className="h-11 w-full px-3 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs outline-none focus:ring-2 ring-indigo-200 cursor-pointer"
+                                    className="h-10 w-full px-3 rounded-lg bg-white border border-slate-200 text-xs font-medium outline-none focus:border-slate-900 cursor-pointer"
                                 >
                                     <option value="Present">Present (Standard In-Office)</option>
                                     <option value="Present - Outdoor">Present (Outdoor / Field Duty)</option>
@@ -2435,14 +2436,14 @@ export default function AttendancePage() {
 
                         {/* Weekly Off Compensation Selector (Req 2.5 D) */}
                         {manualStatus === "Weekly Off Worked" && (
-                            <div className="space-y-1.5 p-3 rounded-xl bg-purple-50 border border-purple-200 animate-in fade-in">
-                                <Label className="text-[9px] font-black uppercase tracking-widest text-purple-900 block">
+                            <div className="space-y-1.5 p-3 rounded-xl bg-purple-50 border border-purple-200 text-xs">
+                                <Label className="font-semibold text-purple-900 block">
                                     Weekly Off Compensation Method (Req 2.5 D)
                                 </Label>
                                 <select
                                     value={manualWoComp}
                                     onChange={(e: any) => setManualWoComp(e.target.value)}
-                                    className="h-10 w-full px-3 rounded-xl bg-white border border-purple-200 font-bold text-xs uppercase outline-none focus:ring-2 ring-purple-200 cursor-pointer"
+                                    className="h-9 w-full px-3 rounded-lg bg-white border border-purple-200 text-xs font-medium outline-none cursor-pointer"
                                 >
                                     <option value="additional_payable_day">Additional Payable Day (+1 Day Payout in Salary)</option>
                                     <option value="comp_off">Compensatory Off (+1 Day Credited to Leave Balance)</option>
@@ -2453,28 +2454,28 @@ export default function AttendancePage() {
                         {/* Check-In and Check-Out Time */}
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1.5">
-                                <Label className="text-[10px] font-bold text-slate-700">Check-In Time</Label>
+                                <Label className="text-xs font-semibold text-slate-700">Check-In Time</Label>
                                 <Input
                                     type="time"
                                     value={manualCheckInTime}
                                     onChange={(e) => setManualCheckInTime(e.target.value)}
-                                    className="h-10 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs font-mono"
+                                    className="h-10 rounded-lg bg-white border border-slate-200 text-xs font-mono"
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <Label className="text-[10px] font-bold text-slate-700">Check-Out Time</Label>
+                                <Label className="text-xs font-semibold text-slate-700">Check-Out Time</Label>
                                 <Input
                                     type="time"
                                     value={manualCheckOutTime}
                                     onChange={(e) => setManualCheckOutTime(e.target.value)}
-                                    className="h-10 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs font-mono"
+                                    className="h-10 rounded-lg bg-white border border-slate-200 text-xs font-mono"
                                 />
                             </div>
                         </div>
 
                         {/* Outdoor / Field Duty Geofence Bypass Option (Req 5.1) */}
                         <div
-                            className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200 hover:border-slate-300 transition-all cursor-pointer"
+                            className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition-all cursor-pointer"
                             onClick={() => setManualIsOutdoor(!manualIsOutdoor)}
                         >
                             <input
@@ -2482,46 +2483,46 @@ export default function AttendancePage() {
                                 id="manualIsOutdoor"
                                 checked={manualIsOutdoor}
                                 onChange={(e) => setManualIsOutdoor(e.target.checked)}
-                                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900 cursor-pointer"
                             />
                             <div className="flex flex-col cursor-pointer">
-                                <label htmlFor="manualIsOutdoor" className="text-[10px] font-black uppercase tracking-wider text-slate-900 cursor-pointer flex items-center gap-1.5">
-                                    <Compass className="h-3.5 w-3.5 text-emerald-600" /> Outdoor / Field Duty Punch
+                                <label htmlFor="manualIsOutdoor" className="text-xs font-semibold text-slate-900 cursor-pointer flex items-center gap-1.5">
+                                    <Compass className="h-4 w-4 text-emerald-600" /> Outdoor / Field Duty Punch
                                 </label>
-                                <span className="text-[8px] font-bold text-slate-500">Bypasses office geofence verification (for client visits, audits, site work)</span>
+                                <span className="text-[11px] text-slate-500">Bypasses office geofence verification (for client visits, audits, site work)</span>
                             </div>
                         </div>
 
                         {/* Authorized Reason / Audit Rationale */}
                         <div className="space-y-1.5">
-                            <Label className="text-[10px] font-bold text-slate-700">Authorized Reason / Audit Rationale</Label>
+                            <Label className="text-xs font-semibold text-slate-700">Authorized Reason / Audit Rationale</Label>
                             <textarea
                                 placeholder="State reason for marking on behalf (e.g. Client site meeting at Delhi Branch, field duty authorization)..."
                                 value={manualReason}
                                 onChange={(e) => setManualReason(e.target.value)}
                                 rows={2}
-                                className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs resize-none outline-none focus:ring-2 ring-indigo-200"
+                                className="w-full p-2.5 rounded-lg bg-white border border-slate-200 text-xs outline-none focus:border-slate-900 resize-none"
                             />
                         </div>
                     </div>
 
-                    {/* Footer: Pinned at bottom with shrink-0, always 100% visible */}
+                    {/* Pinned Footer */}
                     <div className="p-4 px-6 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
-                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
-                            <ShieldCheck className="h-3.5 w-3.5 text-indigo-500" /> Recorded in Audit Log
+                        <span className="text-xs text-slate-500 flex items-center gap-1.5">
+                            <ShieldCheck className="h-4 w-4 text-emerald-600" /> Recorded in Audit Log
                         </span>
                         <div className="flex gap-2.5">
                             <Button
-                                variant="ghost"
+                                variant="outline"
                                 onClick={() => setIsManualEntryOpen(false)}
-                                className="text-[9px] font-black uppercase tracking-widest text-slate-500 rounded-xl hover:bg-slate-200 h-10 px-4 cursor-pointer"
+                                className="h-9 px-4 rounded-lg border-slate-200 text-xs font-medium text-slate-700"
                             >
                                 Cancel
                             </Button>
                             <Button
                                 onClick={handleManualSubmit}
                                 disabled={manualSubmitting}
-                                className="bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-[9px] tracking-widest rounded-xl px-6 h-10 shadow-md transition-all hover:translate-y-[-1px] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                                className="h-9 px-5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs disabled:opacity-50"
                             >
                                 {manualSubmitting ? "Submitting..." : "Authorize Entry"}
                             </Button>
@@ -2532,94 +2533,87 @@ export default function AttendancePage() {
 
             {/* Quick Attendance Adjustment Dialog (Req 2.5 B & D) */}
             <Dialog open={isCellAdjustOpen} onOpenChange={setIsCellAdjustOpen}>
-                <DialogContent className="sm:max-w-[480px] rounded-[2rem] p-0 overflow-hidden bg-white border-none shadow-2xl">
+                <DialogContent className="sm:max-w-[480px] rounded-2xl p-0 overflow-hidden bg-white border border-slate-200 shadow-xl">
                     {selectedCellAdjust && (
                         <div>
-                            <div className="bg-slate-900 p-6 text-white relative">
-                                <div className="relative z-10 flex items-center justify-between">
-                                    <div>
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-[#D9F99D]">Manual Attendance Adjustment</span>
-                                        <DialogTitle className="text-xl font-black italic tracking-tight text-white mt-0.5">
-                                            {selectedCellAdjust.emp.name}
-                                        </DialogTitle>
-                                        <DialogDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-                                            {selectedCellAdjust.emp.id} • {selectedCellAdjust.dateObj.toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' })}
-                                        </DialogDescription>
-                                    </div>
-                                    <Badge className="bg-white/10 text-slate-200 border border-white/20 font-black text-[9px] px-2.5 py-1 uppercase">
-                                        Current: {selectedCellAdjust.currentStatus}
-                                    </Badge>
+                            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
+                                <div>
+                                    <DialogTitle className="text-base font-bold text-slate-900 tracking-tight">
+                                        Adjust Attendance
+                                    </DialogTitle>
+                                    <DialogDescription className="text-xs text-slate-500 font-normal mt-0.5">
+                                        {selectedCellAdjust.emp.name} ({selectedCellAdjust.emp.id}) • {selectedCellAdjust.dateObj.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' })}
+                                    </DialogDescription>
                                 </div>
+                                <Badge variant="outline" className="text-xs font-medium text-slate-600 bg-slate-50 border-slate-200">
+                                    Current: {selectedCellAdjust.currentStatus}
+                                </Badge>
                             </div>
 
                             <div className="p-6 space-y-4">
                                 {/* Status Selection Buttons (Req 2.5 B) */}
                                 <div className="space-y-1.5">
-                                    <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Select Status (Req 2.5 B)</Label>
+                                    <Label className="text-xs font-semibold text-slate-700">Select Status</Label>
                                     <div className="grid grid-cols-2 gap-2">
-                                        <Button
+                                        <button
                                             type="button"
-                                            variant="outline"
                                             onClick={() => setCellAdjustStatus("Present")}
                                             className={cn(
-                                                "h-11 rounded-xl font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all",
+                                                "h-10 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all border",
                                                 cellAdjustStatus === "Present"
-                                                    ? "bg-emerald-600 text-white border-emerald-600 shadow-md"
-                                                    : "bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100"
+                                                    ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                                                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
                                             )}
                                         >
-                                            <CheckCircle2 className="h-4 w-4" /> Present
-                                        </Button>
-                                        <Button
+                                            <CheckCircle2 className="h-3.5 w-3.5" /> Present
+                                        </button>
+                                        <button
                                             type="button"
-                                            variant="outline"
                                             onClick={() => setCellAdjustStatus("Absent")}
                                             className={cn(
-                                                "h-11 rounded-xl font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all",
+                                                "h-10 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all border",
                                                 cellAdjustStatus === "Absent"
-                                                    ? "bg-rose-600 text-white border-rose-600 shadow-md"
-                                                    : "bg-rose-50 text-rose-800 border-rose-200 hover:bg-rose-100"
+                                                    ? "bg-rose-600 text-white border-rose-600 shadow-xs"
+                                                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
                                             )}
                                         >
-                                            <XCircle className="h-4 w-4" /> Absent (LWP)
-                                        </Button>
-                                        <Button
+                                            <XCircle className="h-3.5 w-3.5" /> Absent (LWP)
+                                        </button>
+                                        <button
                                             type="button"
-                                            variant="outline"
                                             onClick={() => setCellAdjustStatus("Half Day")}
                                             className={cn(
-                                                "h-11 rounded-xl font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all",
+                                                "h-10 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all border",
                                                 cellAdjustStatus === "Half Day"
-                                                    ? "bg-amber-600 text-white border-amber-600 shadow-md"
-                                                    : "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100"
+                                                    ? "bg-amber-600 text-white border-amber-600 shadow-xs"
+                                                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
                                             )}
                                         >
-                                            <Clock className="h-4 w-4" /> Half Day (0.5)
-                                        </Button>
-                                        <Button
+                                            <Clock className="h-3.5 w-3.5" /> Half Day (0.5)
+                                        </button>
+                                        <button
                                             type="button"
-                                            variant="outline"
                                             onClick={() => setCellAdjustStatus("Weekly Off Worked")}
                                             className={cn(
-                                                "h-11 rounded-xl font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all",
+                                                "h-10 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all border",
                                                 cellAdjustStatus === "Weekly Off Worked"
-                                                    ? "bg-purple-600 text-white border-purple-600 shadow-md"
-                                                    : "bg-purple-50 text-purple-900 border-purple-200 hover:bg-purple-100"
+                                                    ? "bg-purple-600 text-white border-purple-600 shadow-xs"
+                                                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
                                             )}
                                         >
-                                            <Activity className="h-4 w-4" /> Weekly Off Worked
-                                        </Button>
+                                            <Activity className="h-3.5 w-3.5" /> Weekly Off Worked
+                                        </button>
                                     </div>
                                 </div>
 
                                 {/* Weekly Off Compensation Options (Req 2.5 D) */}
                                 {cellAdjustStatus === "Weekly Off Worked" && (
-                                    <div className="p-3.5 rounded-2xl bg-purple-50 border border-purple-200 space-y-2 animate-in fade-in">
-                                        <Label className="text-[9px] font-black uppercase tracking-widest text-purple-900 block">
+                                    <div className="p-3.5 rounded-xl bg-purple-50 border border-purple-200 space-y-2 text-xs">
+                                        <Label className="font-semibold text-purple-900 block">
                                             Compensation Treatment (Req 2.5 D)
                                         </Label>
-                                        <div className="grid grid-cols-1 gap-2">
-                                            <label className={cn("p-2.5 rounded-xl border flex items-center gap-2.5 cursor-pointer text-xs font-bold transition-all", cellAdjustWoComp === "additional_payable_day" ? "bg-white border-purple-500 text-purple-950 shadow-xs" : "bg-purple-50/50 border-purple-100 text-purple-800")}>
+                                        <div className="space-y-1.5">
+                                            <label className={cn("p-2.5 rounded-lg border flex items-center gap-2.5 cursor-pointer text-xs font-medium transition-all", cellAdjustWoComp === "additional_payable_day" ? "bg-white border-purple-500 text-purple-950 shadow-xs" : "bg-purple-50/50 border-purple-100 text-purple-800")}>
                                                 <input
                                                     type="radio"
                                                     name="woComp"
@@ -2628,11 +2622,11 @@ export default function AttendancePage() {
                                                     className="text-purple-600"
                                                 />
                                                 <div>
-                                                    <span className="block font-black text-[10px] uppercase">Additional Payable Day (+1)</span>
-                                                    <span className="block text-[8px] text-purple-600 font-medium">Adds 1 full day payout to monthly salary</span>
+                                                    <span className="block font-semibold">Additional Payable Day (+1)</span>
+                                                    <span className="block text-[11px] text-purple-600">Adds 1 full day payout to monthly salary</span>
                                                 </div>
                                             </label>
-                                            <label className={cn("p-2.5 rounded-xl border flex items-center gap-2.5 cursor-pointer text-xs font-bold transition-all", cellAdjustWoComp === "comp_off" ? "bg-white border-purple-500 text-purple-950 shadow-xs" : "bg-purple-50/50 border-purple-100 text-purple-800")}>
+                                            <label className={cn("p-2.5 rounded-lg border flex items-center gap-2.5 cursor-pointer text-xs font-medium transition-all", cellAdjustWoComp === "comp_off" ? "bg-white border-purple-500 text-purple-950 shadow-xs" : "bg-purple-50/50 border-purple-100 text-purple-800")}>
                                                 <input
                                                     type="radio"
                                                     name="woComp"
@@ -2641,72 +2635,40 @@ export default function AttendancePage() {
                                                     className="text-purple-600"
                                                 />
                                                 <div>
-                                                    <span className="block font-black text-[10px] uppercase">Compensatory Off (Comp-Off Credit)</span>
-                                                    <span className="block text-[8px] text-purple-600 font-medium">Credits +1 day to employee leave balance</span>
+                                                    <span className="block font-semibold">Compensatory Off (+1)</span>
+                                                    <span className="block text-[11px] text-purple-600">Credited directly to employee's leave ledger</span>
                                                 </div>
                                             </label>
                                         </div>
                                     </div>
                                 )}
 
-                                {/* Time fields (for present, half day, weekly off worked) */}
-                                {(cellAdjustStatus === "Present" || cellAdjustStatus === "Half Day" || cellAdjustStatus === "Weekly Off Worked") && (
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div className="space-y-1">
-                                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Shift Check-In</Label>
-                                            <Input
-                                                type="time"
-                                                value={cellAdjustCheckIn}
-                                                onChange={(e) => setCellAdjustCheckIn(e.target.value)}
-                                                className="h-10 rounded-xl bg-slate-50 border-none font-bold text-xs"
-                                            />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Shift Check-Out</Label>
-                                            <Input
-                                                type="time"
-                                                value={cellAdjustCheckOut}
-                                                onChange={(e) => setCellAdjustCheckOut(e.target.value)}
-                                                className="h-10 rounded-xl bg-slate-50 border-none font-bold text-xs"
-                                            />
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Reason */}
-                                <div className="space-y-1">
-                                    <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Adjustment Note / Reason</Label>
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-semibold text-slate-700">Audit Reason / Justification</Label>
                                     <Input
-                                        placeholder="e.g. Approved overtime on weekly off, manager approved correction..."
+                                        placeholder="Reason for adjustment (e.g. Biometric failed, HR authorized)..."
                                         value={cellAdjustReason}
                                         onChange={(e) => setCellAdjustReason(e.target.value)}
-                                        className="h-10 rounded-xl bg-slate-50 border-none font-bold text-xs"
+                                        className="h-10 rounded-lg bg-white border border-slate-200 text-xs"
                                     />
                                 </div>
                             </div>
 
-                            <div className="p-5 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-                                <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1">
-                                    <ShieldCheck className="h-3.5 w-3.5 text-indigo-500" /> Instant Monthly Sync
-                                </span>
-                                <div className="flex gap-2">
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        onClick={() => setIsCellAdjustOpen(false)}
-                                        className="text-[9px] font-black uppercase tracking-wider text-slate-500 rounded-xl"
-                                    >
-                                        Cancel
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        onClick={handleCellAdjustSubmit}
-                                        disabled={cellAdjustSubmitting}
-                                        className="bg-slate-900 hover:bg-slate-800 text-white font-black text-[9px] uppercase tracking-wider rounded-xl px-5 shadow-sm"
-                                    >
-                                        {cellAdjustSubmitting ? "Saving..." : "Save Adjustment"}
-                                    </Button>
-                                </div>
+                            <div className="p-4 px-6 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2.5 shrink-0">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setIsCellAdjustOpen(false)}
+                                    className="h-9 px-4 rounded-lg border-slate-200 text-xs font-medium text-slate-700"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    onClick={handleCellAdjustSubmit}
+                                    disabled={cellAdjustSubmitting}
+                                    className="h-9 px-5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs disabled:opacity-50"
+                                >
+                                    {cellAdjustSubmitting ? "Saving..." : "Apply Adjustment"}
+                                </Button>
                             </div>
                         </div>
                     )}
@@ -2715,99 +2677,93 @@ export default function AttendancePage() {
 
             {/* Rotational & Fixed Weekly-Off Schedule Configuration Dialog (Req 2.5 C) */}
             <Dialog open={isWeeklyOffModalOpen} onOpenChange={setIsWeeklyOffModalOpen}>
-                <DialogContent className="sm:max-w-[650px] rounded-[2rem] p-0 overflow-hidden bg-white border-none shadow-2xl max-h-[90vh] flex flex-col">
-                    <div className="bg-slate-900 p-6 text-white relative">
-                        <div className="flex items-center justify-between">
+                <DialogContent className="sm:max-w-[650px] rounded-2xl p-0 overflow-hidden bg-white border border-slate-200 shadow-xl max-h-[90vh] flex flex-col">
+                    <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
+                        <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-700 shrink-0">
+                                <Sliders className="h-5 w-5" />
+                            </div>
                             <div>
-                                <span className="text-[9px] font-black uppercase tracking-widest text-purple-400">Rotational & Fixed Weekly Offs</span>
-                                <DialogTitle className="text-xl font-black italic tracking-tight text-white mt-0.5">
+                                <DialogTitle className="text-base font-bold text-slate-900 tracking-tight">
                                     Weekly-Off Schedule Control
                                 </DialogTitle>
-                                <DialogDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                                <DialogDescription className="text-xs text-slate-500 font-normal mt-0.5">
                                     Configure fixed or rotational off days per employee (Req 2.5 C)
                                 </DialogDescription>
                             </div>
-                            <div className="h-10 w-10 rounded-2xl bg-white/10 flex items-center justify-center">
-                                <Sliders className="h-5 w-5 text-purple-300" />
-                            </div>
                         </div>
+                        <Badge variant="outline" className="text-[11px] font-semibold text-purple-700 bg-purple-50 border-purple-200 px-2.5 py-1">
+                            Req 2.5 C
+                        </Badge>
                     </div>
 
                     <div className="p-6 space-y-4 overflow-y-auto flex-1">
                         {editingEmpWeeklyOff ? (
                             /* Edit screen for selected employee */
-                            <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
+                            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-4">
                                 <div className="flex items-center justify-between">
                                     <div>
-                                        <span className="text-xs font-black text-slate-900 uppercase">{editingEmpWeeklyOff.name}</span>
-                                        <span className="text-[9px] font-bold text-slate-400 block">{editingEmpWeeklyOff.id} • {editingEmpWeeklyOff.role}</span>
+                                        <span className="text-xs font-bold text-slate-900">{editingEmpWeeklyOff.name}</span>
+                                        <span className="text-[11px] text-slate-500 block">{editingEmpWeeklyOff.id} • {editingEmpWeeklyOff.role}</span>
                                     </div>
                                     <Button
                                         variant="ghost"
                                         size="sm"
                                         onClick={() => setEditingEmpWeeklyOff(null)}
-                                        className="text-[9px] font-black uppercase text-slate-400 hover:text-slate-700"
+                                        className="text-xs font-medium text-slate-600 hover:text-slate-900"
                                     >
                                         Back to Staff List
                                     </Button>
                                 </div>
 
                                 {/* Rotational Toggle */}
-                                <div className="p-3.5 rounded-xl bg-white border border-slate-200 flex items-center justify-between">
+                                <div className="p-3.5 rounded-lg bg-white border border-slate-200 flex items-center justify-between">
                                     <div>
-                                        <span className="text-[10px] font-black uppercase text-slate-900 block">Rotational Weekly Off Schedule</span>
-                                        <span className="text-[8px] text-slate-400 font-medium">Enable for employees whose weekly offs rotate (e.g. Monday, Tuesday, Sunday)</span>
+                                        <span className="text-xs font-semibold text-slate-900 block">Rotational Weekly Off Schedule</span>
+                                        <span className="text-[11px] text-slate-500">Enable for employees whose weekly offs rotate</span>
                                     </div>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setEditRotationalOff(!editRotationalOff)}
-                                        className={cn(
-                                            "h-8 px-3 rounded-lg font-black text-[9px] uppercase tracking-wider transition-all",
-                                            editRotationalOff ? "bg-purple-600 text-white border-purple-600" : "bg-slate-100 text-slate-600"
-                                        )}
-                                    >
-                                        {editRotationalOff ? "✓ Rotational Active" : "Fixed Schedule"}
-                                    </Button>
+                                    <input
+                                        type="checkbox"
+                                        checked={editRotationalOff}
+                                        onChange={(e) => setEditRotationalOff(e.target.checked)}
+                                        className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900 cursor-pointer"
+                                    />
                                 </div>
 
-                                {/* Day Selection Pills */}
+                                {/* Off Days Selector */}
                                 <div className="space-y-2">
-                                    <Label className="text-[9px] font-black uppercase tracking-widest text-slate-500">
-                                        Select Weekly-Off Days ({editOffDays.length} selected)
-                                    </Label>
-                                    <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5">
-                                        {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((dName) => {
-                                            const isSelected = editOffDays.includes(dName);
+                                    <Label className="text-xs font-semibold text-slate-700">Designated Weekly Off Days</Label>
+                                    <div className="grid grid-cols-7 gap-1.5">
+                                        {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((day) => {
+                                            const isSelected = editOffDays.includes(day);
                                             return (
                                                 <button
-                                                    key={dName}
+                                                    key={day}
                                                     type="button"
-                                                    onClick={() => toggleEditOffDay(dName)}
+                                                    onClick={() => toggleEditOffDay(day)}
                                                     className={cn(
-                                                        "py-2 px-1 rounded-xl text-[9px] font-black uppercase transition-all border",
+                                                        "h-10 rounded-lg text-xs font-semibold transition-all border flex flex-col items-center justify-center",
                                                         isSelected
                                                             ? "bg-purple-600 text-white border-purple-600 shadow-xs"
-                                                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                                                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
                                                     )}
                                                 >
-                                                    {dName.slice(0, 3)}
+                                                    <span>{day.slice(0, 3)}</span>
                                                 </button>
                                             );
                                         })}
                                     </div>
-                                    <p className="text-[8px] text-slate-400 font-medium mt-1">
-                                        Current Active Off Days: <strong className="text-purple-700">{editOffDays.join(", ")}</strong>. Attendance and payable days recalculate automatically based on this schedule.
+                                    <p className="text-[11px] text-slate-500 mt-1">
+                                        Current Off Days: <strong className="text-purple-700">{editOffDays.join(", ")}</strong>. Attendance recalculates automatically.
                                     </p>
                                 </div>
 
                                 <div className="flex justify-end gap-2 pt-2">
                                     <Button
                                         type="button"
-                                        variant="ghost"
+                                        variant="outline"
                                         onClick={() => setEditingEmpWeeklyOff(null)}
-                                        className="text-[9px] font-black uppercase text-slate-500 rounded-xl"
+                                        className="h-9 px-4 rounded-lg border-slate-200 text-xs font-medium text-slate-700"
                                     >
                                         Cancel
                                     </Button>
@@ -2815,7 +2771,7 @@ export default function AttendancePage() {
                                         type="button"
                                         onClick={handleSaveWeeklyOffSchedule}
                                         disabled={weeklyOffSaving}
-                                        className="bg-purple-600 hover:bg-purple-700 text-white font-black text-[9px] uppercase tracking-wider rounded-xl px-5 shadow-sm"
+                                        className="h-9 px-5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs"
                                     >
                                         {weeklyOffSaving ? "Saving..." : "Save Schedule"}
                                     </Button>
@@ -2830,30 +2786,30 @@ export default function AttendancePage() {
                                         placeholder="Search employee by name or ID..."
                                         value={weeklyOffEmpSearch}
                                         onChange={(e) => setWeeklyOffEmpSearch(e.target.value)}
-                                        className="h-10 pl-9 rounded-xl bg-slate-50 border-none font-bold text-xs"
+                                        className="h-10 pl-9 rounded-lg bg-slate-50 border-slate-200 text-xs"
                                     />
                                 </div>
 
-                                <div className="border border-slate-100 rounded-2xl overflow-hidden divide-y divide-slate-100 max-h-[360px] overflow-y-auto">
+                                <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100 max-h-[360px] overflow-y-auto">
                                     {monthlyRows
                                         .filter(emp => !weeklyOffEmpSearch || emp.name.toLowerCase().includes(weeklyOffEmpSearch.toLowerCase()) || (emp.id && emp.id.toLowerCase().includes(weeklyOffEmpSearch.toLowerCase())))
                                         .map((emp) => {
                                             const currentOffs = Array.isArray(emp.weekly_off_days) ? emp.weekly_off_days.join(", ") : "Sunday";
                                             return (
-                                                <div key={emp.employee_id || emp.id} className="p-3.5 flex items-center justify-between hover:bg-slate-50/80 transition-colors">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="h-8 w-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-black italic text-xs">
+                                                <div key={emp.employee_id || emp.id} className="p-3 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                                                    <div className="flex items-center gap-2.5">
+                                                        <div className="h-8 w-8 rounded-lg bg-slate-100 text-slate-800 flex items-center justify-center font-bold text-xs">
                                                             {emp.name.charAt(0)}
                                                         </div>
                                                         <div>
-                                                            <span className="text-xs font-black text-slate-900 block leading-tight">{emp.name}</span>
-                                                            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{emp.id} • {emp.department}</span>
+                                                            <span className="text-xs font-semibold text-slate-900 block leading-tight">{emp.name}</span>
+                                                            <span className="text-[11px] text-slate-500">{emp.id} • {emp.department}</span>
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-3">
                                                         <div className="text-right">
-                                                            <span className="text-[8px] font-bold text-slate-400 uppercase block">Weekly Off</span>
-                                                            <Badge className={cn("text-[8px] font-black uppercase px-2 py-0.5", emp.rotational_weekly_off ? "bg-purple-100 text-purple-900 border border-purple-200" : "bg-slate-100 text-slate-700")}>
+                                                            <span className="text-[10px] text-slate-400 font-medium block">Weekly Off</span>
+                                                            <Badge variant="outline" className={cn("text-[10px] font-medium px-2 py-0.5", emp.rotational_weekly_off ? "bg-purple-50 text-purple-700 border-purple-200" : "bg-slate-50 text-slate-700 border-slate-200")}>
                                                                 {currentOffs} {emp.rotational_weekly_off ? "(Rotational)" : "(Fixed)"}
                                                             </Badge>
                                                         </div>
@@ -2861,7 +2817,7 @@ export default function AttendancePage() {
                                                             size="sm"
                                                             variant="outline"
                                                             onClick={() => openWeeklyOffEdit(emp)}
-                                                            className="h-8 px-3 rounded-lg border-purple-200 hover:bg-purple-50 text-purple-900 font-black text-[9px] uppercase tracking-wider"
+                                                            className="h-8 px-3 rounded-lg border-slate-200 hover:bg-slate-100 text-slate-800 text-xs font-medium"
                                                         >
                                                             Configure
                                                         </Button>
@@ -2874,13 +2830,13 @@ export default function AttendancePage() {
                         )}
                     </div>
 
-                    <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-[9px] text-slate-400 font-bold uppercase tracking-widest">
-                        <span>Configured schedule applies immediately to monthly attendance grid & payroll</span>
+                    <div className="p-4 px-6 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
+                        <span>Configured schedule applies immediately to attendance & payroll</span>
                         <Button
                             variant="outline"
                             size="sm"
                             onClick={() => setIsWeeklyOffModalOpen(false)}
-                            className="h-8 rounded-xl font-black text-[9px] uppercase tracking-wider"
+                            className="h-9 px-4 rounded-lg border-slate-200 text-xs font-medium text-slate-700"
                         >
                             Close
                         </Button>
@@ -2890,79 +2846,81 @@ export default function AttendancePage() {
 
             {/* Late Attendance Policy & Threshold Dialog (Req 5.3) */}
             <Dialog open={isLateThresholdOpen} onOpenChange={setIsLateThresholdOpen}>
-                <DialogContent className="sm:max-w-[480px] max-h-[90vh] flex flex-col rounded-2xl p-0 overflow-hidden bg-white border border-slate-200 shadow-2xl">
-                    <div className="bg-slate-900 px-6 py-5 text-center relative shrink-0">
-                        <div className="relative z-10 flex flex-col items-center">
-                            <div className="h-11 w-11 bg-white/10 rounded-2xl flex items-center justify-center mb-2">
-                                <Clock className="h-6 w-6 text-amber-400" />
+                <DialogContent className="sm:max-w-[480px] max-h-[90vh] flex flex-col rounded-2xl p-0 overflow-hidden bg-white border border-slate-200 shadow-xl">
+                    <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
+                        <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600 shrink-0">
+                                <Clock className="h-5 w-5" />
                             </div>
-                            <DialogTitle className="text-xl font-bold text-white tracking-tight">Late Attendance Grace Rule</DialogTitle>
-                            <DialogDescription className="text-xs text-slate-400 mt-1">
-                                Configurable Grace Period Threshold (Req 5.3)
-                            </DialogDescription>
+                            <div>
+                                <DialogTitle className="text-base font-bold text-slate-900 tracking-tight">Late Attendance Grace Rule</DialogTitle>
+                                <DialogDescription className="text-xs text-slate-500 font-normal mt-0.5">
+                                    Configurable grace period threshold before flagging as Late (Req 5.3)
+                                </DialogDescription>
+                            </div>
                         </div>
+                        <Badge variant="outline" className="text-[11px] font-semibold text-amber-700 bg-amber-50 border-amber-200 px-2.5 py-1">
+                            Req 5.3 Standard
+                        </Badge>
                     </div>
 
                     <div className="p-6 space-y-4 overflow-y-auto flex-1">
-                        <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200/60 text-xs text-amber-950 leading-relaxed">
-                            <p className="font-bold">Threshold Calculation Logic:</p>
-                            <p className="text-slate-600 text-xs mt-0.5">
-                                Employees punching in up to <strong>{tempLateThreshold} minutes</strong> ({Math.round((tempLateThreshold / 60) * 10) / 10} hrs) after their shift start time are treated within grace. Any punch beyond this threshold is automatically categorized as <strong>Late</strong>.
-                            </p>
+                        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-relaxed">
+                            <p className="font-semibold text-slate-900 mb-0.5">Threshold Calculation Policy:</p>
+                            Employees punching in up to <strong>{tempLateThreshold} minutes</strong> ({Math.round((tempLateThreshold / 60) * 10) / 10} hrs) after shift start are within grace. Any punch beyond this threshold is automatically categorized as <strong>Late</strong>.
                         </div>
 
                         <div className="space-y-2">
-                            <Label className="text-xs font-bold text-slate-700">Select Standard Grace Buffer</Label>
+                            <Label className="text-xs font-semibold text-slate-700">Select Standard Grace Buffer</Label>
                             <div className="grid grid-cols-3 gap-2">
                                 {[15, 30, 45, 60, 90, 120].map((mins) => (
-                                    <Button
+                                    <button
                                         key={mins}
                                         type="button"
-                                        variant="outline"
                                         onClick={() => setTempLateThreshold(mins)}
                                         className={cn(
-                                            "h-10 rounded-xl font-bold text-xs transition-all cursor-pointer",
+                                            "h-10 rounded-lg text-xs font-semibold transition-all border cursor-pointer",
                                             tempLateThreshold === mins
                                                 ? "bg-slate-900 text-white border-slate-900 shadow-xs"
-                                                : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                                                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
                                         )}
                                     >
                                         {mins} mins {mins === 60 ? "(1 hr)" : mins === 120 ? "(2 hrs)" : ""}
-                                    </Button>
+                                    </button>
                                 ))}
                             </div>
                         </div>
 
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-bold text-slate-700">Custom Threshold (Minutes)</Label>
+                            <Label className="text-xs font-semibold text-slate-700">Custom Threshold (Minutes)</Label>
                             <Input
                                 type="number"
                                 min={0}
                                 max={360}
                                 value={tempLateThreshold}
                                 onChange={(e) => setTempLateThreshold(Math.max(0, parseInt(e.target.value) || 0))}
-                                className="h-10 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs"
+                                className="h-10 rounded-lg bg-white border border-slate-200 text-xs font-medium"
                             />
-                            <p className="text-[10px] font-semibold text-slate-400">Company standard: 60 minutes (1 hour) grace window</p>
+                            <p className="text-[11px] text-slate-400">Company default standard: 60 minutes (1 hour) grace window</p>
                         </div>
                     </div>
 
                     <div className="p-4 px-6 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
-                        <span className="text-xs font-semibold text-slate-500">
+                        <span className="text-xs text-slate-500">
                             Current active: <strong className="text-slate-800">{lateThresholdMinutes} mins</strong>
                         </span>
                         <div className="flex gap-2.5">
                             <Button
-                                variant="ghost"
+                                variant="outline"
                                 onClick={() => setIsLateThresholdOpen(false)}
-                                className="text-xs font-semibold text-slate-600 rounded-xl hover:bg-slate-200 h-10 px-4 cursor-pointer"
+                                className="h-9 px-4 rounded-lg border-slate-200 text-xs font-medium text-slate-700"
                             >
                                 Cancel
                             </Button>
                             <Button
                                 onClick={() => handleUpdateLateThreshold(tempLateThreshold)}
                                 disabled={lateThresholdSaving}
-                                className="bg-slate-900 hover:bg-black text-white font-bold text-xs rounded-xl px-5 h-10 shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                                className="h-9 px-5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs disabled:opacity-50"
                             >
                                 {lateThresholdSaving ? "Saving..." : "Save Late Rule"}
                             </Button>
@@ -2973,44 +2931,47 @@ export default function AttendancePage() {
 
             {/* Mark Tour Dialog */}
             <Dialog open={isTourOpen} onOpenChange={setIsTourOpen}>
-                <DialogContent className="sm:max-w-[540px] max-h-[90vh] flex flex-col rounded-2xl p-0 overflow-hidden bg-white border border-slate-200 shadow-2xl">
-                    <div className="bg-slate-900 px-6 py-5 text-center relative shrink-0">
-                        <div className="relative z-10 flex flex-col items-center">
-                            <div className="h-11 w-11 bg-white/10 rounded-2xl flex items-center justify-center mb-2">
-                                <Plane className="h-6 w-6 text-sky-400" />
+                <DialogContent className="sm:max-w-[540px] max-h-[90vh] flex flex-col rounded-2xl p-0 overflow-hidden bg-white border border-slate-200 shadow-xl">
+                    <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
+                        <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                                <Plane className="h-5 w-5" />
                             </div>
-                            <DialogTitle className="text-xl font-bold text-white tracking-tight">Mark Official Tour</DialogTitle>
-                            <DialogDescription className="text-xs text-slate-400 mt-1">
-                                Auto-mark attendance as Tour for specified date range (Req 5.1 & 5.2)
-                            </DialogDescription>
+                            <div>
+                                <DialogTitle className="text-base font-bold text-slate-900 tracking-tight">Mark Official Tour</DialogTitle>
+                                <DialogDescription className="text-xs text-slate-500 font-normal mt-0.5">
+                                    Auto-mark attendance as Tour for specified date range (Req 5.1 & 5.2)
+                                </DialogDescription>
+                            </div>
                         </div>
+                        <Badge variant="outline" className="text-[11px] font-semibold text-slate-600 bg-slate-50 border-slate-200 px-2.5 py-1">
+                            100% Payable
+                        </Badge>
                     </div>
 
                     <div className="p-6 space-y-4 overflow-y-auto flex-1">
-                        <div className="p-3 rounded-xl bg-sky-50/80 border border-sky-200/60 text-xs text-sky-950">
-                            <p className="font-bold">Official Tour / Outdoor Duty (Req 5.1 & 5.2):</p>
-                            <p className="text-slate-600 text-[11px] mt-0.5">
-                                Attendance within this date range will be recorded as Tour, bypassing office geofence checks and counted as 100% Payable Working Days.
-                            </p>
+                        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-relaxed">
+                            <p className="font-semibold text-slate-900 mb-0.5">Official Tour Policy (Req 5.1 & 5.2):</p>
+                            Attendance in this date range is recorded as Tour, bypassing office geofence checks and counted as 100% Payable Working Days in payroll.
                         </div>
 
                         {/* Employee Selector */}
                         <div className="space-y-1.5">
                             <div className="flex items-center justify-between">
-                                <Label className="text-xs font-bold text-slate-700">Select Employee *</Label>
+                                <Label className="text-xs font-semibold text-slate-700">Select Employee *</Label>
                                 <button
                                     type="button"
                                     onClick={() => setTourInputMode(m => m === "dropdown" ? "custom" : "dropdown")}
-                                    className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
+                                    className="text-xs font-medium text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
                                 >
-                                    {tourInputMode === "dropdown" ? "Type ID manually" : "Select from list"}
+                                    {tourInputMode === "dropdown" ? "Type ID manually" : "Select from roster"}
                                 </button>
                             </div>
                             {tourInputMode === "dropdown" && allEmployees.length > 0 ? (
                                 <select
                                     value={tourEmpId}
                                     onChange={(e) => setTourEmpId(e.target.value)}
-                                    className="h-10 w-full px-3 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs text-slate-800 outline-none focus:ring-2 ring-indigo-200 cursor-pointer"
+                                    className="h-10 w-full px-3 rounded-lg bg-white border border-slate-200 text-xs font-medium text-slate-800 outline-none focus:border-slate-900 cursor-pointer"
                                 >
                                     <option value="">-- Choose Employee (Name / Code) --</option>
                                     {allEmployees.map((emp: any) => (
@@ -3024,7 +2985,7 @@ export default function AttendancePage() {
                                     placeholder="Enter Emp Code (e.g. APA001) or Numeric ID"
                                     value={tourEmpId}
                                     onChange={(e) => setTourEmpId(e.target.value)}
-                                    className="h-10 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs uppercase"
+                                    className="h-10 rounded-lg bg-white border border-slate-200 text-xs uppercase"
                                 />
                             )}
                             {/* Selected Employee Preview */}
@@ -3035,15 +2996,15 @@ export default function AttendancePage() {
                                 );
                                 if (!selected) return null;
                                 return (
-                                    <div className="mt-1 p-2 rounded-xl bg-sky-50 border border-sky-200/60 flex items-center justify-between animate-in fade-in">
+                                    <div className="mt-1.5 p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
                                         <div className="flex items-center gap-2">
-                                            <div className="h-6 w-6 rounded-md bg-sky-600 text-white flex items-center justify-center font-bold text-[10px]">
+                                            <div className="h-6 w-6 rounded-md bg-slate-900 text-white flex items-center justify-center font-bold text-[10px]">
                                                 {selected.name?.charAt(0).toUpperCase()}
                                             </div>
-                                            <span className="text-xs font-bold text-slate-800">{selected.name}</span>
-                                            <span className="text-[10px] font-mono text-sky-700 bg-white px-1.5 py-0.5 rounded border border-sky-100">{selected.emp_code}</span>
+                                            <span className="font-semibold text-slate-800">{selected.name}</span>
+                                            <span className="font-mono text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200 text-[11px]">{selected.emp_code}</span>
                                         </div>
-                                        <span className="text-[10px] font-bold text-slate-500">{selected.department || "Operations"}</span>
+                                        <span className="text-slate-500">{selected.department || "Operations"}</span>
                                     </div>
                                 );
                             })()}
@@ -3051,33 +3012,33 @@ export default function AttendancePage() {
 
                         {/* Tour Title */}
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-bold text-slate-700">Tour Title *</Label>
+                            <Label className="text-xs font-semibold text-slate-700">Tour Title *</Label>
                             <Input
                                 placeholder="e.g. Client Site Audit / Depot Inspection"
                                 value={tourTitle}
                                 onChange={(e) => setTourTitle(e.target.value)}
-                                className="h-10 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs"
+                                className="h-10 rounded-lg bg-white border border-slate-200 text-xs"
                             />
                         </div>
 
                         {/* From & To Location */}
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1.5">
-                                <Label className="text-xs font-bold text-slate-700">From Location</Label>
+                                <Label className="text-xs font-semibold text-slate-700">From Location</Label>
                                 <Input
                                     placeholder="e.g. Indore HQ"
                                     value={tourFromLocation}
                                     onChange={(e) => setTourFromLocation(e.target.value)}
-                                    className="h-10 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs"
+                                    className="h-10 rounded-lg bg-white border border-slate-200 text-xs"
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <Label className="text-xs font-bold text-slate-700">To Location</Label>
+                                <Label className="text-xs font-semibold text-slate-700">To Location</Label>
                                 <Input
                                     placeholder="e.g. Mumbai Depot"
                                     value={tourToLocation}
                                     onChange={(e) => setTourToLocation(e.target.value)}
-                                    className="h-10 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs"
+                                    className="h-10 rounded-lg bg-white border border-slate-200 text-xs"
                                 />
                             </div>
                         </div>
@@ -3085,54 +3046,54 @@ export default function AttendancePage() {
                         {/* Start & End Date */}
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1.5">
-                                <Label className="text-xs font-bold text-slate-700">Start Date *</Label>
+                                <Label className="text-xs font-semibold text-slate-700">Start Date *</Label>
                                 <Input
                                     type="date"
                                     value={tourStartDate}
                                     onChange={(e) => setTourStartDate(e.target.value)}
-                                    className="h-10 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs"
+                                    className="h-10 rounded-lg bg-white border border-slate-200 text-xs font-medium"
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <Label className="text-xs font-bold text-slate-700">End Date *</Label>
+                                <Label className="text-xs font-semibold text-slate-700">End Date *</Label>
                                 <Input
                                     type="date"
                                     value={tourEndDate}
                                     onChange={(e) => setTourEndDate(e.target.value)}
-                                    className="h-10 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs"
+                                    className="h-10 rounded-lg bg-white border border-slate-200 text-xs font-medium"
                                 />
                             </div>
                         </div>
 
                         {/* Description */}
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-bold text-slate-700">Tour Purpose & Details (Optional)</Label>
+                            <Label className="text-xs font-semibold text-slate-700">Tour Purpose & Details (Optional)</Label>
                             <textarea
                                 placeholder="State purpose, meeting schedule, or travel notes..."
                                 value={tourDescription}
                                 onChange={(e) => setTourDescription(e.target.value)}
                                 rows={2}
-                                className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs resize-none outline-none focus:ring-2 ring-indigo-200"
+                                className="w-full p-2.5 rounded-lg bg-white border border-slate-200 text-xs outline-none focus:border-slate-900 resize-none"
                             />
                         </div>
                     </div>
 
                     <div className="p-4 px-6 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
-                        <span className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
+                        <span className="text-xs text-slate-500 flex items-center gap-1.5">
                             <ShieldCheck className="h-4 w-4 text-emerald-600" /> Tour Days = 100% Payable
                         </span>
                         <div className="flex gap-2.5">
                             <Button
-                                variant="ghost"
+                                variant="outline"
                                 onClick={() => setIsTourOpen(false)}
-                                className="text-xs font-semibold text-slate-600 rounded-xl hover:bg-slate-200 h-10 px-4 cursor-pointer"
+                                className="h-9 px-4 rounded-lg border-slate-200 text-xs font-medium text-slate-700"
                             >
                                 Cancel
                             </Button>
                             <Button
                                 onClick={handleTourSubmit}
                                 disabled={tourSubmitting}
-                                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl px-6 h-10 shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                                className="h-9 px-5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs disabled:opacity-50"
                             >
                                 {tourSubmitting ? "Submitting..." : "Mark Tour"}
                             </Button>

@@ -774,96 +774,114 @@ export default function LeavePage() {
                         {isAdmin && (
                             <Sheet open={isGrantOpen} onOpenChange={(v) => { setIsGrantOpen(v); if (!v) { setGrantEmployeeId(""); setGrantCount(1); setGrantReason(""); setGrantErrors({}); } else { fetchEmployees(); } }}>
                                 <SheetTrigger asChild>
-                                    <Button className="bg-[#D1FAE5] text-emerald-800 hover:bg-[#A7F3D0] font-black uppercase text-[9px] tracking-widest px-6 h-11 rounded-2xl shadow-sm transition-all border border-emerald-200">
-                                        <Gift className="h-4 w-4 mr-2" /> Grant Leave
+                                    <Button variant="outline" className="border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold text-xs px-4 h-10 rounded-xl shadow-xs transition-all flex items-center gap-2">
+                                        <Gift className="h-4 w-4 text-emerald-600" /> Grant Leave
                                     </Button>
                                 </SheetTrigger>
-                                <SheetContent className="sm:max-w-[540px] border-none shadow-2xl p-0 overflow-y-auto">
-                                    <div className="h-2 bg-[#D1FAE5]" />
-                                    <div className="p-8 space-y-10">
-                                        <SheetHeader className="text-left space-y-2">
-                                            <div className="h-12 w-12 rounded-2xl bg-slate-50 flex items-center justify-center">
-                                                <Gift className="h-6 w-6 text-emerald-500" />
+                                <SheetContent className="sm:max-w-[560px] w-full p-0 flex flex-col h-full max-h-screen bg-white border-l border-slate-200 shadow-2xl">
+                                    {/* Pinned Clean Header */}
+                                    <div className="shrink-0 px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white">
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-10 w-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                                                <Gift className="h-5 w-5" />
                                             </div>
-                                            <SheetTitle className="text-2xl font-black italic uppercase text-slate-900 tracking-tighter">Grant Extra Leave</SheetTitle>
-                                            <SheetDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-loose">
-                                                Grant bonus leaves to an employee. These leaves are credited to comp-off balance.
-                                            </SheetDescription>
-                                        </SheetHeader>
-                                        <div className="grid gap-8">
-                                            <div className="space-y-6">
-                                                <div className="space-y-2">
-                                                    <Label className={cn("text-[9px] font-black uppercase tracking-widest", grantErrors.employeeId ? "text-rose-500" : "text-slate-400")}>Select Employee</Label>
-                                                    <select
-                                                        value={grantEmployeeId}
-                                                        onChange={(e) => { setGrantEmployeeId(e.target.value); setGrantErrors((prev) => ({ ...prev, employeeId: undefined })); }}
-                                                        className={cn(
-                                                            "w-full h-12 rounded-xl px-4 font-bold text-[11px] outline-none border transition-all appearance-none bg-no-repeat",
-                                                            grantErrors.employeeId ? "bg-rose-50 border-rose-200 text-rose-600" : "bg-slate-50 border-slate-100 text-slate-700"
-                                                        )}
-                                                        style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")", backgroundPosition: "right 12px center" }}
-                                                    >
-                                                        <option value="" className="font-bold">Choose an employee...</option>
-                                                        {employees.map((emp: any) => (
-                                                            <option key={emp.id} value={emp.id} className="font-bold">
-                                                                {emp.name} - {emp.emp_code}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                    {grantErrors.employeeId && (
-                                                        <p className="text-[8px] font-bold text-rose-500 uppercase tracking-wider flex items-center gap-1">
-                                                            <ShieldAlert className="h-2.5 w-2.5" /> {grantErrors.employeeId}
-                                                        </p>
-                                                    )}
-                                                </div>
-
-                                                <div className="space-y-2">
-                                                    <Label className={cn("text-[9px] font-black uppercase tracking-widest", grantErrors.count ? "text-rose-500" : "text-slate-400")}>Leave Count (Days)</Label>
-                                                    <Input
-                                                        type="number"
-                                                        min={1}
-                                                        max={30}
-                                                        value={grantCount}
-                                                        onChange={(e) => { setGrantCount(Number(e.target.value)); setGrantErrors((prev) => ({ ...prev, count: undefined })); }}
-                                                        className={cn(
-                                                            "h-12 rounded-xl font-bold text-[11px] transition-all",
-                                                            grantErrors.count ? "bg-rose-50 border-rose-200 text-rose-600 focus-visible:ring-rose-200" : "bg-slate-50 border-slate-100"
-                                                        )}
-                                                    />
-                                                    {grantErrors.count && (
-                                                        <p className="text-[8px] font-bold text-rose-500 uppercase tracking-wider flex items-center gap-1">
-                                                            <ShieldAlert className="h-2.5 w-2.5" /> {grantErrors.count}
-                                                        </p>
-                                                    )}
-                                                </div>
-
-                                                <div className="space-y-2">
-                                                    <Label className={cn("text-[9px] font-black uppercase tracking-widest", grantErrors.reason ? "text-rose-500" : "text-slate-400")}>Reason for Grant</Label>
-                                                    <textarea
-                                                        className={cn(
-                                                            "w-full h-32 rounded-xl p-4 font-bold text-[11px] outline-none border transition-all resize-none",
-                                                            grantErrors.reason ? "bg-rose-50 border-rose-200 text-rose-600 focus:border-rose-300 placeholder:text-rose-300" : "bg-slate-50 border-slate-100 focus:border-slate-300 placeholder:text-slate-300"
-                                                        )}
-                                                        placeholder="Describe the reason for granting these leaves (min 5 characters)..."
-                                                        value={grantReason}
-                                                        onChange={(e) => { setGrantReason(e.target.value); setGrantErrors((prev) => ({ ...prev, reason: undefined })); }}
-                                                        maxLength={500}
-                                                    />
-                                                    {grantErrors.reason && (
-                                                        <p className="text-[8px] font-bold text-rose-500 uppercase tracking-wider flex items-center gap-1">
-                                                            <ShieldAlert className="h-2.5 w-2.5" /> {grantErrors.reason}
-                                                        </p>
-                                                    )}
-                                                </div>
+                                            <div>
+                                                <SheetTitle className="text-base font-bold text-slate-900 tracking-tight">Grant Extra Leave</SheetTitle>
+                                                <SheetDescription className="text-xs text-slate-500 font-normal mt-0.5">
+                                                    Credit compensatory or discretionary off days to employee's ledger
+                                                </SheetDescription>
                                             </div>
                                         </div>
-                                        <SheetFooter className="flex gap-3 pt-6">
-                                            <Button variant="outline" onClick={() => { setIsGrantOpen(false); setGrantEmployeeId(""); setGrantCount(1); setGrantReason(""); setGrantErrors({}); }} className="flex-1 h-12 rounded-2xl border-slate-100 font-black uppercase text-[9px] tracking-widest">Cancel</Button>
-                                            <Button onClick={handleGrantSubmit} disabled={grantSubmitting} className="flex-1 h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[9px] tracking-widest shadow-xl">
-                                                {grantSubmitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                                                {grantSubmitting ? "Submitting..." : "Grant Leaves"}
-                                            </Button>
-                                        </SheetFooter>
+                                        <Badge variant="outline" className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border-emerald-200 px-2.5 py-1">
+                                            Comp-Off Credit
+                                        </Badge>
+                                    </div>
+
+                                    {/* Scrollable Body */}
+                                    <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+                                        <div className="space-y-1.5">
+                                            <Label className={cn("text-xs font-semibold", grantErrors.employeeId ? "text-rose-600" : "text-slate-700")}>Select Employee *</Label>
+                                            <select
+                                                value={grantEmployeeId}
+                                                onChange={(e) => { setGrantEmployeeId(e.target.value); setGrantErrors((prev) => ({ ...prev, employeeId: undefined })); }}
+                                                className={cn(
+                                                    "w-full h-10 rounded-lg px-3 text-xs font-medium outline-none border transition-all cursor-pointer bg-white",
+                                                    grantErrors.employeeId ? "border-rose-300 text-rose-900 bg-rose-50/50" : "border-slate-200 text-slate-800 focus:border-slate-900"
+                                                )}
+                                            >
+                                                <option value="">Choose an employee...</option>
+                                                {employees.map((emp: any) => (
+                                                    <option key={emp.id} value={emp.id}>
+                                                        {emp.name} ({emp.emp_code}) — {emp.department || "Operations"}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            {grantErrors.employeeId && (
+                                                <p className="text-xs text-rose-600 flex items-center gap-1 mt-1">
+                                                    <ShieldAlert className="h-3.5 w-3.5" /> {grantErrors.employeeId}
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <Label className={cn("text-xs font-semibold", grantErrors.count ? "text-rose-600" : "text-slate-700")}>Leave Count (Days) *</Label>
+                                            <Input
+                                                type="number"
+                                                min={1}
+                                                max={30}
+                                                value={grantCount}
+                                                onChange={(e) => { setGrantCount(Number(e.target.value)); setGrantErrors((prev) => ({ ...prev, count: undefined })); }}
+                                                className={cn(
+                                                    "h-10 rounded-lg text-xs font-medium transition-all bg-white",
+                                                    grantErrors.count ? "border-rose-300 text-rose-900 bg-rose-50/50" : "border-slate-200 focus:border-slate-900"
+                                                )}
+                                            />
+                                            {grantErrors.count && (
+                                                <p className="text-xs text-rose-600 flex items-center gap-1 mt-1">
+                                                    <ShieldAlert className="h-3.5 w-3.5" /> {grantErrors.count}
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <Label className={cn("text-xs font-semibold", grantErrors.reason ? "text-rose-600" : "text-slate-700")}>Reason for Grant *</Label>
+                                            <textarea
+                                                className={cn(
+                                                    "w-full h-28 rounded-lg p-3 text-xs outline-none border transition-all resize-none bg-white",
+                                                    grantErrors.reason ? "border-rose-300 text-rose-900 bg-rose-50/50" : "border-slate-200 focus:border-slate-900 placeholder:text-slate-400"
+                                                )}
+                                                placeholder="Describe the reason for granting these leaves (e.g. Extra weekend work, exceptional project overtime)..."
+                                                value={grantReason}
+                                                onChange={(e) => { setGrantReason(e.target.value); setGrantErrors((prev) => ({ ...prev, reason: undefined })); }}
+                                                maxLength={500}
+                                            />
+                                            {grantErrors.reason && (
+                                                <p className="text-xs text-rose-600 flex items-center gap-1 mt-1">
+                                                    <ShieldAlert className="h-3.5 w-3.5" /> {grantErrors.reason}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Pinned Footer */}
+                                    <div className="shrink-0 px-6 py-4 border-t border-slate-200 bg-white flex items-center justify-end gap-3">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => { setIsGrantOpen(false); setGrantEmployeeId(""); setGrantCount(1); setGrantReason(""); setGrantErrors({}); }}
+                                            className="h-10 px-5 rounded-xl border-slate-200 text-xs font-semibold text-slate-700"
+                                        >
+                                            Cancel
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            onClick={handleGrantSubmit}
+                                            disabled={grantSubmitting}
+                                            className="h-10 px-6 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs shadow-xs flex items-center gap-2"
+                                        >
+                                            {grantSubmitting && <Loader2 className="h-4 w-4 animate-spin text-white" />}
+                                            {grantSubmitting ? "Granting..." : "Grant Leaves"}
+                                        </Button>
                                     </div>
                                 </SheetContent>
                             </Sheet>
@@ -1954,37 +1972,44 @@ export default function LeavePage() {
 
                 {/* ── LEAVE POLICY CONFIGURATION DIALOG (Req 2.6) ── */}
                 <Dialog open={isPolicyOpen} onOpenChange={setIsPolicyOpen}>
-                    <DialogContent className="sm:max-w-[560px] border-none shadow-2xl rounded-3xl p-8 max-h-[90vh] overflow-y-auto">
-                        <DialogHeader className="space-y-3">
-                            <div className="h-12 w-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-1">
-                                <SlidersHorizontal className="h-6 w-6" />
+                    <DialogContent className="sm:max-w-[560px] max-h-[90vh] flex flex-col rounded-2xl p-0 overflow-hidden bg-white border border-slate-200 shadow-xl">
+                        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
+                            <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                                    <SlidersHorizontal className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <DialogTitle className="text-base font-bold text-slate-900 tracking-tight">
+                                        Leave Policy Configuration
+                                    </DialogTitle>
+                                    <DialogDescription className="text-xs text-slate-500 font-normal mt-0.5">
+                                        Configure annual quotas, carry-forward caps, and lapse rules (Req 2.6)
+                                    </DialogDescription>
+                                </div>
                             </div>
-                            <DialogTitle className="text-xl font-black italic uppercase text-slate-900 tracking-tighter">
-                                Leave Policy Configuration (Req 2.6)
-                            </DialogTitle>
-                            <DialogDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
-                                Configure annual entitlements, carry-forward rules, and lapse behavior for PL, EL, and CL categories.
-                            </DialogDescription>
-                        </DialogHeader>
+                            <Badge variant="outline" className="text-[11px] font-semibold text-slate-600 bg-slate-50 border-slate-200 px-2.5 py-1">
+                                36d Standard
+                            </Badge>
+                        </div>
 
                         {policyLoading ? (
-                            <div className="py-12 text-center">
-                                <Loader2 className="h-7 w-7 text-indigo-500 animate-spin mx-auto mb-2" />
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Loading policy...</span>
+                            <div className="py-12 text-center flex-1">
+                                <Loader2 className="h-6 w-6 text-slate-600 animate-spin mx-auto mb-2" />
+                                <span className="text-xs text-slate-400 font-medium">Loading policy configuration...</span>
                             </div>
                         ) : (
-                            <div className="space-y-6 py-3">
+                            <div className="p-6 space-y-4 overflow-y-auto flex-1">
                                 {/* PL Section */}
-                                <div className="p-4 rounded-2xl bg-indigo-50/50 border border-indigo-100 space-y-3">
+                                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
                                     <div className="flex items-center justify-between">
-                                        <span className="text-[11px] font-black uppercase tracking-wider text-indigo-950 flex items-center gap-1.5">
+                                        <span className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
                                             <Award className="h-4 w-4 text-indigo-600" /> Privilege Leave (PL)
                                         </span>
-                                        <Badge className="bg-indigo-600 text-white font-black text-[8px] uppercase">Carry-Forward Enabled</Badge>
+                                        <Badge variant="outline" className="text-[10px] bg-indigo-50 text-indigo-700 border-indigo-200 font-medium">Carry-Forward Enabled</Badge>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-2 gap-3 text-xs">
                                         <div className="space-y-1">
-                                            <Label className="text-[8px] font-black uppercase tracking-widest text-slate-400">Annual Entitlement (Days)</Label>
+                                            <Label className="text-[11px] font-medium text-slate-600">Annual Quota (Days)</Label>
                                             <Input
                                                 type="number"
                                                 min={0}
@@ -1994,11 +2019,11 @@ export default function LeavePage() {
                                                     ...policyConfig,
                                                     pl: { ...policyConfig.pl, entitlement: Number(e.target.value) }
                                                 })}
-                                                className="h-10 rounded-xl bg-white text-xs font-bold"
+                                                className="h-10 rounded-lg bg-white border border-slate-200 text-xs font-bold"
                                             />
                                         </div>
                                         <div className="space-y-1">
-                                            <Label className="text-[8px] font-black uppercase tracking-widest text-slate-400">Max Carry-Forward Cap (Days)</Label>
+                                            <Label className="text-[11px] font-medium text-slate-600">Max Carry-Forward Cap (Days)</Label>
                                             <Input
                                                 type="number"
                                                 min={0}
@@ -2008,23 +2033,23 @@ export default function LeavePage() {
                                                     ...policyConfig,
                                                     pl: { ...policyConfig.pl, max_carry_forward: Number(e.target.value) }
                                                 })}
-                                                className="h-10 rounded-xl bg-white text-xs font-bold"
+                                                className="h-10 rounded-lg bg-white border border-slate-200 text-xs font-bold"
                                             />
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* EL Section */}
-                                <div className="p-4 rounded-2xl bg-emerald-50/50 border border-emerald-100 space-y-3">
+                                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
                                     <div className="flex items-center justify-between">
-                                        <span className="text-[11px] font-black uppercase tracking-wider text-emerald-950 flex items-center gap-1.5">
+                                        <span className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
                                             <Plane className="h-4 w-4 text-emerald-600" /> Earned Leave (EL)
                                         </span>
-                                        <Badge className="bg-emerald-600 text-white font-black text-[8px] uppercase">Carry-Forward Enabled</Badge>
+                                        <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 font-medium">Carry-Forward Enabled</Badge>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-2 gap-3 text-xs">
                                         <div className="space-y-1">
-                                            <Label className="text-[8px] font-black uppercase tracking-widest text-slate-400">Annual Entitlement (Days)</Label>
+                                            <Label className="text-[11px] font-medium text-slate-600">Annual Quota (Days)</Label>
                                             <Input
                                                 type="number"
                                                 min={0}
@@ -2034,11 +2059,11 @@ export default function LeavePage() {
                                                     ...policyConfig,
                                                     el: { ...policyConfig.el, entitlement: Number(e.target.value) }
                                                 })}
-                                                className="h-10 rounded-xl bg-white text-xs font-bold"
+                                                className="h-10 rounded-lg bg-white border border-slate-200 text-xs font-bold"
                                             />
                                         </div>
                                         <div className="space-y-1">
-                                            <Label className="text-[8px] font-black uppercase tracking-widest text-slate-400">Max Carry-Forward Cap (Days)</Label>
+                                            <Label className="text-[11px] font-medium text-slate-600">Max Carry-Forward Cap (Days)</Label>
                                             <Input
                                                 type="number"
                                                 min={0}
@@ -2048,23 +2073,23 @@ export default function LeavePage() {
                                                     ...policyConfig,
                                                     el: { ...policyConfig.el, max_carry_forward: Number(e.target.value) }
                                                 })}
-                                                className="h-10 rounded-xl bg-white text-xs font-bold"
+                                                className="h-10 rounded-lg bg-white border border-slate-200 text-xs font-bold"
                                             />
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* CL Section */}
-                                <div className="p-4 rounded-2xl bg-purple-50/50 border border-purple-100 space-y-3">
+                                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
                                     <div className="flex items-center justify-between">
-                                        <span className="text-[11px] font-black uppercase tracking-wider text-purple-950 flex items-center gap-1.5">
+                                        <span className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
                                             <CalendarDays className="h-4 w-4 text-purple-600" /> Casual Leave (CL)
                                         </span>
-                                        <Badge className="bg-purple-600 text-white font-black text-[8px] uppercase">Lapses Annually</Badge>
+                                        <Badge variant="outline" className="text-[10px] bg-purple-50 text-purple-700 border-purple-200 font-medium">Lapses Annually</Badge>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-2 gap-3 text-xs">
                                         <div className="space-y-1">
-                                            <Label className="text-[8px] font-black uppercase tracking-widest text-slate-400">Annual Entitlement (Days)</Label>
+                                            <Label className="text-[11px] font-medium text-slate-600">Annual Quota (Days)</Label>
                                             <Input
                                                 type="number"
                                                 min={0}
@@ -2074,107 +2099,107 @@ export default function LeavePage() {
                                                     ...policyConfig,
                                                     cl: { ...policyConfig.cl, entitlement: Number(e.target.value) }
                                                 })}
-                                                className="h-10 rounded-xl bg-white text-xs font-bold"
+                                                className="h-10 rounded-lg bg-white border border-slate-200 text-xs font-bold"
                                             />
                                         </div>
                                         <div className="space-y-1">
-                                            <Label className="text-[8px] font-black uppercase tracking-widest text-slate-400">Lapse Policy</Label>
-                                            <div className="h-10 px-3 rounded-xl bg-white border border-slate-200 flex items-center text-xs font-bold text-slate-600">
-                                                Lapses at Year-End (No Carry)
+                                            <Label className="text-[11px] font-medium text-slate-600">Lapse Behavior</Label>
+                                            <div className="h-10 px-3 rounded-lg bg-white border border-slate-200 flex items-center text-xs text-slate-600 font-medium">
+                                                Lapses at Dec 31 (No Carry)
                                             </div>
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* Rollover Execution Utility */}
-                                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between">
+                                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
                                     <div className="space-y-0.5">
-                                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-800 block">
-                                            Execute Year-End Rollover & Lapse
+                                        <span className="text-xs font-semibold text-slate-800 block">
+                                            Year-End Rollover & Lapse Tool
                                         </span>
-                                        <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest block">
-                                            Carry forward PL & EL up to policy cap and lapse all CL balances
+                                        <span className="text-[11px] text-slate-500 block">
+                                            Carry forward PL & EL up to policy cap and lapse CL balances
                                         </span>
                                     </div>
                                     <Button
                                         onClick={handleRunRollover}
                                         disabled={rolloverRunning}
                                         variant="outline"
-                                        className="h-9 px-4 rounded-xl border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-black text-[8px] uppercase tracking-wider shrink-0"
+                                        className="h-9 px-3.5 rounded-lg border-slate-200 text-slate-700 hover:bg-slate-100 text-xs font-semibold shrink-0 flex items-center gap-1.5"
                                     >
-                                        {rolloverRunning ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
+                                        {rolloverRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                                         Run Rollover
                                     </Button>
                                 </div>
                             </div>
                         )}
 
-                        <DialogFooter className="gap-3 sm:justify-start">
-                            <Button
-                                disabled={policySaving || policyLoading}
-                                onClick={handleSavePolicy}
-                                className="flex-1 h-12 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-[9px] tracking-widest shadow-xl transition-all"
-                            >
-                                {policySaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                                Save Policy Configuration
-                            </Button>
+                        <div className="p-4 px-6 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2.5 shrink-0">
                             <Button
                                 variant="outline"
                                 onClick={() => setIsPolicyOpen(false)}
-                                className="flex-1 h-12 rounded-2xl border-slate-100 font-black uppercase text-[9px] tracking-widest"
+                                className="h-9 px-4 rounded-lg border-slate-200 text-xs font-medium text-slate-700"
                             >
                                 Cancel
                             </Button>
-                        </DialogFooter>
+                            <Button
+                                disabled={policySaving || policyLoading}
+                                onClick={handleSavePolicy}
+                                className="h-9 px-5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs disabled:opacity-50 flex items-center gap-2"
+                            >
+                                {policySaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                                {policySaving ? "Saving..." : "Save Policy"}
+                            </Button>
+                        </div>
                     </DialogContent>
                 </Dialog>
 
                 {/* ── EMPLOYEE LEAVE HISTORY DRAWER WITH MONTH-WISE REVIEW (Req 2.6) ── */}
                 <Sheet open={historyDrawerOpen} onOpenChange={setHistoryDrawerOpen}>
-                    <SheetContent className="sm:max-w-[680px] border-none shadow-2xl p-0 overflow-y-auto">
-                        <div className="h-2 bg-indigo-500" />
-                        <div className="p-8 space-y-6">
-                            <SheetHeader className="text-left space-y-2">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <div className="h-9 w-9 rounded-xl bg-indigo-50 flex items-center justify-center">
-                                            <History className="h-5 w-5 text-indigo-600" />
-                                        </div>
-                                        <div>
-                                            <SheetTitle className="text-xl font-black italic uppercase text-slate-900 tracking-tight">
-                                                Employee Leave History & Audit
-                                            </SheetTitle>
-                                            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">
-                                                Month-Wise Leave History, PL/EL/CL Quotas & Audit Trail (Req 2.6)
-                                            </p>
-                                        </div>
-                                    </div>
+                    <SheetContent className="sm:max-w-[640px] w-full p-0 flex flex-col h-full max-h-screen bg-white border-l border-slate-200 shadow-2xl">
+                        {/* Pinned Header */}
+                        <div className="shrink-0 px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white">
+                            <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-800 shrink-0">
+                                    <History className="h-5 w-5" />
                                 </div>
+                                <div>
+                                    <SheetTitle className="text-base font-bold text-slate-900 tracking-tight">Leave History & Audit</SheetTitle>
+                                    <SheetDescription className="text-xs text-slate-500 font-normal mt-0.5">
+                                        {historyEmployee?.personnel || historyEmployee?.name || "Employee"} • {historyEmployee?.empCode || historyEmployee?.emp_code || `ID #${historyEmployee?.id}`}
+                                    </SheetDescription>
+                                </div>
+                            </div>
+                            <Badge variant="outline" className="text-[11px] font-semibold text-slate-600 bg-slate-50 border-slate-200 px-2.5 py-1">
+                                Req 2.6 Audit
+                            </Badge>
+                        </div>
 
-                                {/* Employee Card */}
-                                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className="h-10 w-10 rounded-xl bg-slate-900 text-white font-black text-sm flex items-center justify-center">
-                                            {(historyEmployee?.personnel || historyEmployee?.name || "E").charAt(0).toUpperCase()}
-                                        </div>
-                                        <div>
-                                            <h4 className="text-sm font-black text-slate-900 uppercase italic tracking-tight">
-                                                {historyEmployee?.personnel || historyEmployee?.name || "Employee"}
-                                            </h4>
-                                            <div className="flex items-center gap-2 text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-                                                <span className="font-mono text-slate-600">{historyEmployee?.empCode || historyEmployee?.emp_code || `EMP#${historyEmployee?.id}`}</span>
-                                                <span>•</span>
-                                                <span>{historyEmployee?.department || "Department —"}</span>
-                                                <span>•</span>
-                                                <span>{historyEmployee?.designation || "Staff"}</span>
-                                            </div>
+                        {/* Scrollable Body */}
+                        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+                            {/* Employee Card */}
+                            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="h-10 w-10 rounded-xl bg-slate-900 text-white font-bold text-sm flex items-center justify-center">
+                                        {(historyEmployee?.personnel || historyEmployee?.name || "E").charAt(0).toUpperCase()}
+                                    </div>
+                                    <div>
+                                        <h4 className="text-sm font-bold text-slate-900">
+                                            {historyEmployee?.personnel || historyEmployee?.name || "Employee"}
+                                        </h4>
+                                        <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-0.5">
+                                            <span className="font-mono text-slate-700">{historyEmployee?.empCode || historyEmployee?.emp_code || `EMP#${historyEmployee?.id}`}</span>
+                                            <span>•</span>
+                                            <span>{historyEmployee?.department || "General"}</span>
+                                            <span>•</span>
+                                            <span>{historyEmployee?.designation || "Staff"}</span>
                                         </div>
                                     </div>
-                                    <Badge className="bg-amber-100 text-amber-900 font-black text-[9px] border-none">
-                                        36 d Entitled
-                                    </Badge>
                                 </div>
-                            </SheetHeader>
+                                <Badge variant="outline" className="text-xs font-semibold bg-white border-slate-200 text-slate-700">
+                                    36d Annual Entitlement
+                                </Badge>
+                            </div>
 
                             {loadingHistory ? (
                                 <div className="py-24 text-center space-y-3">
