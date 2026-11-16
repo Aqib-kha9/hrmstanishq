@@ -72,19 +72,24 @@ interface LeaveBalance {
     id: number;
     employee_id: number;
     year?: number;
-    // Privilege Leave (PL)
+    // Privilege / Earned Leave (PL / EL) - 12 days/yr
+    pl_el_allocated?: number;
+    pl_el_carried_forward?: number;
+    pl_el_used?: number;
+    pl_el_lapsed?: number;
+    pl_el_balance?: number;
+    // Backward compatibility aliases
     pl_allocated?: number;
     pl_carried_forward?: number;
     pl_used?: number;
     pl_lapsed?: number;
     pl_balance?: number;
-    // Earned Leave (EL)
     el_allocated?: number;
     el_carried_forward?: number;
     el_used?: number;
     el_lapsed?: number;
     el_balance?: number;
-    // Casual Leave (CL)
+    // Casual Leave (CL) - 12 days/yr
     cl_allocated?: number;
     cl_carried_forward?: number;
     cl_used?: number;
@@ -92,6 +97,10 @@ interface LeaveBalance {
     cl_balance?: number;
     // Comp-off
     comp_off_balance?: number;
+    // Monthly Paid Leave Policy Limits (Max 2 Paid Leaves / Month)
+    monthly_paid_leave_limit?: number;
+    paid_leaves_taken_this_month?: number;
+    paid_leaves_remaining_this_month?: number;
     // Totals
     total_annual_entitlement?: number;
     total_paid_entitlement?: number;
@@ -158,8 +167,9 @@ export default function LeavePage() {
     const [rolloverRunning, setRolloverRunning] = useState(false);
     const [policyConfig, setPolicyConfig] = useState<any>({
         pl: { entitlement: 12, carry_forward: true, max_carry_forward: 15, lapse: false },
-        el: { entitlement: 12, carry_forward: true, max_carry_forward: 30, lapse: false },
+        el: { entitlement: 0, carry_forward: false, max_carry_forward: 0, lapse: false },
         cl: { entitlement: 12, carry_forward: false, max_carry_forward: 0, lapse: true },
+        monthly_paid_limit: 2,
     });
 
     // Audit History Picker for Admins
@@ -178,8 +188,8 @@ export default function LeavePage() {
     const [balance, setBalance] = useState<LeaveBalance | null>(null);
     const [logs, setLogs] = useState<any[]>([]);
 
-    // Application form state (Req 2.6: PL / EL / CL / Comp-Off / LWP)
-    const [applyLeaveType, setApplyLeaveType] = useState<"pl" | "el" | "cl" | "lwp" | "comp_off">("cl");
+    // Application form state (PL / EL / CL / Comp-Off / LWP - Max 2 Paid Leaves/Month)
+    const [applyLeaveType, setApplyLeaveType] = useState<"pl_el" | "pl" | "el" | "cl" | "lwp" | "comp_off">("pl_el");
     const [isHalfDay, setIsHalfDay] = useState(false);
     const [halfDaySession, setHalfDaySession] = useState<"first_half" | "second_half">("first_half");
     const [applyDays, setApplyDays] = useState(1);
@@ -355,7 +365,7 @@ export default function LeavePage() {
 
     // Execute Year-End Rollover & Lapse
     const handleRunRollover = async () => {
-        const confirmMsg = "Are you sure you want to run Annual Leave Rollover? This will carry forward eligible PL and EL balances (subject to policy caps) and lapse all unused CL balances for all employees.";
+        const confirmMsg = "Are you sure you want to run Annual Leave Rollover? This will carry forward eligible PL / EL balances (subject to policy caps) and lapse all unused CL balances for all employees.";
         if (!confirm(confirmMsg)) return;
 
         setRolloverRunning(true);
@@ -413,13 +423,11 @@ export default function LeavePage() {
         else if (!isAdmin && applyTo < todayStr) errors.to_date = "End date cannot be in the past";
         else if (applyTo < applyFrom) errors.to_date = "End date must be on or after start date";
 
-        // Check available annual balance for selected type (Req 2.6: PL / EL / CL / Comp-Off)
+        // Check available annual balance for selected type (PL/EL / CL / Comp-Off)
         const targetBalance = selectedEmployeeId ? selectedEmpBalance : balance;
         let availableForType = 12;
-        if (applyLeaveType === "pl") {
-            availableForType = targetBalance?.pl_balance ?? 12;
-        } else if (applyLeaveType === "el") {
-            availableForType = targetBalance?.el_balance ?? 12;
+        if (applyLeaveType === "pl_el" || applyLeaveType === "pl" || applyLeaveType === "el") {
+            availableForType = targetBalance?.pl_el_balance ?? targetBalance?.pl_balance ?? 12;
         } else if (applyLeaveType === "cl") {
             availableForType = targetBalance?.cl_balance ?? 12;
         } else if (applyLeaveType === "comp_off") {
@@ -432,7 +440,15 @@ export default function LeavePage() {
         if (durationVal <= 0) {
             errors.days = "Duration must be at least 0.5 days";
         } else if (applyLeaveType !== "lwp" && targetBalance && durationVal > availableForType) {
-            errors.days = `Insufficient ${applyLeaveType.toUpperCase()} balance (${availableForType} days available, ${durationVal} requested)`;
+            const typeLabel = (applyLeaveType === "pl_el" || applyLeaveType === "pl" || applyLeaveType === "el") ? "PL / EL" : applyLeaveType.toUpperCase();
+            errors.days = `Insufficient ${typeLabel} balance (${availableForType} days available, ${durationVal} requested)`;
+        } else if (applyLeaveType !== "lwp" && durationVal > 2) {
+            errors.days = "Monthly limit: Maximum 2 paid leaves are allowed per calendar month.";
+        } else if (applyLeaveType !== "lwp" && targetBalance?.paid_leaves_taken_this_month !== undefined) {
+            const alreadyTaken = targetBalance.paid_leaves_taken_this_month || 0;
+            if (alreadyTaken + durationVal > 2) {
+                errors.days = `Monthly limit exceeded: You have already taken/applied for ${alreadyTaken} paid leave(s) this month. Maximum 2 paid leaves allowed per calendar month.`;
+            }
         }
 
         if (!applyReason || applyReason.trim().length < 5) errors.reason = "Reason must be at least 5 characters";
@@ -712,7 +728,7 @@ export default function LeavePage() {
                             Leave Management
                         </h1>
                         <p className="text-[10px] font-bold text-slate-400 mt-4 uppercase tracking-[0.2em]">
-                            PL (Privilege) • EL (Earned) • CL (Casual) • Absences & Policy Tracking
+                            PL / EL (12d) • CL (Casual: 12d) • 24 Annual Paid Days • Max 2 Leaves/Month
                         </p>
                     </div>
 
@@ -1011,22 +1027,33 @@ export default function LeavePage() {
                                         </div>
                                     )}
 
-                                    {/* Section 2: Real-time Leave Balance Matrix (Req 2.6: 12 PL + 12 EL + 12 CL = 36) */}
+                                    {/* Section 2: Real-time Leave Balance Matrix (12 PL/EL + 12 CL = 24 Total) */}
                                     {(() => {
                                         const targetBalance = selectedEmployeeId ? selectedEmpBalance : balance;
-                                        const plBal = targetBalance?.pl_balance ?? 12;
-                                        const plAlloc = (targetBalance?.pl_allocated ?? 12) + (targetBalance?.pl_carried_forward ?? 0);
-                                        const elBal = targetBalance?.el_balance ?? 12;
-                                        const elAlloc = (targetBalance?.el_allocated ?? 12) + (targetBalance?.el_carried_forward ?? 0);
+                                        const plElBal = targetBalance?.pl_el_balance ?? targetBalance?.pl_balance ?? 12;
+                                        const plElAlloc = (targetBalance?.pl_el_allocated ?? targetBalance?.pl_allocated ?? 12) + (targetBalance?.pl_el_carried_forward ?? targetBalance?.pl_carried_forward ?? 0);
                                         const clBal = targetBalance?.cl_balance ?? 12;
                                         const clAlloc = targetBalance?.cl_allocated ?? 12;
                                         const compBal = targetBalance?.comp_off_balance ?? 0;
+                                        const monthTaken = targetBalance?.paid_leaves_taken_this_month ?? 0;
+                                        const monthRemaining = targetBalance?.paid_leaves_remaining_this_month ?? Math.max(0, 2 - monthTaken);
 
                                         return (
-                                            <div className="space-y-2">
+                                            <div className="space-y-3">
+                                                {/* Monthly Policy Alert */}
+                                                <div className="bg-amber-50/90 border border-amber-200/90 rounded-xl p-3 flex items-start gap-2.5">
+                                                    <Info className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                                                    <div className="text-[11px] text-amber-900 leading-relaxed">
+                                                        <span className="font-bold">Monthly Paid Leave Policy:</span> Maximum <strong>2 paid leaves</strong> per calendar month (PL / EL + CL combined).
+                                                        <span className="block mt-0.5 text-amber-800">
+                                                            This month: <strong>{monthTaken} / 2</strong> paid leaves used (<strong>{monthRemaining}</strong> day(s) remaining).
+                                                        </span>
+                                                    </div>
+                                                </div>
+
                                                 <div className="flex items-center justify-between">
                                                     <Label className="text-xs font-semibold text-slate-700">
-                                                        Available Leave Ledger (Req 2.6)
+                                                        Available Leave Ledger (24 Days / Year)
                                                     </Label>
                                                     <span className="text-[10px] font-medium text-slate-400">
                                                         Click card to select type
@@ -1034,44 +1061,24 @@ export default function LeavePage() {
                                                 </div>
 
                                                 <div className="grid grid-cols-4 gap-2">
-                                                    {/* PL */}
+                                                    {/* PL / EL */}
                                                     <div
-                                                        onClick={() => setApplyLeaveType("pl")}
+                                                        onClick={() => setApplyLeaveType("pl_el")}
                                                         className={cn(
                                                             "p-2.5 rounded-xl border text-left cursor-pointer transition-all",
-                                                            applyLeaveType === "pl"
+                                                            applyLeaveType === "pl_el" || applyLeaveType === "pl" || applyLeaveType === "el"
                                                                 ? "bg-indigo-50/70 border-indigo-400 ring-2 ring-indigo-200"
                                                                 : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50"
                                                         )}
                                                     >
                                                         <div className="flex items-center justify-between mb-1">
-                                                            <span className="text-[10px] font-bold text-indigo-700 uppercase">PL</span>
+                                                            <span className="text-[10px] font-bold text-indigo-700 uppercase">PL / EL</span>
                                                             <span className="text-[9px] text-slate-400">CF OK</span>
                                                         </div>
                                                         <div className="text-base font-bold text-slate-900">
-                                                            {plBal} <span className="text-[10px] font-normal text-slate-400">/ {plAlloc}d</span>
+                                                            {plElBal} <span className="text-[10px] font-normal text-slate-400">/ {plElAlloc}d</span>
                                                         </div>
-                                                        <div className="text-[9px] text-slate-500 truncate mt-0.5">Privilege</div>
-                                                    </div>
-
-                                                    {/* EL */}
-                                                    <div
-                                                        onClick={() => setApplyLeaveType("el")}
-                                                        className={cn(
-                                                            "p-2.5 rounded-xl border text-left cursor-pointer transition-all",
-                                                            applyLeaveType === "el"
-                                                                ? "bg-emerald-50/70 border-emerald-400 ring-2 ring-emerald-200"
-                                                                : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-                                                        )}
-                                                    >
-                                                        <div className="flex items-center justify-between mb-1">
-                                                            <span className="text-[10px] font-bold text-emerald-700 uppercase">EL</span>
-                                                            <span className="text-[9px] text-slate-400">CF OK</span>
-                                                        </div>
-                                                        <div className="text-base font-bold text-slate-900">
-                                                            {elBal} <span className="text-[10px] font-normal text-slate-400">/ {elAlloc}d</span>
-                                                        </div>
-                                                        <div className="text-[9px] text-slate-500 truncate mt-0.5">Earned</div>
+                                                        <div className="text-[9px] text-slate-500 truncate mt-0.5">Privilege / Earned</div>
                                                     </div>
 
                                                     {/* CL */}
@@ -1080,18 +1087,18 @@ export default function LeavePage() {
                                                         className={cn(
                                                             "p-2.5 rounded-xl border text-left cursor-pointer transition-all",
                                                             applyLeaveType === "cl"
-                                                                ? "bg-amber-50/70 border-amber-400 ring-2 ring-amber-200"
+                                                                ? "bg-purple-50/70 border-purple-400 ring-2 ring-purple-200"
                                                                 : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50"
                                                         )}
                                                     >
                                                         <div className="flex items-center justify-between mb-1">
-                                                            <span className="text-[10px] font-bold text-amber-700 uppercase">CL</span>
+                                                            <span className="text-[10px] font-bold text-purple-700 uppercase">CL</span>
                                                             <span className="text-[9px] text-slate-400">Lapses</span>
                                                         </div>
                                                         <div className="text-base font-bold text-slate-900">
                                                             {clBal} <span className="text-[10px] font-normal text-slate-400">/ {clAlloc}d</span>
                                                         </div>
-                                                        <div className="text-[9px] text-slate-500 truncate mt-0.5">Casual</div>
+                                                        <div className="text-[9px] text-slate-500 truncate mt-0.5">Casual Leave</div>
                                                     </div>
 
                                                     {/* Comp-Off */}
@@ -1100,18 +1107,38 @@ export default function LeavePage() {
                                                         className={cn(
                                                             "p-2.5 rounded-xl border text-left cursor-pointer transition-all",
                                                             applyLeaveType === "comp_off"
-                                                                ? "bg-purple-50/70 border-purple-400 ring-2 ring-purple-200"
+                                                                ? "bg-amber-50/70 border-amber-400 ring-2 ring-amber-200"
                                                                 : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50"
                                                         )}
                                                     >
                                                         <div className="flex items-center justify-between mb-1">
-                                                            <span className="text-[10px] font-bold text-purple-700 uppercase">Comp</span>
+                                                            <span className="text-[10px] font-bold text-amber-700 uppercase">Comp</span>
                                                             <span className="text-[9px] text-slate-400">Duty</span>
                                                         </div>
                                                         <div className="text-base font-bold text-slate-900">
                                                             {compBal} <span className="text-[10px] font-normal text-slate-400">days</span>
                                                         </div>
                                                         <div className="text-[9px] text-slate-500 truncate mt-0.5">Comp-Off</div>
+                                                    </div>
+
+                                                    {/* LWP */}
+                                                    <div
+                                                        onClick={() => setApplyLeaveType("lwp")}
+                                                        className={cn(
+                                                            "p-2.5 rounded-xl border text-left cursor-pointer transition-all",
+                                                            applyLeaveType === "lwp"
+                                                                ? "bg-rose-50/70 border-rose-400 ring-2 ring-rose-200"
+                                                                : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                                                        )}
+                                                    >
+                                                        <div className="flex items-center justify-between mb-1">
+                                                            <span className="text-[10px] font-bold text-rose-700 uppercase">LWP</span>
+                                                            <span className="text-[9px] text-slate-400">Unpaid</span>
+                                                        </div>
+                                                        <div className="text-base font-bold text-slate-900">
+                                                            Unpaid <span className="text-[10px] font-normal text-slate-400">Loss</span>
+                                                        </div>
+                                                        <div className="text-[9px] text-slate-500 truncate mt-0.5">Leave Without Pay</div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1133,8 +1160,7 @@ export default function LeavePage() {
                                                         backgroundRepeat: "no-repeat"
                                                     }}
                                                 >
-                                                    <option value="pl">PL — Privilege Leave (12d/yr, Carryover)</option>
-                                                    <option value="el">EL — Earned Leave (12d/yr, Carryover)</option>
+                                                    <option value="pl_el">PL / EL — Privilege / Earned Leave (12d/yr, Carryover)</option>
                                                     <option value="cl">CL — Casual Leave (12d/yr, Lapses)</option>
                                                     <option value="comp_off">Comp-Off — Compensatory Off</option>
                                                     <option value="lwp">LWP — Leave Without Pay (Unpaid)</option>
@@ -1383,9 +1409,9 @@ export default function LeavePage() {
                     </div>
                 </div>
 
-                {/* Annual Leave Structure Cards (Req 2.6: 12 PL + 12 EL + 12 CL = 36 Total) */}
+                {/* Annual Leave Structure Cards (12 PL/EL + 12 CL = 24 Total, Max 2 Paid Leaves/Month) */}
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 px-2">
-                    {/* Privilege Leave (PL) */}
+                    {/* Privilege / Earned Leave (PL / EL) */}
                     <Card className="bg-[#EEF2FF] border-none rounded-2xl p-5 shadow-sm flex flex-col justify-between h-36 group hover:shadow-md transition-all">
                         <div className="flex items-center justify-between">
                             <div className="h-8 w-8 bg-white/70 rounded-lg flex items-center justify-center">
@@ -1395,31 +1421,13 @@ export default function LeavePage() {
                         </div>
                         <div>
                             <div className="flex items-center justify-between">
-                                <p className="text-[8px] font-black text-indigo-500 uppercase tracking-widest mb-0.5">Privilege (PL)</p>
-                                <span className="text-[8px] font-bold text-indigo-700">+{balance?.pl_carried_forward ?? 0} CF</span>
+                                <p className="text-[8px] font-black text-indigo-500 uppercase tracking-widest mb-0.5">PL / EL</p>
+                                <span className="text-[8px] font-bold text-indigo-700">+{balance?.pl_el_carried_forward ?? balance?.pl_carried_forward ?? 0} CF</span>
                             </div>
                             <h3 className="text-xl font-black text-indigo-950 italic tracking-tighter">
-                                {balance?.pl_balance ?? 12} <span className="text-[9px] uppercase font-bold text-indigo-400 not-italic ml-1">/ {balance?.pl_allocated ?? 12} d</span>
+                                {balance?.pl_el_balance ?? balance?.pl_balance ?? 12} <span className="text-[9px] uppercase font-bold text-indigo-400 not-italic ml-1">/ {balance?.pl_el_allocated ?? 12} d</span>
                             </h3>
-                        </div>
-                    </Card>
-
-                    {/* Earned Leave (EL) */}
-                    <Card className="bg-[#DCFCE7] border-none rounded-2xl p-5 shadow-sm flex flex-col justify-between h-36 group hover:shadow-md transition-all">
-                        <div className="flex items-center justify-between">
-                            <div className="h-8 w-8 bg-white/70 rounded-lg flex items-center justify-center">
-                                <Plane className="h-4 w-4 text-emerald-600" />
-                            </div>
-                            <Badge className="bg-emerald-600 text-white border-none font-black text-[7px] uppercase tracking-widest px-2 h-5 rounded-md">CF Allowed</Badge>
-                        </div>
-                        <div>
-                            <div className="flex items-center justify-between">
-                                <p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest mb-0.5">Earned (EL)</p>
-                                <span className="text-[8px] font-bold text-emerald-700">+{balance?.el_carried_forward ?? 0} CF</span>
-                            </div>
-                            <h3 className="text-xl font-black text-emerald-950 italic tracking-tighter">
-                                {balance?.el_balance ?? 12} <span className="text-[9px] uppercase font-bold text-emerald-500 not-italic ml-1">/ {balance?.el_allocated ?? 12} d</span>
-                            </h3>
+                            <p className="text-[7px] font-bold text-indigo-500 uppercase tracking-wider mt-0.5">Privilege / Earned</p>
                         </div>
                     </Card>
 
@@ -1439,10 +1447,31 @@ export default function LeavePage() {
                             <h3 className="text-xl font-black text-purple-950 italic tracking-tighter">
                                 {balance?.cl_balance ?? 12} <span className="text-[9px] uppercase font-bold text-purple-400 not-italic ml-1">/ {balance?.cl_allocated ?? 12} d</span>
                             </h3>
+                            <p className="text-[7px] font-bold text-purple-500 uppercase tracking-wider mt-0.5">Annual Quota</p>
                         </div>
                     </Card>
 
-                    {/* Total Annual Entitlement */}
+                    {/* Monthly Limit (Max 2 Paid Leaves / Month) */}
+                    <Card className="bg-[#DCFCE7] border-none rounded-2xl p-5 shadow-sm flex flex-col justify-between h-36 group hover:shadow-md transition-all">
+                        <div className="flex items-center justify-between">
+                            <div className="h-8 w-8 bg-white/70 rounded-lg flex items-center justify-center">
+                                <CalendarCheck className="h-4 w-4 text-emerald-600" />
+                            </div>
+                            <Badge className="bg-emerald-600 text-white border-none font-black text-[7px] uppercase tracking-widest px-2 h-5 rounded-md">Max 2 / Mo</Badge>
+                        </div>
+                        <div>
+                            <div className="flex items-center justify-between">
+                                <p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest mb-0.5">Monthly Limit</p>
+                                <span className="text-[8px] font-bold text-emerald-700">{balance?.paid_leaves_remaining_this_month ?? 2} left</span>
+                            </div>
+                            <h3 className="text-xl font-black text-emerald-950 italic tracking-tighter">
+                                {balance?.paid_leaves_taken_this_month ?? 0} <span className="text-[9px] uppercase font-bold text-emerald-500 not-italic ml-1">/ 2 Days</span>
+                            </h3>
+                            <p className="text-[7px] font-bold text-emerald-600 uppercase tracking-wider mt-0.5">Current Month Used</p>
+                        </div>
+                    </Card>
+
+                    {/* Total Annual Entitlement (24 Days = 12 PL/EL + 12 CL) */}
                     <Card className="bg-[#FEF3C7] border-none rounded-2xl p-5 shadow-sm flex flex-col justify-between h-36 group hover:shadow-md transition-all">
                         <div className="flex items-center justify-between">
                             <div className="h-8 w-8 bg-white/70 rounded-lg flex items-center justify-center">
@@ -1453,9 +1482,9 @@ export default function LeavePage() {
                         <div>
                             <p className="text-[8px] font-black text-amber-600 uppercase tracking-widest mb-0.5">Paid Entitlement</p>
                             <h3 className="text-xl font-black text-amber-950 italic tracking-tighter">
-                                {balance?.total_paid_entitlement ?? balance?.total_annual_entitlement ?? 36} <span className="text-[9px] uppercase font-bold text-amber-600 not-italic ml-1">Days</span>
+                                {balance?.total_paid_entitlement ?? balance?.total_annual_entitlement ?? 24} <span className="text-[9px] uppercase font-bold text-amber-600 not-italic ml-1">Days</span>
                             </h3>
-                            <p className="text-[7px] font-bold text-amber-700 uppercase tracking-wider mt-0.5">12 PL + 12 EL + 12 CL</p>
+                            <p className="text-[7px] font-bold text-amber-700 uppercase tracking-wider mt-0.5">12 PL/EL + 12 CL = 24d</p>
                         </div>
                     </Card>
 
@@ -1487,20 +1516,20 @@ export default function LeavePage() {
                         <div>
                             <p className="text-[8px] font-black text-sky-600 uppercase tracking-widest mb-0.5">Remaining Balance</p>
                             <h3 className="text-xl font-black text-sky-950 italic tracking-tighter">
-                                {balance?.total_remaining_balance ?? balance?.available ?? 36} <span className="text-[9px] uppercase font-bold text-sky-500 not-italic ml-1">Days</span>
+                                {balance?.total_remaining_balance ?? balance?.available ?? 24} <span className="text-[9px] uppercase font-bold text-sky-500 not-italic ml-1">Days</span>
                             </h3>
-                            <p className="text-[7px] font-bold text-sky-700 uppercase tracking-wider mt-0.5">PL + EL + CL + Comp</p>
+                            <p className="text-[7px] font-bold text-sky-600 uppercase tracking-wider mt-0.5">PL/EL + CL + Comp-Off</p>
                         </div>
                     </Card>
                 </div>
 
-                {/* Enterprise Leave Policy Notice (Req 2.6) */}
+                {/* Enterprise Leave Policy Notice */}
                 <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100 mx-2">
                     <Info className="h-4 w-4 text-indigo-500 mt-0.5 shrink-0" />
                     <div className="space-y-1">
-                        <p className="text-[10px] font-black text-slate-800 uppercase tracking-wide">Enterprise Annual Leave Policy (Req 2.6)</p>
+                        <p className="text-[10px] font-black text-slate-800 uppercase tracking-wide">Enterprise Annual Leave Policy</p>
                         <p className="text-[9px] font-bold text-slate-500 uppercase leading-relaxed">
-                            36 Total Annual Paid Leave Days • 12 Privilege Leaves (PL - Carry-forward permitted) • 12 Earned Leaves (EL - Carry-forward permitted) • 12 Casual Leaves (CL - Lapses annually at year-end) • Half-day (0.5 d) and Leave Without Pay (LWP) are tracked separately.
+                            24 Total Annual Paid Leave Days • 12 PL / EL (Privilege / Earned Leave - Carry-forward permitted) • 12 Casual Leaves (CL - Lapses annually at year-end) • Monthly Limit: Max 2 Paid Leaves per Calendar Month • Half-day (0.5 d) and Leave Without Pay (LWP) are tracked separately.
                         </p>
                     </div>
                 </div>
@@ -1594,9 +1623,8 @@ export default function LeavePage() {
                                             <th className="text-left py-4 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Employee ID</th>
                                             <th className="text-left py-4 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Employee & Dept</th>
                                             <th className="text-center py-4 px-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Paid Entitlement</th>
-                                            <th className="text-center py-4 px-3 text-[9px] font-black text-indigo-600 uppercase tracking-widest">PL Balance</th>
-                                            <th className="text-center py-4 px-3 text-[9px] font-black text-emerald-600 uppercase tracking-widest">EL Balance</th>
-                                            <th className="text-center py-4 px-3 text-[9px] font-black text-purple-600 uppercase tracking-widest">CL Balance</th>
+                                            <th className="text-center py-4 px-3 text-[9px] font-black text-indigo-600 uppercase tracking-widest">PL / EL Balance (12)</th>
+                                            <th className="text-center py-4 px-3 text-[9px] font-black text-purple-600 uppercase tracking-widest">CL Balance (12)</th>
                                             <th className="text-center py-4 px-3 text-[9px] font-black text-rose-600 uppercase tracking-widest">Total Taken</th>
                                             <th className="text-center py-4 px-3 text-[9px] font-black text-sky-600 uppercase tracking-widest">Remaining</th>
                                             {staffSelectedMonth !== "all" && (
@@ -1611,7 +1639,7 @@ export default function LeavePage() {
                                     <TableBody>
                                         {staffSummaryLoading ? (
                                             <tr>
-                                                <td colSpan={11} className="py-20 text-center">
+                                                <td colSpan={10} className="py-20 text-center">
                                                     <Loader2 className="h-8 w-8 text-indigo-500 animate-spin mx-auto mb-3" />
                                                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Loading employee leave records...</p>
                                                 </td>
@@ -1644,23 +1672,13 @@ export default function LeavePage() {
                                                     </span>
                                                 </td>
 
-                                                {/* PL Balance */}
+                                                {/* PL / EL Balance */}
                                                 <td className="py-4 px-3 text-center">
                                                     <div className="inline-flex flex-col items-center">
                                                         <span className="font-black text-xs text-indigo-700">
-                                                            {emp.pl_balance}
+                                                            {emp.pl_el_balance ?? emp.pl_balance}
                                                         </span>
-                                                        <span className="text-[7px] font-bold text-slate-400">/ {emp.pl_allocated} d</span>
-                                                    </div>
-                                                </td>
-
-                                                {/* EL Balance */}
-                                                <td className="py-4 px-3 text-center">
-                                                    <div className="inline-flex flex-col items-center">
-                                                        <span className="font-black text-xs text-emerald-700">
-                                                            {emp.el_balance}
-                                                        </span>
-                                                        <span className="text-[7px] font-bold text-slate-400">/ {emp.el_allocated} d</span>
+                                                        <span className="text-[7px] font-bold text-slate-400">/ {emp.pl_el_allocated ?? 12} d</span>
                                                     </div>
                                                 </td>
 
@@ -1842,13 +1860,9 @@ export default function LeavePage() {
                                                 </td>
                                                 <td className="py-5 px-4">
                                                     <div className="flex flex-col gap-1.5">
-                                                        {row.type === 'PL' ? (
+                                                        {row.type === 'PL' || row.type === 'EL' || row.type === 'PL_EL' || row.type === 'PL / EL' ? (
                                                             <span className="w-fit text-[9px] font-black text-indigo-700 uppercase tracking-tight italic bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-200 shadow-xs">
-                                                                PL (Privilege)
-                                                            </span>
-                                                        ) : row.type === 'EL' ? (
-                                                            <span className="w-fit text-[9px] font-black text-emerald-700 uppercase tracking-tight italic bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200 shadow-xs">
-                                                                EL (Earned)
+                                                                PL / EL
                                                             </span>
                                                         ) : row.type === 'CL' ? (
                                                             <span className="w-fit text-[9px] font-black text-purple-700 uppercase tracking-tight italic bg-purple-50 px-2.5 py-1 rounded-md border border-purple-200 shadow-xs">
@@ -1988,7 +2002,7 @@ export default function LeavePage() {
                                 </div>
                             </div>
                             <Badge variant="outline" className="text-[11px] font-semibold text-slate-600 bg-slate-50 border-slate-200 px-2.5 py-1">
-                                36d Standard
+                                24d Standard • Max 2/mo
                             </Badge>
                         </div>
 
@@ -1999,11 +2013,24 @@ export default function LeavePage() {
                             </div>
                         ) : (
                             <div className="p-6 space-y-4 overflow-y-auto flex-1">
-                                {/* PL Section */}
+                                {/* Monthly Paid Limit Section */}
+                                <div className="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs font-semibold text-emerald-950 flex items-center gap-1.5">
+                                            <CalendarCheck className="h-4 w-4 text-emerald-600" /> Monthly Paid Leave Limit
+                                        </span>
+                                        <Badge className="bg-emerald-600 text-white font-bold text-[9px]">Max 2 Leaves / Month</Badge>
+                                    </div>
+                                    <p className="text-[11px] text-emerald-800">
+                                        Strict restriction: Any employee can take a maximum of <strong>2 paid leaves</strong> per calendar month (PL / EL + CL combined).
+                                    </p>
+                                </div>
+
+                                {/* PL / EL Section */}
                                 <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
                                     <div className="flex items-center justify-between">
                                         <span className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
-                                            <Award className="h-4 w-4 text-indigo-600" /> Privilege Leave (PL)
+                                            <Award className="h-4 w-4 text-indigo-600" /> Privilege / Earned Leave (PL / EL)
                                         </span>
                                         <Badge variant="outline" className="text-[10px] bg-indigo-50 text-indigo-700 border-indigo-200 font-medium">Carry-Forward Enabled</Badge>
                                     </div>
@@ -2032,46 +2059,6 @@ export default function LeavePage() {
                                                 onChange={(e) => setPolicyConfig({
                                                     ...policyConfig,
                                                     pl: { ...policyConfig.pl, max_carry_forward: Number(e.target.value) }
-                                                })}
-                                                className="h-10 rounded-lg bg-white border border-slate-200 text-xs font-bold"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* EL Section */}
-                                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
-                                            <Plane className="h-4 w-4 text-emerald-600" /> Earned Leave (EL)
-                                        </span>
-                                        <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 font-medium">Carry-Forward Enabled</Badge>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-3 text-xs">
-                                        <div className="space-y-1">
-                                            <Label className="text-[11px] font-medium text-slate-600">Annual Quota (Days)</Label>
-                                            <Input
-                                                type="number"
-                                                min={0}
-                                                max={30}
-                                                value={policyConfig.el?.entitlement ?? 12}
-                                                onChange={(e) => setPolicyConfig({
-                                                    ...policyConfig,
-                                                    el: { ...policyConfig.el, entitlement: Number(e.target.value) }
-                                                })}
-                                                className="h-10 rounded-lg bg-white border border-slate-200 text-xs font-bold"
-                                            />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <Label className="text-[11px] font-medium text-slate-600">Max Carry-Forward Cap (Days)</Label>
-                                            <Input
-                                                type="number"
-                                                min={0}
-                                                max={60}
-                                                value={policyConfig.el?.max_carry_forward ?? 30}
-                                                onChange={(e) => setPolicyConfig({
-                                                    ...policyConfig,
-                                                    el: { ...policyConfig.el, max_carry_forward: Number(e.target.value) }
                                                 })}
                                                 className="h-10 rounded-lg bg-white border border-slate-200 text-xs font-bold"
                                             />
@@ -2118,7 +2105,7 @@ export default function LeavePage() {
                                             Year-End Rollover & Lapse Tool
                                         </span>
                                         <span className="text-[11px] text-slate-500 block">
-                                            Carry forward PL & EL up to policy cap and lapse CL balances
+                                            Carry forward PL / EL up to policy cap and lapse CL balances
                                         </span>
                                     </div>
                                     <Button
@@ -2197,7 +2184,7 @@ export default function LeavePage() {
                                     </div>
                                 </div>
                                 <Badge variant="outline" className="text-xs font-semibold bg-white border-slate-200 text-slate-700">
-                                    36d Annual Entitlement
+                                    24d Annual Entitlement • Max 2/mo
                                 </Badge>
                             </div>
 
@@ -2208,13 +2195,13 @@ export default function LeavePage() {
                                 </div>
                             ) : (
                                 <div className="space-y-6">
-                                    {/* ── CARD 1: Annual Leave Balances & Entitlements (Req 2.6) ── */}
+                                    {/* ── CARD 1: Annual Leave Balances & Entitlements (24 Days Total) ── */}
                                     <div className="p-5 rounded-2xl bg-gradient-to-br from-indigo-50/80 via-white to-slate-50 border border-indigo-100/80 shadow-xs space-y-4">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2">
                                                 <Sparkles className="h-4 w-4 text-indigo-600" />
                                                 <span className="text-[10px] font-black uppercase tracking-wider text-slate-900">
-                                                    Paid Leave Entitlement & Balance Quotas (Req 2.6)
+                                                    Paid Leave Entitlement & Balance Quotas (12 PL/EL + 12 CL = 24d)
                                                 </span>
                                             </div>
                                             <Badge className="bg-indigo-600 text-white font-black text-[8px] uppercase px-2 h-5 rounded-md">
@@ -2223,27 +2210,15 @@ export default function LeavePage() {
                                         </div>
 
                                         <div className="grid grid-cols-4 gap-2">
-                                            {/* Privilege Leave */}
+                                            {/* PL / EL */}
                                             <div className="p-3 rounded-xl bg-white border border-slate-200/80 space-y-1">
-                                                <span className="text-[8px] font-bold text-indigo-600 uppercase tracking-wider block">Privilege (PL)</span>
+                                                <span className="text-[8px] font-bold text-indigo-600 uppercase tracking-wider block">PL / EL</span>
                                                 <div className="text-base font-black text-slate-900">
-                                                    {historyBalance?.pl_balance ?? 12}
-                                                    <span className="text-[8px] font-bold text-slate-400 not-italic ml-1">/ {historyBalance?.pl_allocated ?? 12}</span>
+                                                    {historyBalance?.pl_el_balance ?? historyBalance?.pl_balance ?? 12}
+                                                    <span className="text-[8px] font-bold text-slate-400 not-italic ml-1">/ {historyBalance?.pl_el_allocated ?? 12}</span>
                                                 </div>
                                                 <span className="text-[7px] font-bold text-indigo-600 uppercase tracking-tight block">
-                                                    +{historyBalance?.pl_carried_forward ?? 0} CF
-                                                </span>
-                                            </div>
-
-                                            {/* Earned Leave */}
-                                            <div className="p-3 rounded-xl bg-white border border-slate-200/80 space-y-1">
-                                                <span className="text-[8px] font-bold text-emerald-600 uppercase tracking-wider block">Earned (EL)</span>
-                                                <div className="text-base font-black text-slate-900">
-                                                    {historyBalance?.el_balance ?? 12}
-                                                    <span className="text-[8px] font-bold text-slate-400 not-italic ml-1">/ {historyBalance?.el_allocated ?? 12}</span>
-                                                </div>
-                                                <span className="text-[7px] font-bold text-emerald-600 uppercase tracking-tight block">
-                                                    +{historyBalance?.el_carried_forward ?? 0} CF
+                                                    +{historyBalance?.pl_el_carried_forward ?? historyBalance?.pl_carried_forward ?? 0} CF
                                                 </span>
                                             </div>
 
@@ -2257,15 +2232,24 @@ export default function LeavePage() {
                                                 <span className="text-[7px] font-bold text-purple-600 uppercase tracking-tight block">Lapses Annually</span>
                                             </div>
 
+                                            {/* Monthly Limit */}
+                                            <div className="p-3 rounded-xl bg-white border border-slate-200/80 space-y-1">
+                                                <span className="text-[8px] font-bold text-emerald-600 uppercase tracking-wider block">Monthly Limit</span>
+                                                <div className="text-base font-black text-slate-900">
+                                                    Max 2 <span className="text-[8px] font-bold text-slate-400 not-italic">/ month</span>
+                                                </div>
+                                                <span className="text-[7px] font-bold text-emerald-600 uppercase tracking-tight block">Paid Leave Quota</span>
+                                            </div>
+
                                             {/* Total Available Balance */}
                                             <div className="p-3 rounded-xl bg-indigo-600 text-white space-y-1 shadow-sm">
                                                 <span className="text-[8px] font-black uppercase tracking-wider text-indigo-200 block">Remaining</span>
                                                 <div className="text-base font-black">
-                                                    {historyBalance?.total_remaining_balance ?? historyBalance?.available ?? 36}
+                                                    {historyBalance?.total_remaining_balance ?? historyBalance?.available ?? 24}
                                                     <span className="text-[8px] font-bold text-indigo-200 ml-1">Days</span>
                                                 </div>
                                                 <span className="text-[7px] font-black uppercase text-indigo-200 tracking-tight block">
-                                                    Of {historyBalance?.total_paid_entitlement ?? 36} d
+                                                    Of {historyBalance?.total_paid_entitlement ?? 24} d
                                                 </span>
                                             </div>
                                         </div>
@@ -2458,13 +2442,9 @@ export default function LeavePage() {
                                                             {/* Top badges */}
                                                             <div className="flex items-center justify-between">
                                                                 <div className="flex items-center gap-2">
-                                                                    {leaveType === "PL" ? (
+                                                                    {leaveType === "PL" || leaveType === "EL" || leaveType === "PL_EL" || leaveType === "PL / EL" ? (
                                                                         <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 font-black text-[8px] uppercase">
-                                                                            PL (Privilege Leave)
-                                                                        </Badge>
-                                                                    ) : leaveType === "EL" ? (
-                                                                        <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 font-black text-[8px] uppercase">
-                                                                            EL (Earned Leave)
+                                                                            PL / EL (Privilege / Earned)
                                                                         </Badge>
                                                                     ) : leaveType === "CL" ? (
                                                                         <Badge className="bg-purple-50 text-purple-700 border-purple-200 font-black text-[8px] uppercase">
@@ -2697,20 +2677,20 @@ export default function LeavePage() {
                                     </div>
                                     <div className="grid grid-cols-4 gap-2 text-center">
                                         <div className="p-2 rounded-xl bg-white border border-indigo-100">
-                                            <span className="text-[7px] font-bold text-slate-400 uppercase block">PL</span>
-                                            <span className="text-xs font-black text-indigo-950">{auditEmpPreviewBalance.pl_balance ?? 12} d</span>
-                                        </div>
-                                        <div className="p-2 rounded-xl bg-white border border-indigo-100">
-                                            <span className="text-[7px] font-bold text-slate-400 uppercase block">EL</span>
-                                            <span className="text-xs font-black text-emerald-950">{auditEmpPreviewBalance.el_balance ?? 12} d</span>
+                                            <span className="text-[7px] font-bold text-slate-400 uppercase block">PL / EL</span>
+                                            <span className="text-xs font-black text-indigo-950">{auditEmpPreviewBalance.pl_el_balance ?? auditEmpPreviewBalance.pl_balance ?? 12} d</span>
                                         </div>
                                         <div className="p-2 rounded-xl bg-white border border-indigo-100">
                                             <span className="text-[7px] font-bold text-slate-400 uppercase block">CL</span>
                                             <span className="text-xs font-black text-purple-950">{auditEmpPreviewBalance.cl_balance ?? 12} d</span>
                                         </div>
+                                        <div className="p-2 rounded-xl bg-white border border-indigo-100">
+                                            <span className="text-[7px] font-bold text-slate-400 uppercase block">Monthly</span>
+                                            <span className="text-xs font-black text-emerald-950">Max 2 d</span>
+                                        </div>
                                         <div className="p-2 rounded-xl bg-indigo-600 text-white">
                                             <span className="text-[7px] font-bold text-indigo-200 uppercase block">Remaining</span>
-                                            <span className="text-xs font-black">{auditEmpPreviewBalance.total_remaining_balance ?? 36} d</span>
+                                            <span className="text-xs font-black">{auditEmpPreviewBalance.total_remaining_balance ?? 24} d</span>
                                         </div>
                                     </div>
                                 </div>
