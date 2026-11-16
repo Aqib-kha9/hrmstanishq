@@ -104,6 +104,7 @@ export default function AttendancePage() {
     const [selectedDepartment, setSelectedDepartment] = useState("");
     const [allEmployees, setAllEmployees] = useState<any[]>([]);
     const [manualInputMode, setManualInputMode] = useState<"dropdown" | "custom">("dropdown");
+    const [tourInputMode, setTourInputMode] = useState<"dropdown" | "custom">("dropdown");
     const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Fetch companies, offices, departments, late threshold and active employees for selector (Req 5.3)
@@ -2889,29 +2890,29 @@ export default function AttendancePage() {
 
             {/* Late Attendance Policy & Threshold Dialog (Req 5.3) */}
             <Dialog open={isLateThresholdOpen} onOpenChange={setIsLateThresholdOpen}>
-                <DialogContent className="sm:max-w-[460px] rounded-[2rem] p-0 overflow-hidden bg-white border-none shadow-2xl">
-                    <div className="bg-amber-500 p-8 text-center relative">
+                <DialogContent className="sm:max-w-[480px] max-h-[90vh] flex flex-col rounded-2xl p-0 overflow-hidden bg-white border border-slate-200 shadow-2xl">
+                    <div className="bg-slate-900 px-6 py-5 text-center relative shrink-0">
                         <div className="relative z-10 flex flex-col items-center">
-                            <div className="h-14 w-14 bg-white/20 rounded-2xl flex items-center justify-center mb-3">
-                                <Clock className="h-7 w-7 text-white" />
+                            <div className="h-11 w-11 bg-white/10 rounded-2xl flex items-center justify-center mb-2">
+                                <Clock className="h-6 w-6 text-amber-400" />
                             </div>
-                            <DialogTitle className="text-2xl font-black italic uppercase tracking-tighter text-white">Late Attendance Rule</DialogTitle>
-                            <DialogDescription className="text-[10px] font-bold text-amber-100 uppercase tracking-widest mt-1">
+                            <DialogTitle className="text-xl font-bold text-white tracking-tight">Late Attendance Grace Rule</DialogTitle>
+                            <DialogDescription className="text-xs text-slate-400 mt-1">
                                 Configurable Grace Period Threshold (Req 5.3)
                             </DialogDescription>
                         </div>
                     </div>
 
-                    <div className="p-8 space-y-5">
-                        <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/60 text-[10px] text-amber-950 leading-relaxed">
+                    <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                        <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200/60 text-xs text-amber-950 leading-relaxed">
                             <p className="font-bold">Threshold Calculation Logic:</p>
-                            <p className="text-slate-600 text-[10px] mt-0.5">
-                                Employees punching in up to <strong>{tempLateThreshold} minutes</strong> ({Math.round((tempLateThreshold / 60) * 10) / 10} hours) after their shift start time are treated within grace. Any punch beyond this threshold is automatically categorized as <strong>Late</strong>.
+                            <p className="text-slate-600 text-xs mt-0.5">
+                                Employees punching in up to <strong>{tempLateThreshold} minutes</strong> ({Math.round((tempLateThreshold / 60) * 10) / 10} hrs) after their shift start time are treated within grace. Any punch beyond this threshold is automatically categorized as <strong>Late</strong>.
                             </p>
                         </div>
 
                         <div className="space-y-2">
-                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Select Standard Grace Buffer</Label>
+                            <Label className="text-xs font-bold text-slate-700">Select Standard Grace Buffer</Label>
                             <div className="grid grid-cols-3 gap-2">
                                 {[15, 30, 45, 60, 90, 120].map((mins) => (
                                     <Button
@@ -2920,10 +2921,10 @@ export default function AttendancePage() {
                                         variant="outline"
                                         onClick={() => setTempLateThreshold(mins)}
                                         className={cn(
-                                            "h-11 rounded-xl font-black text-xs transition-all",
+                                            "h-10 rounded-xl font-bold text-xs transition-all cursor-pointer",
                                             tempLateThreshold === mins
-                                                ? "bg-slate-900 text-white border-slate-900 shadow-sm"
-                                                : "bg-slate-50 border-slate-100 text-slate-700 hover:bg-slate-100"
+                                                ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                                                : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
                                         )}
                                     >
                                         {mins} mins {mins === 60 ? "(1 hr)" : mins === 120 ? "(2 hrs)" : ""}
@@ -2933,29 +2934,35 @@ export default function AttendancePage() {
                         </div>
 
                         <div className="space-y-1.5">
-                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Custom Threshold (Minutes)</Label>
+                            <Label className="text-xs font-bold text-slate-700">Custom Threshold (Minutes)</Label>
                             <Input
                                 type="number"
                                 min={0}
                                 max={360}
                                 value={tempLateThreshold}
                                 onChange={(e) => setTempLateThreshold(Math.max(0, parseInt(e.target.value) || 0))}
-                                className="h-11 rounded-xl bg-slate-50 border-none font-bold text-xs"
+                                className="h-10 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs"
                             />
-                            <p className="text-[8px] font-bold text-slate-400 ml-1">Company standard: 60 minutes (1 hour) grace window</p>
+                            <p className="text-[10px] font-semibold text-slate-400">Company standard: 60 minutes (1 hour) grace window</p>
                         </div>
                     </div>
 
-                    <div className="p-6 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">
-                            Current: {lateThresholdMinutes} mins
+                    <div className="p-4 px-6 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
+                        <span className="text-xs font-semibold text-slate-500">
+                            Current active: <strong className="text-slate-800">{lateThresholdMinutes} mins</strong>
                         </span>
-                        <div className="flex gap-3">
-                            <Button variant="ghost" onClick={() => setIsLateThresholdOpen(false)} className="text-[9px] font-black uppercase tracking-widest text-slate-500 rounded-xl hover:bg-slate-200">Cancel</Button>
+                        <div className="flex gap-2.5">
+                            <Button
+                                variant="ghost"
+                                onClick={() => setIsLateThresholdOpen(false)}
+                                className="text-xs font-semibold text-slate-600 rounded-xl hover:bg-slate-200 h-10 px-4 cursor-pointer"
+                            >
+                                Cancel
+                            </Button>
                             <Button
                                 onClick={() => handleUpdateLateThreshold(tempLateThreshold)}
                                 disabled={lateThresholdSaving}
-                                className="bg-slate-900 hover:bg-black text-[#D9F99D] font-black uppercase text-[9px] tracking-widest rounded-xl px-6 shadow-md transition-all disabled:opacity-50"
+                                className="bg-slate-900 hover:bg-black text-white font-bold text-xs rounded-xl px-5 h-10 shadow-xs transition-all disabled:opacity-50 cursor-pointer"
                             >
                                 {lateThresholdSaving ? "Saving..." : "Save Late Rule"}
                             </Button>
@@ -2966,110 +2973,168 @@ export default function AttendancePage() {
 
             {/* Mark Tour Dialog */}
             <Dialog open={isTourOpen} onOpenChange={setIsTourOpen}>
-                <DialogContent className="sm:max-w-[480px] rounded-[2rem] p-0 overflow-hidden bg-white border-none shadow-2xl">
-                    <div className="bg-slate-900 p-8 text-center relative overflow-hidden">
-                        <div className="absolute top-0 right-0 p-6 opacity-10">
-                            <Plane className="h-24 w-24 text-white" />
-                        </div>
+                <DialogContent className="sm:max-w-[540px] max-h-[90vh] flex flex-col rounded-2xl p-0 overflow-hidden bg-white border border-slate-200 shadow-2xl">
+                    <div className="bg-slate-900 px-6 py-5 text-center relative shrink-0">
                         <div className="relative z-10 flex flex-col items-center">
-                            <div className="h-14 w-14 bg-white/10 rounded-2xl flex items-center justify-center mb-4">
-                                <Plane className="h-7 w-7 text-violet-300" />
+                            <div className="h-11 w-11 bg-white/10 rounded-2xl flex items-center justify-center mb-2">
+                                <Plane className="h-6 w-6 text-sky-400" />
                             </div>
-                            <DialogTitle className="text-2xl font-black italic uppercase tracking-tighter text-white">Mark Tour</DialogTitle>
-                            <DialogDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">
-                                Auto-mark attendance as Tour for date range
+                            <DialogTitle className="text-xl font-bold text-white tracking-tight">Mark Official Tour</DialogTitle>
+                            <DialogDescription className="text-xs text-slate-400 mt-1">
+                                Auto-mark attendance as Tour for specified date range (Req 5.1 & 5.2)
                             </DialogDescription>
                         </div>
                     </div>
 
-                    <div className="p-8 space-y-5 max-h-[55vh] overflow-y-auto">
-                        <div className="space-y-2">
-                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Employee ID</Label>
-                            <Input
-                                placeholder="e.g. EMP005"
-                                value={tourEmpId}
-                                onChange={(e) => setTourEmpId(e.target.value)}
-                                className="h-12 rounded-xl bg-slate-50 border-none font-bold text-xs uppercase"
-                            />
+                    <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                        <div className="p-3 rounded-xl bg-sky-50/80 border border-sky-200/60 text-xs text-sky-950">
+                            <p className="font-bold">Official Tour / Outdoor Duty (Req 5.1 & 5.2):</p>
+                            <p className="text-slate-600 text-[11px] mt-0.5">
+                                Attendance within this date range will be recorded as Tour, bypassing office geofence checks and counted as 100% Payable Working Days.
+                            </p>
                         </div>
-                        <div className="space-y-2">
-                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Tour Title</Label>
+
+                        {/* Employee Selector */}
+                        <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-xs font-bold text-slate-700">Select Employee *</Label>
+                                <button
+                                    type="button"
+                                    onClick={() => setTourInputMode(m => m === "dropdown" ? "custom" : "dropdown")}
+                                    className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
+                                >
+                                    {tourInputMode === "dropdown" ? "Type ID manually" : "Select from list"}
+                                </button>
+                            </div>
+                            {tourInputMode === "dropdown" && allEmployees.length > 0 ? (
+                                <select
+                                    value={tourEmpId}
+                                    onChange={(e) => setTourEmpId(e.target.value)}
+                                    className="h-10 w-full px-3 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs text-slate-800 outline-none focus:ring-2 ring-indigo-200 cursor-pointer"
+                                >
+                                    <option value="">-- Choose Employee (Name / Code) --</option>
+                                    {allEmployees.map((emp: any) => (
+                                        <option key={emp.id} value={emp.emp_code || emp.id}>
+                                            {emp.emp_code} — {emp.name} ({emp.department || "Operations"})
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <Input
+                                    placeholder="Enter Emp Code (e.g. APA001) or Numeric ID"
+                                    value={tourEmpId}
+                                    onChange={(e) => setTourEmpId(e.target.value)}
+                                    className="h-10 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs uppercase"
+                                />
+                            )}
+                            {/* Selected Employee Preview */}
+                            {(function () {
+                                const selected = allEmployees.find(e => 
+                                    String(e.id) === String(tourEmpId) || 
+                                    (e.emp_code && e.emp_code.toUpperCase() === String(tourEmpId).toUpperCase())
+                                );
+                                if (!selected) return null;
+                                return (
+                                    <div className="mt-1 p-2 rounded-xl bg-sky-50 border border-sky-200/60 flex items-center justify-between animate-in fade-in">
+                                        <div className="flex items-center gap-2">
+                                            <div className="h-6 w-6 rounded-md bg-sky-600 text-white flex items-center justify-center font-bold text-[10px]">
+                                                {selected.name?.charAt(0).toUpperCase()}
+                                            </div>
+                                            <span className="text-xs font-bold text-slate-800">{selected.name}</span>
+                                            <span className="text-[10px] font-mono text-sky-700 bg-white px-1.5 py-0.5 rounded border border-sky-100">{selected.emp_code}</span>
+                                        </div>
+                                        <span className="text-[10px] font-bold text-slate-500">{selected.department || "Operations"}</span>
+                                    </div>
+                                );
+                            })()}
+                        </div>
+
+                        {/* Tour Title */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-bold text-slate-700">Tour Title *</Label>
                             <Input
-                                placeholder="e.g. Client Visit - Mumbai"
+                                placeholder="e.g. Client Site Audit / Depot Inspection"
                                 value={tourTitle}
                                 onChange={(e) => setTourTitle(e.target.value)}
-                                className="h-12 rounded-xl bg-slate-50 border-none font-bold text-xs"
+                                className="h-10 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs"
                             />
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">From Location</Label>
+
+                        {/* From & To Location */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-bold text-slate-700">From Location</Label>
                                 <Input
-                                    placeholder="e.g. Delhi"
+                                    placeholder="e.g. Indore HQ"
                                     value={tourFromLocation}
                                     onChange={(e) => setTourFromLocation(e.target.value)}
-                                    className="h-12 rounded-xl bg-slate-50 border-none font-bold text-xs"
+                                    className="h-10 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs"
                                 />
                             </div>
-                            <div className="space-y-2">
-                                <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">To Location</Label>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-bold text-slate-700">To Location</Label>
                                 <Input
-                                    placeholder="e.g. Mumbai"
+                                    placeholder="e.g. Mumbai Depot"
                                     value={tourToLocation}
                                     onChange={(e) => setTourToLocation(e.target.value)}
-                                    className="h-12 rounded-xl bg-slate-50 border-none font-bold text-xs"
+                                    className="h-10 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs"
                                 />
                             </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Start Date</Label>
+
+                        {/* Start & End Date */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-bold text-slate-700">Start Date *</Label>
                                 <Input
                                     type="date"
                                     value={tourStartDate}
                                     onChange={(e) => setTourStartDate(e.target.value)}
-                                    className="h-12 rounded-xl bg-slate-50 border-none font-bold text-xs uppercase"
+                                    className="h-10 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs"
                                 />
                             </div>
-                            <div className="space-y-2">
-                                <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">End Date</Label>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-bold text-slate-700">End Date *</Label>
                                 <Input
                                     type="date"
                                     value={tourEndDate}
                                     onChange={(e) => setTourEndDate(e.target.value)}
-                                    className="h-12 rounded-xl bg-slate-50 border-none font-bold text-xs uppercase"
+                                    className="h-10 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs"
                                 />
                             </div>
                         </div>
-                        <div className="space-y-2">
-                            <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Description (Optional)</Label>
+
+                        {/* Description */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-bold text-slate-700">Tour Purpose & Details (Optional)</Label>
                             <textarea
-                                placeholder="Tour purpose & details..."
+                                placeholder="State purpose, meeting schedule, or travel notes..."
                                 value={tourDescription}
                                 onChange={(e) => setTourDescription(e.target.value)}
-                                className="w-full h-20 p-4 rounded-xl bg-slate-50 border-none font-bold text-xs resize-none outline-none focus:ring-2 ring-violet-100"
+                                rows={2}
+                                className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold text-xs resize-none outline-none focus:ring-2 ring-indigo-200"
                             />
                         </div>
                     </div>
 
-                    <div className="p-6 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
-                            <Info className="h-3 w-3" /> Tour days = Paid
+                    <div className="p-4 px-6 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
+                        <span className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
+                            <ShieldCheck className="h-4 w-4 text-emerald-600" /> Tour Days = 100% Payable
                         </span>
-                        <div className="flex gap-3">
-                            <Button variant="ghost" onClick={() => setIsTourOpen(false)} className="text-[9px] font-black uppercase tracking-widest text-slate-500 rounded-xl hover:bg-slate-200">Cancel</Button>
-                            <Button onClick={handleTourSubmit} disabled={tourSubmitting} className="bg-violet-600 hover:bg-violet-700 text-white font-black uppercase text-[9px] tracking-widest rounded-xl px-6 shadow-md transition-all hover:translate-y-[-2px] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0">
-                                {tourSubmitting ? (
-                                    <span className="flex items-center gap-2">
-                                        <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                        </svg>
-                                        Submitting...
-                                    </span>
-                                ) : (
-                                    "Mark Tour"
-                                )}
+                        <div className="flex gap-2.5">
+                            <Button
+                                variant="ghost"
+                                onClick={() => setIsTourOpen(false)}
+                                className="text-xs font-semibold text-slate-600 rounded-xl hover:bg-slate-200 h-10 px-4 cursor-pointer"
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={handleTourSubmit}
+                                disabled={tourSubmitting}
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl px-6 h-10 shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                            >
+                                {tourSubmitting ? "Submitting..." : "Mark Tour"}
                             </Button>
                         </div>
                     </div>
