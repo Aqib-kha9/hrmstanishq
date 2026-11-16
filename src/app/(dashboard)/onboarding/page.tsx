@@ -113,10 +113,10 @@ const SOW_ONBOARDING_DOCUMENTS = [
     },
     {
         key: "salary_slips",
-        title: "Last 3 Months' Salary Slips",
-        shortName: "Salary Slips (3 Mos)",
+        title: "Last 6 Months' Salary Slips",
+        shortName: "Salary Slips (6 Mos)",
         mandatory: false,
-        description: "Payslips for previous 3 consecutive months (Optional for freshers)",
+        description: "Payslips for previous 6 consecutive months (Optional for freshers)",
         accept: ".pdf,.png,.jpg,.jpeg",
         icon: FileSpreadsheet,
     },
@@ -981,7 +981,7 @@ function OnboardingForm() {
             if (n.includes("education") || n.includes("degree") || n.includes("qualification") || n.includes("marksheet") || n.includes("diploma")) return "Highest Educational Qualification Certificate";
             if (n.includes("relieving") || n.includes("experience") || n.includes("service")) return "Previous Employer Relieving Letter / Experience Letter";
             if (n.includes("statement") || n.includes("bank statement") || n.includes("bank_statement") || n.includes("bankstmt")) return "Last 6 Months' Bank Statement";
-            if (n.includes("salary") || n.includes("payslip") || n.includes("slip")) return "Last 3 Months' Salary Slips";
+            if (n.includes("salary") || n.includes("payslip") || n.includes("slip")) return "Last 6 Months' Salary Slips";
             if (n.includes("resume") || n.includes("cv") || n.includes("curriculum") || n.includes("biodata")) return "Updated Resume / Curriculum Vitae (CV)";
             if (n.includes("offer") || n.includes("appointment") || n.includes("contract") || n.includes("acceptance")) return "Signed Offer Letter / Appointment Letter Acceptance";
             return "other";

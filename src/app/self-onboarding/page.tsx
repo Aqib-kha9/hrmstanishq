@@ -89,8 +89,8 @@ const DOCUMENT_DEFINITIONS = [
     },
     {
         id: "salary_slips",
-        title: "7. Last 3 Months' Salary Slips",
-        description: "Official payslips for the previous 3 consecutive months showing earnings & deductions (Optional for freshers).",
+        title: "7. Last 6 Months' Salary Slips",
+        description: "Official payslips for the previous 6 consecutive months showing earnings & deductions (Optional for freshers).",
         mandatory: false,
         accept: ".pdf,.png,.jpg,.jpeg",
     },
