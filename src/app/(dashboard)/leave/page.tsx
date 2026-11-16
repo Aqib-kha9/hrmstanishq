@@ -115,7 +115,8 @@ const MONTH_NAMES = [
 
 export default function LeavePage() {
     const { user } = useAuth();
-    const isAdmin = user?.role === "ADMIN";
+    const userRole = (user?.role || "").toUpperCase().replace(/\s+/g, "_");
+    const isAdmin = userRole === "ADMIN" || userRole === "SUPER_ADMIN" || userRole === "HR" || userRole === "HR_MANAGER";
 
     // Tab state: "requests" | "history" | "balances" (Req 2.6)
     const [activeTab, setActiveTab] = useState<"requests" | "history" | "balances">("requests");
@@ -185,6 +186,7 @@ export default function LeavePage() {
     const [applyFrom, setApplyFrom] = useState("");
     const [applyTo, setApplyTo] = useState("");
     const [applyReason, setApplyReason] = useState("");
+    const [contactDuringLeave, setContactDuringLeave] = useState("");
     const [applySubmitting, setApplySubmitting] = useState(false);
     const [formErrors, setFormErrors] = useState<{ from_date?: string; to_date?: string; days?: string; reason?: string; employee_id?: string }>({});
     const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
@@ -406,10 +408,10 @@ export default function LeavePage() {
         const errors: { from_date?: string; to_date?: string; days?: string; reason?: string; employee_id?: string } = {};
         if (isAdmin && !selectedEmployeeId) errors.employee_id = "Please select an employee";
         if (!applyFrom) errors.from_date = "Start date is required";
-        else if (applyFrom < todayStr) errors.from_date = "Start date cannot be in the past";
+        else if (!isAdmin && applyFrom < todayStr) errors.from_date = "Start date cannot be in the past";
         if (!applyTo) errors.to_date = "End date is required";
-        else if (applyTo < todayStr) errors.to_date = "End date cannot be in the past";
-        else if (applyTo < applyFrom) errors.to_date = "End date must be after start date";
+        else if (!isAdmin && applyTo < todayStr) errors.to_date = "End date cannot be in the past";
+        else if (applyTo < applyFrom) errors.to_date = "End date must be on or after start date";
 
         // Check available annual balance for selected type (Req 2.6: PL / EL / CL / Comp-Off)
         const targetBalance = selectedEmployeeId ? selectedEmpBalance : balance;
@@ -433,7 +435,7 @@ export default function LeavePage() {
             errors.days = `Insufficient ${applyLeaveType.toUpperCase()} balance (${availableForType} days available, ${durationVal} requested)`;
         }
 
-        if (!applyReason || applyReason.trim().length < 10) errors.reason = "Reason must be at least 10 characters";
+        if (!applyReason || applyReason.trim().length < 5) errors.reason = "Reason must be at least 5 characters";
         else if (applyReason.length > 500) errors.reason = "Reason must be under 500 characters";
         setFormErrors(errors);
         return Object.keys(errors).length === 0;
@@ -463,6 +465,13 @@ export default function LeavePage() {
             console.error("Failed to fetch leave balance:", err);
         }
     }, []);
+
+    // Proactively fetch employees list if admin
+    useEffect(() => {
+        if (isAdmin) {
+            fetchEmployees();
+        }
+    }, [isAdmin, fetchEmployees]);
 
     // Fetch departments list for branch filter
     useEffect(() => {
@@ -623,6 +632,9 @@ export default function LeavePage() {
                 is_half_day: isHalfDay,
                 half_day_session: isHalfDay ? halfDaySession : undefined,
             };
+            if (contactDuringLeave.trim()) {
+                payload.contact_during_leave = contactDuringLeave.trim();
+            }
             if (isAdmin && selectedEmployeeId) {
                 payload.employee_id = Number(selectedEmployeeId);
             }
@@ -655,6 +667,7 @@ export default function LeavePage() {
         setIsHalfDay(false);
         setHalfDaySession("first_half");
         setApplyReason("");
+        setContactDuringLeave("");
         setFormErrors({});
         setSelectedEmployeeId("");
     };
@@ -858,265 +871,494 @@ export default function LeavePage() {
 
                         <Sheet open={isApplyOpen} onOpenChange={(v) => { setIsApplyOpen(v); if (!v) { resetApplyForm(); } else if (isAdmin) { fetchEmployees(); } }}>
                             <SheetTrigger asChild>
-                                <Button className="bg-slate-900 text-white hover:bg-black font-black uppercase text-[9px] tracking-widest px-8 h-11 rounded-2xl shadow-xl transition-all">
-                                    <Plus className="h-4 w-4 mr-2" /> Apply Leave
+                                <Button className="bg-slate-900 text-white hover:bg-black font-semibold text-xs px-5 h-10 rounded-xl shadow-sm transition-all flex items-center gap-2">
+                                    <Plus className="h-4 w-4" /> Apply Leave
                                 </Button>
                             </SheetTrigger>
-                            <SheetContent className="sm:max-w-[560px] border-none shadow-2xl p-0 overflow-y-auto">
-                                <div className="h-2 bg-[#D9F99D]" />
-                                <div className="p-8 space-y-8">
-                                    <SheetHeader className="text-left space-y-2">
-                                        <div className="h-12 w-12 rounded-2xl bg-slate-50 flex items-center justify-center">
-                                            <Plane className="h-6 w-6 text-indigo-500" />
+                            <SheetContent className="sm:max-w-[600px] w-full p-0 flex flex-col h-full max-h-screen bg-white border-l border-slate-200 shadow-2xl">
+                                {/* Pinned Header */}
+                                <div className="shrink-0 px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white">
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-10 w-10 rounded-xl bg-indigo-50 border border-indigo-100/80 flex items-center justify-center text-indigo-600 shrink-0">
+                                            <CalendarCheck className="h-5 w-5" />
                                         </div>
-                                        <SheetTitle className="text-2xl font-black italic uppercase text-slate-900 tracking-tighter">Apply for Leave</SheetTitle>
-                                        <SheetDescription className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-loose">
-                                            Annual Entitlement: 12 PL + 12 EL + 12 CL = 36 Total Paid Days/Year (Req 2.6)
-                                        </SheetDescription>
-                                    </SheetHeader>
-                                    <div className="grid gap-6">
-                                        <div className="space-y-5">
-                                            <div className="flex items-start gap-3 p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
-                                                <Info className="h-5 w-5 text-indigo-500 shrink-0 mt-0.5" />
-                                                <div className="space-y-1">
-                                                    <p className="text-[10px] font-black text-indigo-900 uppercase tracking-wide">
-                                                        Leave Categories & Entitlements (Req 2.6)
-                                                    </p>
-                                                    <p className="text-[9px] font-bold text-indigo-700 uppercase tracking-wide leading-relaxed">
-                                                        • <strong>PL (Privilege Leave):</strong> 12 days/yr • Carry-forward permitted.<br />
-                                                        • <strong>EL (Earned Leave):</strong> 12 days/yr • Carry-forward permitted.<br />
-                                                        • <strong>CL (Casual Leave):</strong> 12 days/yr • Resets / Lapses annually.<br />
-                                                        • Total Paid Entitlement: <strong>36 Days / Year</strong> (+ Carried Forward).
-                                                    </p>
-                                                </div>
-                                            </div>
+                                        <div>
+                                            <SheetTitle className="text-base font-bold text-slate-900 tracking-tight">Apply for Leave</SheetTitle>
+                                            <SheetDescription className="text-xs text-slate-500 font-normal mt-0.5">
+                                                Annual Quota: 12 PL + 12 EL + 12 CL = 36 Total Paid Days/Year (Req 2.6)
+                                            </SheetDescription>
+                                        </div>
+                                    </div>
+                                    <div className="hidden sm:flex items-center">
+                                        <Badge variant="outline" className="text-[11px] font-semibold text-slate-600 bg-slate-50 border-slate-200 px-2.5 py-1">
+                                            Req 2.6 Standard
+                                        </Badge>
+                                    </div>
+                                </div>
 
-                                            {isAdmin && (
-                                                <div className="space-y-2">
-                                                    <Label className={cn("text-[9px] font-black uppercase tracking-widest", formErrors.employee_id ? "text-rose-500" : "text-slate-400")}>Select Employee</Label>
-                                                    <select
-                                                        value={selectedEmployeeId}
-                                                        onChange={(e) => { setSelectedEmployeeId(e.target.value); setFormErrors((prev) => ({ ...prev, employee_id: undefined })); }}
-                                                        className={cn(
-                                                            "w-full h-12 rounded-xl px-4 font-bold text-[11px] outline-none border transition-all appearance-none bg-no-repeat",
-                                                            formErrors.employee_id ? "bg-rose-50 border-rose-200 text-rose-600" : "bg-slate-50 border-slate-100 text-slate-700"
-                                                        )}
-                                                        style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")", backgroundPosition: "right 12px center" }}
-                                                    >
-                                                        <option value="" className="font-bold">Choose an employee...</option>
-                                                        {employees.map((emp: any) => (
-                                                            <option key={emp.id} value={emp.id} className="font-bold">
-                                                                {emp.name} - {emp.emp_code}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                    {loadingEmployees && (
-                                                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                                                            <Loader2 className="h-2.5 w-2.5 animate-spin" /> Loading employees...
-                                                        </p>
+                                {/* Scrollable Form Body */}
+                                <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+                                    {/* Section 1: Employee Selector / Applicant Pill */}
+                                    {isAdmin ? (
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <Label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                                                    <User className="h-3.5 w-3.5 text-indigo-500" />
+                                                    Select Employee <span className="text-rose-500">*</span>
+                                                </Label>
+                                                <span className="text-[10px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                                                    Admin Action (Apply on behalf)
+                                                </span>
+                                            </div>
+                                            <div className="relative">
+                                                <select
+                                                    value={selectedEmployeeId}
+                                                    onChange={(e) => {
+                                                        setSelectedEmployeeId(e.target.value);
+                                                        setFormErrors((prev) => ({ ...prev, employee_id: undefined }));
+                                                    }}
+                                                    className={cn(
+                                                        "w-full h-11 rounded-xl px-3.5 pr-8 text-xs font-medium outline-none border transition-all appearance-none cursor-pointer bg-white",
+                                                        formErrors.employee_id
+                                                            ? "bg-rose-50/50 border-rose-300 text-rose-900 focus:ring-2 focus:ring-rose-200"
+                                                            : "border-slate-200 text-slate-800 hover:border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                                                     )}
-                                                    {formErrors.employee_id && (
-                                                        <p className="text-[8px] font-bold text-rose-500 uppercase tracking-wider flex items-center gap-1">
-                                                            <ShieldAlert className="h-2.5 w-2.5" /> {formErrors.employee_id}
-                                                        </p>
-                                                    )}
-                                                </div>
+                                                    style={{
+                                                        backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")",
+                                                        backgroundPosition: "right 12px center",
+                                                        backgroundRepeat: "no-repeat"
+                                                    }}
+                                                >
+                                                    <option value="">Select an employee from roster...</option>
+                                                    {employees.map((emp: any) => (
+                                                        <option key={emp.id} value={emp.id}>
+                                                            {emp.emp_code} — {emp.name} ({emp.department || "General"})
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            {loadingEmployees && (
+                                                <p className="text-xs text-slate-400 flex items-center gap-1.5 pt-1">
+                                                    <Loader2 className="h-3 w-3 animate-spin text-slate-500" /> Fetching active employees...
+                                                </p>
+                                            )}
+                                            {formErrors.employee_id && (
+                                                <p className="text-xs text-rose-600 font-medium flex items-center gap-1 pt-1">
+                                                    <ShieldAlert className="h-3.5 w-3.5 text-rose-500 shrink-0" /> {formErrors.employee_id}
+                                                </p>
                                             )}
 
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div className="space-y-2">
-                                                    <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Leave Category (Req 2.6)</Label>
-                                                    <select
-                                                        value={applyLeaveType}
-                                                        onChange={(e: any) => setApplyLeaveType(e.target.value)}
-                                                        className="h-12 w-full rounded-xl bg-slate-50 border border-slate-100 px-4 font-bold text-[11px] text-slate-700 outline-none cursor-pointer"
-                                                    >
-                                                        <option value="pl">PL — Privilege Leave (12/yr, Carryover)</option>
-                                                        <option value="el">EL — Earned Leave (12/yr, Carryover)</option>
-                                                        <option value="cl">CL — Casual Leave (12/yr, Lapses)</option>
-                                                        <option value="comp_off">Comp-Off (From Weekend Work)</option>
-                                                        <option value="lwp">LWP — Leave Without Pay (Unpaid)</option>
-                                                    </select>
-                                                </div>
-
-                                                <div className="space-y-2">
-                                                    <div className="flex items-center justify-between">
-                                                        <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Duration</Label>
-                                                        <span className="text-[8px] font-bold text-slate-300 uppercase tracking-wider">{isHalfDay ? "Half Day (0.5)" : "Auto-calculated"}</span>
-                                                    </div>
-                                                    <div className={cn(
-                                                        "h-12 rounded-xl border flex items-center px-4 font-bold text-[11px] transition-all",
-                                                        formErrors.days ? "bg-rose-50 border-rose-200 text-rose-600" : "bg-indigo-50/50 border-indigo-100 text-indigo-700"
-                                                    )}>
-                                                        <CalendarDays className="h-4 w-4 mr-2 opacity-50" />
-                                                        {isHalfDay ? "0.5 Day (Half Day)" : (applyFrom && applyTo ? `${applyDays} day${applyDays !== 1 ? 's' : ''}` : "—")}
-                                                    </div>
-                                                    {formErrors.days && (
-                                                        <p className="text-[8px] font-bold text-rose-500 uppercase tracking-wider flex items-center gap-1">
-                                                            <ShieldAlert className="h-2.5 w-2.5" /> {formErrors.days}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* Half-Day Toggle (Req 2.6) */}
-                                            <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <input
-                                                        type="checkbox"
-                                                        id="isHalfDayCheck"
-                                                        checked={isHalfDay}
-                                                        onChange={(e) => setIsHalfDay(e.target.checked)}
-                                                        className="h-4 w-4 text-indigo-600 rounded cursor-pointer"
-                                                    />
-                                                    <label htmlFor="isHalfDayCheck" className="text-[10px] font-black uppercase tracking-wider text-slate-700 cursor-pointer">
-                                                        Half Day Leave (0.5 Day)
-                                                    </label>
-                                                </div>
-                                                {isHalfDay && (
-                                                    <select
-                                                        value={halfDaySession}
-                                                        onChange={(e: any) => setHalfDaySession(e.target.value)}
-                                                        className="h-8 px-2 rounded-lg bg-white border border-slate-200 text-[9px] font-bold uppercase outline-none"
-                                                    >
-                                                        <option value="first_half">First Half</option>
-                                                        <option value="second_half">Second Half</option>
-                                                    </select>
-                                                )}
-                                            </div>
-
-                                            {/* Live Balance indicator for selected type (Req 2.6) */}
-                                            {(() => {
-                                                const targetBalance = selectedEmployeeId ? selectedEmpBalance : balance;
-                                                let curBal = 12;
-                                                let allocated = 12;
-                                                let typeLabel = "Privilege Leave (PL)";
-                                                let carryRule = "Carryover Permitted";
-
-                                                if (applyLeaveType === "pl") {
-                                                    curBal = targetBalance?.pl_balance ?? 12;
-                                                    allocated = (targetBalance?.pl_allocated ?? 12) + (targetBalance?.pl_carried_forward ?? 0);
-                                                    typeLabel = "Privilege Leave (PL)";
-                                                    carryRule = "Carryover Permitted";
-                                                } else if (applyLeaveType === "el") {
-                                                    curBal = targetBalance?.el_balance ?? 12;
-                                                    allocated = (targetBalance?.el_allocated ?? 12) + (targetBalance?.el_carried_forward ?? 0);
-                                                    typeLabel = "Earned Leave (EL)";
-                                                    carryRule = "Carryover Permitted";
-                                                } else if (applyLeaveType === "cl") {
-                                                    curBal = targetBalance?.cl_balance ?? 12;
-                                                    allocated = targetBalance?.cl_allocated ?? 12;
-                                                    typeLabel = "Casual Leave (CL)";
-                                                    carryRule = "Lapses Annually at Year-End";
-                                                } else if (applyLeaveType === "comp_off") {
-                                                    curBal = targetBalance?.comp_off_balance ?? 0;
-                                                    allocated = curBal;
-                                                    typeLabel = "Compensatory Off";
-                                                    carryRule = "Earned from Weekend Work";
-                                                } else {
-                                                    curBal = 999;
-                                                    allocated = 999;
-                                                    typeLabel = "Leave Without Pay (LWP)";
-                                                    carryRule = "Subject to Payroll Deduction";
-                                                }
-
+                                            {/* Selected Employee Preview Card */}
+                                            {selectedEmployeeId && (() => {
+                                                const emp = employees.find((e: any) => String(e.id) === String(selectedEmployeeId));
+                                                if (!emp) return null;
                                                 return (
-                                                    <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80">
-                                                        <div className="space-y-0.5">
-                                                            <span className="text-[9px] font-black uppercase tracking-wider text-slate-700 block">
-                                                                {typeLabel} Balance
-                                                            </span>
-                                                            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">
-                                                                {applyLeaveType === 'lwp' ? 'Unpaid absence' : `${curBal} remaining of ${allocated} annual days • ${carryRule}`}
-                                                            </span>
+                                                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 flex items-center justify-between">
+                                                        <div className="flex items-center gap-2.5">
+                                                            <Avatar className="h-8 w-8 rounded-lg bg-indigo-600 text-white font-bold text-xs flex items-center justify-center">
+                                                                <AvatarFallback className="bg-indigo-600 text-white font-bold text-xs">
+                                                                    {(emp.name || "E").substring(0, 2).toUpperCase()}
+                                                                </AvatarFallback>
+                                                            </Avatar>
+                                                            <div>
+                                                                <p className="text-xs font-semibold text-slate-800">{emp.name}</p>
+                                                                <p className="text-[11px] text-slate-500">
+                                                                    {emp.emp_code} • {emp.designation || "Staff"} • {emp.department || "Operations"}
+                                                                </p>
+                                                            </div>
                                                         </div>
-                                                        <Badge className={cn(
-                                                            "font-black text-[10px] uppercase border-none px-3 h-6 rounded-lg shadow-xs",
-                                                            curBal > 0 || applyLeaveType === 'lwp' ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
-                                                        )}>
-                                                            {applyLeaveType === 'lwp' ? 'Uncapped' : `${curBal} Day${curBal !== 1 ? 's' : ''} Avail.`}
+                                                        <Badge variant="outline" className="text-[10px] bg-white border-emerald-200 text-emerald-700 font-medium">
+                                                            Active
                                                         </Badge>
                                                     </div>
                                                 );
                                             })()}
-
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div className="space-y-2">
-                                                    <Label className={cn("text-[9px] font-black uppercase tracking-widest", formErrors.from_date ? "text-rose-500" : "text-slate-400")}>Start Date</Label>
-                                                    <Input
-                                                        type="date"
-                                                        min={todayStr}
-                                                        value={applyFrom}
-                                                        onChange={(e) => {
-                                                            setApplyFrom(e.target.value);
-                                                            if (isHalfDay) setApplyTo(e.target.value);
-                                                            setFormErrors((prev) => ({ ...prev, from_date: undefined, days: undefined }));
-                                                        }}
-                                                        className={cn(
-                                                            "h-12 rounded-xl font-bold text-[11px] transition-all",
-                                                            formErrors.from_date ? "bg-rose-50 border-rose-200 text-rose-600 focus-visible:ring-rose-200" : "bg-slate-50 border-slate-100"
-                                                        )}
-                                                    />
-                                                    {formErrors.from_date && (
-                                                        <p className="text-[8px] font-bold text-rose-500 uppercase tracking-wider flex items-center gap-1">
-                                                            <ShieldAlert className="h-2.5 w-2.5" /> {formErrors.from_date}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label className={cn("text-[9px] font-black uppercase tracking-widest", formErrors.to_date ? "text-rose-500" : "text-slate-400")}>End Date</Label>
-                                                    <Input
-                                                        type="date"
-                                                        min={applyFrom || todayStr}
-                                                        disabled={isHalfDay}
-                                                        value={isHalfDay ? applyFrom : applyTo}
-                                                        onChange={(e) => { setApplyTo(e.target.value); setFormErrors((prev) => ({ ...prev, to_date: undefined, days: undefined })); }}
-                                                        className={cn(
-                                                            "h-12 rounded-xl font-bold text-[11px] transition-all",
-                                                            formErrors.to_date ? "bg-rose-50 border-rose-200 text-rose-600 focus-visible:ring-rose-200" : "bg-slate-50 border-slate-100",
-                                                            isHalfDay ? "opacity-60 cursor-not-allowed" : ""
-                                                        )}
-                                                    />
-                                                    {formErrors.to_date && (
-                                                        <p className="text-[8px] font-bold text-rose-500 uppercase tracking-wider flex items-center gap-1">
-                                                            <ShieldAlert className="h-2.5 w-2.5" /> {formErrors.to_date}
-                                                        </p>
-                                                    )}
+                                        </div>
+                                    ) : (
+                                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
+                                            <div className="flex items-center gap-2.5">
+                                                <Avatar className="h-8 w-8 rounded-lg bg-indigo-600 text-white font-bold text-xs flex items-center justify-center">
+                                                    <AvatarFallback className="bg-indigo-600 text-white font-bold text-xs">
+                                                        {(user?.name || "U").substring(0, 2).toUpperCase()}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div>
+                                                    <p className="text-xs font-semibold text-slate-800">{user?.name}</p>
+                                                    <p className="text-[11px] text-slate-500">{(user as any)?.emp_code || user?.email} • {userRole}</p>
                                                 </div>
                                             </div>
+                                            <Badge variant="outline" className="text-[10px] bg-white border-slate-200 text-slate-600 font-medium">
+                                                Self Application
+                                            </Badge>
+                                        </div>
+                                    )}
 
+                                    {/* Section 2: Real-time Leave Balance Matrix (Req 2.6: 12 PL + 12 EL + 12 CL = 36) */}
+                                    {(() => {
+                                        const targetBalance = selectedEmployeeId ? selectedEmpBalance : balance;
+                                        const plBal = targetBalance?.pl_balance ?? 12;
+                                        const plAlloc = (targetBalance?.pl_allocated ?? 12) + (targetBalance?.pl_carried_forward ?? 0);
+                                        const elBal = targetBalance?.el_balance ?? 12;
+                                        const elAlloc = (targetBalance?.el_allocated ?? 12) + (targetBalance?.el_carried_forward ?? 0);
+                                        const clBal = targetBalance?.cl_balance ?? 12;
+                                        const clAlloc = targetBalance?.cl_allocated ?? 12;
+                                        const compBal = targetBalance?.comp_off_balance ?? 0;
+
+                                        return (
                                             <div className="space-y-2">
                                                 <div className="flex items-center justify-between">
-                                                    <Label className={cn("text-[9px] font-black uppercase tracking-widest", formErrors.reason ? "text-rose-500" : "text-slate-400")}>Reason for Leave</Label>
-                                                    <span className={cn("text-[8px] font-bold uppercase tracking-wider", applyReason.length > 500 ? "text-rose-500" : applyReason.length >= 10 ? "text-emerald-500" : "text-slate-300")}>
-                                                        {applyReason.length}/500
+                                                    <Label className="text-xs font-semibold text-slate-700">
+                                                        Available Leave Ledger (Req 2.6)
+                                                    </Label>
+                                                    <span className="text-[10px] font-medium text-slate-400">
+                                                        Click card to select type
                                                     </span>
                                                 </div>
-                                                <textarea
-                                                    className={cn(
-                                                        "w-full h-32 rounded-xl p-4 font-bold text-[11px] outline-none border transition-all resize-none",
-                                                        formErrors.reason ? "bg-rose-50 border-rose-200 text-rose-600 focus:border-rose-300 placeholder:text-rose-300" : "bg-slate-50 border-slate-100 focus:border-slate-300 placeholder:text-slate-300"
-                                                    )}
-                                                    placeholder="Describe the reason for your leave request (min 10 characters)..."
-                                                    value={applyReason}
-                                                    onChange={(e) => { setApplyReason(e.target.value); setFormErrors((prev) => ({ ...prev, reason: undefined })); }}
-                                                    maxLength={500}
-                                                />
-                                                {formErrors.reason && (
-                                                    <p className="text-[8px] font-bold text-rose-500 uppercase tracking-wider flex items-center gap-1">
-                                                        <ShieldAlert className="h-2.5 w-2.5" /> {formErrors.reason}
-                                                    </p>
-                                                )}
+
+                                                <div className="grid grid-cols-4 gap-2">
+                                                    {/* PL */}
+                                                    <div
+                                                        onClick={() => setApplyLeaveType("pl")}
+                                                        className={cn(
+                                                            "p-2.5 rounded-xl border text-left cursor-pointer transition-all",
+                                                            applyLeaveType === "pl"
+                                                                ? "bg-indigo-50/70 border-indigo-400 ring-2 ring-indigo-200"
+                                                                : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                                                        )}
+                                                    >
+                                                        <div className="flex items-center justify-between mb-1">
+                                                            <span className="text-[10px] font-bold text-indigo-700 uppercase">PL</span>
+                                                            <span className="text-[9px] text-slate-400">CF OK</span>
+                                                        </div>
+                                                        <div className="text-base font-bold text-slate-900">
+                                                            {plBal} <span className="text-[10px] font-normal text-slate-400">/ {plAlloc}d</span>
+                                                        </div>
+                                                        <div className="text-[9px] text-slate-500 truncate mt-0.5">Privilege</div>
+                                                    </div>
+
+                                                    {/* EL */}
+                                                    <div
+                                                        onClick={() => setApplyLeaveType("el")}
+                                                        className={cn(
+                                                            "p-2.5 rounded-xl border text-left cursor-pointer transition-all",
+                                                            applyLeaveType === "el"
+                                                                ? "bg-emerald-50/70 border-emerald-400 ring-2 ring-emerald-200"
+                                                                : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                                                        )}
+                                                    >
+                                                        <div className="flex items-center justify-between mb-1">
+                                                            <span className="text-[10px] font-bold text-emerald-700 uppercase">EL</span>
+                                                            <span className="text-[9px] text-slate-400">CF OK</span>
+                                                        </div>
+                                                        <div className="text-base font-bold text-slate-900">
+                                                            {elBal} <span className="text-[10px] font-normal text-slate-400">/ {elAlloc}d</span>
+                                                        </div>
+                                                        <div className="text-[9px] text-slate-500 truncate mt-0.5">Earned</div>
+                                                    </div>
+
+                                                    {/* CL */}
+                                                    <div
+                                                        onClick={() => setApplyLeaveType("cl")}
+                                                        className={cn(
+                                                            "p-2.5 rounded-xl border text-left cursor-pointer transition-all",
+                                                            applyLeaveType === "cl"
+                                                                ? "bg-amber-50/70 border-amber-400 ring-2 ring-amber-200"
+                                                                : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                                                        )}
+                                                    >
+                                                        <div className="flex items-center justify-between mb-1">
+                                                            <span className="text-[10px] font-bold text-amber-700 uppercase">CL</span>
+                                                            <span className="text-[9px] text-slate-400">Lapses</span>
+                                                        </div>
+                                                        <div className="text-base font-bold text-slate-900">
+                                                            {clBal} <span className="text-[10px] font-normal text-slate-400">/ {clAlloc}d</span>
+                                                        </div>
+                                                        <div className="text-[9px] text-slate-500 truncate mt-0.5">Casual</div>
+                                                    </div>
+
+                                                    {/* Comp-Off */}
+                                                    <div
+                                                        onClick={() => setApplyLeaveType("comp_off")}
+                                                        className={cn(
+                                                            "p-2.5 rounded-xl border text-left cursor-pointer transition-all",
+                                                            applyLeaveType === "comp_off"
+                                                                ? "bg-purple-50/70 border-purple-400 ring-2 ring-purple-200"
+                                                                : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                                                        )}
+                                                    >
+                                                        <div className="flex items-center justify-between mb-1">
+                                                            <span className="text-[10px] font-bold text-purple-700 uppercase">Comp</span>
+                                                            <span className="text-[9px] text-slate-400">Duty</span>
+                                                        </div>
+                                                        <div className="text-base font-bold text-slate-900">
+                                                            {compBal} <span className="text-[10px] font-normal text-slate-400">days</span>
+                                                        </div>
+                                                        <div className="text-[9px] text-slate-500 truncate mt-0.5">Comp-Off</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* Section 3: Leave Type & Duration */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold text-slate-700">Leave Category <span className="text-rose-500">*</span></Label>
+                                            <div className="relative">
+                                                <select
+                                                    value={applyLeaveType}
+                                                    onChange={(e: any) => setApplyLeaveType(e.target.value)}
+                                                    className="w-full h-10 rounded-xl px-3 pr-8 text-xs font-medium outline-none border border-slate-200 text-slate-800 bg-white hover:border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all appearance-none cursor-pointer"
+                                                    style={{
+                                                        backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")",
+                                                        backgroundPosition: "right 12px center",
+                                                        backgroundRepeat: "no-repeat"
+                                                    }}
+                                                >
+                                                    <option value="pl">PL — Privilege Leave (12d/yr, Carryover)</option>
+                                                    <option value="el">EL — Earned Leave (12d/yr, Carryover)</option>
+                                                    <option value="cl">CL — Casual Leave (12d/yr, Lapses)</option>
+                                                    <option value="comp_off">Comp-Off — Compensatory Off</option>
+                                                    <option value="lwp">LWP — Leave Without Pay (Unpaid)</option>
+                                                </select>
                                             </div>
                                         </div>
+
+                                        <div className="space-y-1.5">
+                                            <div className="flex items-center justify-between">
+                                                <Label className="text-xs font-semibold text-slate-700">Calculated Duration</Label>
+                                                <span className="text-[10px] text-slate-400">
+                                                    {isHalfDay ? "Half Day (0.5d)" : "Full Day(s)"}
+                                                </span>
+                                            </div>
+                                            <div className={cn(
+                                                "h-10 rounded-xl border px-3 flex items-center justify-between text-xs font-semibold transition-all",
+                                                formErrors.days
+                                                    ? "bg-rose-50 border-rose-300 text-rose-700"
+                                                    : "bg-slate-50 border-slate-200 text-slate-800"
+                                            )}>
+                                                <div className="flex items-center gap-2">
+                                                    <CalendarDays className="h-4 w-4 text-slate-400" />
+                                                    <span>
+                                                        {isHalfDay
+                                                            ? "0.5 Day (Half Day)"
+                                                            : (applyFrom && applyTo
+                                                                ? `${applyDays} Day${applyDays !== 1 ? 's' : ''}`
+                                                                : "Select Dates")}
+                                                    </span>
+                                                </div>
+                                                {isHalfDay && (
+                                                    <Badge variant="outline" className="text-[10px] bg-white border-indigo-200 text-indigo-700 font-medium">
+                                                        {halfDaySession === "first_half" ? "1st Half" : "2nd Half"}
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                            {formErrors.days && (
+                                                <p className="text-[11px] text-rose-600 font-medium flex items-center gap-1">
+                                                    <ShieldAlert className="h-3 w-3 shrink-0" /> {formErrors.days}
+                                                </p>
+                                            )}
+                                        </div>
                                     </div>
-                                    <SheetFooter className="flex gap-3 pt-6">
-                                        <Button variant="outline" onClick={() => { setIsApplyOpen(false); resetApplyForm(); }} className="flex-1 h-12 rounded-2xl border-slate-100 font-black uppercase text-[9px] tracking-widest">Cancel</Button>
-                                        <Button onClick={handleApplySubmit} disabled={applySubmitting} className="flex-1 h-12 rounded-2xl bg-slate-900 text-white font-black uppercase text-[9px] tracking-widest shadow-xl">
-                                            {applySubmitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                                            {applySubmitting ? "Submitting..." : "Submit Request"}
+
+                                    {/* Half Day Option */}
+                                    <div className="p-3 bg-slate-50/80 rounded-xl border border-slate-200 space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <label htmlFor="isHalfDayCheck" className="flex items-center gap-2.5 cursor-pointer select-none">
+                                                <input
+                                                    type="checkbox"
+                                                    id="isHalfDayCheck"
+                                                    checked={isHalfDay}
+                                                    onChange={(e) => {
+                                                        setIsHalfDay(e.target.checked);
+                                                        if (e.target.checked && applyFrom) {
+                                                            setApplyTo(applyFrom);
+                                                        }
+                                                    }}
+                                                    className="h-4 w-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                                                />
+                                                <div>
+                                                    <span className="text-xs font-semibold text-slate-800 block">Apply as Half Day Leave</span>
+                                                    <span className="text-[10px] text-slate-500 block">Deducts exactly 0.5 days from balance (Req 2.6)</span>
+                                                </div>
+                                            </label>
+                                            {isHalfDay && (
+                                                <Badge className="bg-indigo-100 text-indigo-800 border-none text-[10px] font-semibold">
+                                                    0.5 Day
+                                                </Badge>
+                                            )}
+                                        </div>
+
+                                        {isHalfDay && (
+                                            <div className="pt-2 border-t border-slate-200/60 flex items-center gap-2">
+                                                <span className="text-xs text-slate-600 font-medium shrink-0">Working Session:</span>
+                                                <div className="grid grid-cols-2 gap-2 flex-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setHalfDaySession("first_half")}
+                                                        className={cn(
+                                                            "h-8 rounded-lg text-xs font-medium border transition-all",
+                                                            halfDaySession === "first_half"
+                                                                ? "bg-white border-indigo-500 text-indigo-700 shadow-xs font-semibold"
+                                                                : "bg-transparent border-slate-200 text-slate-600 hover:bg-white"
+                                                        )}
+                                                    >
+                                                        First Half (Morning)
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setHalfDaySession("second_half")}
+                                                        className={cn(
+                                                            "h-8 rounded-lg text-xs font-medium border transition-all",
+                                                            halfDaySession === "second_half"
+                                                                ? "bg-white border-indigo-500 text-indigo-700 shadow-xs font-semibold"
+                                                                : "bg-transparent border-slate-200 text-slate-600 hover:bg-white"
+                                                        )}
+                                                    >
+                                                        Second Half (Afternoon)
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Section 4: Date Selection */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold text-slate-700">Start Date <span className="text-rose-500">*</span></Label>
+                                            <Input
+                                                type="date"
+                                                min={!isAdmin ? todayStr : undefined}
+                                                value={applyFrom}
+                                                onChange={(e) => {
+                                                    setApplyFrom(e.target.value);
+                                                    if (isHalfDay) setApplyTo(e.target.value);
+                                                    setFormErrors((prev) => ({ ...prev, from_date: undefined, days: undefined }));
+                                                }}
+                                                className={cn(
+                                                    "h-10 rounded-xl text-xs font-medium bg-white",
+                                                    formErrors.from_date ? "border-rose-300 focus-visible:ring-rose-200" : "border-slate-200"
+                                                )}
+                                            />
+                                            {formErrors.from_date && (
+                                                <p className="text-[11px] text-rose-600 font-medium flex items-center gap-1">
+                                                    <ShieldAlert className="h-3 w-3 shrink-0" /> {formErrors.from_date}
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold text-slate-700">End Date <span className="text-rose-500">*</span></Label>
+                                            <Input
+                                                type="date"
+                                                min={applyFrom || (!isAdmin ? todayStr : undefined)}
+                                                disabled={isHalfDay}
+                                                value={isHalfDay ? applyFrom : applyTo}
+                                                onChange={(e) => {
+                                                    setApplyTo(e.target.value);
+                                                    setFormErrors((prev) => ({ ...prev, to_date: undefined, days: undefined }));
+                                                }}
+                                                className={cn(
+                                                    "h-10 rounded-xl text-xs font-medium bg-white",
+                                                    isHalfDay ? "bg-slate-100 text-slate-500 cursor-not-allowed" : "",
+                                                    formErrors.to_date ? "border-rose-300 focus-visible:ring-rose-200" : "border-slate-200"
+                                                )}
+                                            />
+                                            {formErrors.to_date && (
+                                                <p className="text-[11px] text-rose-600 font-medium flex items-center gap-1">
+                                                    <ShieldAlert className="h-3 w-3 shrink-0" /> {formErrors.to_date}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Section 5: Reason & Contact */}
+                                    <div className="space-y-1.5">
+                                        <div className="flex items-center justify-between">
+                                            <Label className="text-xs font-semibold text-slate-700">Reason for Absence <span className="text-rose-500">*</span></Label>
+                                            <span className={cn(
+                                                "text-[10px] font-medium",
+                                                applyReason.length > 500
+                                                    ? "text-rose-500"
+                                                    : applyReason.trim().length >= 5
+                                                        ? "text-slate-400"
+                                                        : "text-amber-500"
+                                            )}>
+                                                {applyReason.length}/500 chars (min 5)
+                                            </span>
+                                        </div>
+                                        <textarea
+                                            rows={3}
+                                            className={cn(
+                                                "w-full rounded-xl p-3 text-xs font-normal outline-none border transition-all resize-none bg-white",
+                                                formErrors.reason
+                                                    ? "bg-rose-50/30 border-rose-300 text-rose-900 focus:ring-2 focus:ring-rose-200"
+                                                    : "border-slate-200 text-slate-800 placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                                            )}
+                                            placeholder="State the reason for your leave (e.g., medical leave, family event, personal emergency)..."
+                                            value={applyReason}
+                                            onChange={(e) => {
+                                                setApplyReason(e.target.value);
+                                                setFormErrors((prev) => ({ ...prev, reason: undefined }));
+                                            }}
+                                            maxLength={500}
+                                        />
+                                        {formErrors.reason && (
+                                            <p className="text-[11px] text-rose-600 font-medium flex items-center gap-1">
+                                                <ShieldAlert className="h-3 w-3 shrink-0" /> {formErrors.reason}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <div className="flex items-center justify-between">
+                                            <Label className="text-xs font-semibold text-slate-700">Contact During Absence (Optional)</Label>
+                                            <span className="text-[10px] text-slate-400">Emergency reachability</span>
+                                        </div>
+                                        <Input
+                                            type="text"
+                                            placeholder="e.g. +91 98765 43210 or alternate phone"
+                                            value={contactDuringLeave}
+                                            onChange={(e) => setContactDuringLeave(e.target.value)}
+                                            maxLength={20}
+                                            className="h-10 rounded-xl text-xs font-medium border-slate-200 bg-white"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Pinned Footer */}
+                                <div className="shrink-0 px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-slate-500">Duration:</span>
+                                        <Badge className="bg-slate-900 text-white border-none text-xs font-semibold px-2.5 py-0.5">
+                                            {isHalfDay ? "0.5 Day" : (applyFrom && applyTo ? `${applyDays} Day${applyDays !== 1 ? 's' : ''}` : "—")}
+                                        </Badge>
+                                        <Badge variant="outline" className="text-[11px] font-semibold text-slate-600 bg-white border-slate-200 uppercase">
+                                            {applyLeaveType}
+                                        </Badge>
+                                    </div>
+                                    <div className="flex items-center gap-2.5">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => {
+                                                setIsApplyOpen(false);
+                                                resetApplyForm();
+                                            }}
+                                            className="h-10 px-4 rounded-xl border-slate-200 text-slate-700 hover:bg-slate-100 text-xs font-semibold"
+                                        >
+                                            Cancel
                                         </Button>
-                                    </SheetFooter>
+                                        <Button
+                                            type="button"
+                                            onClick={handleApplySubmit}
+                                            disabled={applySubmitting}
+                                            className="h-10 px-5 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-semibold shadow-sm flex items-center gap-2"
+                                        >
+                                            {applySubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarCheck className="h-4 w-4" />}
+                                            {applySubmitting ? "Submitting..." : "Submit Leave Application"}
+                                        </Button>
+                                    </div>
                                 </div>
                             </SheetContent>
                         </Sheet>
