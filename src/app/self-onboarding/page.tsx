@@ -226,24 +226,34 @@ function CandidateOnboardingContent() {
         });
     };
 
+    const processFileForDoc = async (docId: string, file: File) => {
+        if (!file || !docId) return;
+        if (file.size > 10 * 1024 * 1024) {
+            alert("File size exceeds 10MB limit. Please upload a smaller file.");
+            return;
+        }
+        try {
+            const dataUrl = await readFileAsDataUrl(file);
+            setUploadedDocs((prev) => ({
+                ...prev,
+                [docId]: { file, dataUrl },
+            }));
+            // Clear any doc error
+            setFieldErrors((prev) => {
+                const n = { ...prev };
+                delete n.docs;
+                return n;
+            });
+        } catch (readErr) {
+            console.error("Could not read file", readErr);
+            alert("Could not read file. Please try again.");
+        }
+    };
+
     const onFilePicked = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file && activeDocType) {
-            if (file.size > 10 * 1024 * 1024) {
-                alert("File size exceeds 10MB limit. Please upload a smaller file.");
-                e.target.value = "";
-                return;
-            }
-            try {
-                const dataUrl = await readFileAsDataUrl(file);
-                setUploadedDocs((prev) => ({
-                    ...prev,
-                    [activeDocType]: { file, dataUrl },
-                }));
-            } catch (readErr) {
-                console.error("Could not read file", readErr);
-                alert("Could not read file. Please try again.");
-            }
+            await processFileForDoc(activeDocType, file);
         }
         e.target.value = "";
     };
@@ -698,6 +708,14 @@ function CandidateOnboardingContent() {
 
                 {/* Form Body Card */}
                 <Card className="rounded-3xl border-none shadow-xl bg-white p-6 sm:p-8">
+                    {/* Hidden fallback global file input */}
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={onFilePicked}
+                        className="hidden"
+                        accept=".pdf,.png,.jpg,.jpeg"
+                    />
                     {/* ════════════════════════════════════════════════════════ */}
                     {/* STEP 0 (PAGE A): PERSONAL INFORMATION */}
                     {/* ════════════════════════════════════════════════════════ */}
@@ -1599,15 +1617,25 @@ function CandidateOnboardingContent() {
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <Button
-                                                    type="button"
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() => handleFileSelect(doc.id)}
-                                                    className="w-full mt-3 h-8 text-[10px] font-bold rounded-xl border-dashed border-slate-300 hover:border-slate-400 bg-white"
+                                                <label
+                                                    htmlFor={`doc-upload-${doc.id}`}
+                                                    className="w-full mt-3 h-8 text-[10px] font-bold rounded-xl border border-dashed border-slate-300 hover:border-indigo-500 hover:bg-indigo-50/50 bg-white flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-2xs"
                                                 >
-                                                    <Upload className="h-3 w-3 mr-1" /> Choose File
-                                                </Button>
+                                                    <Upload className="h-3 w-3 text-slate-500" /> Choose File
+                                                    <input
+                                                        id={`doc-upload-${doc.id}`}
+                                                        type="file"
+                                                        className="hidden"
+                                                        accept={doc.accept}
+                                                        onChange={(e) => {
+                                                            const file = e.target.files?.[0];
+                                                            if (file) {
+                                                                processFileForDoc(doc.id, file);
+                                                            }
+                                                            e.target.value = "";
+                                                        }}
+                                                    />
+                                                </label>
                                             )}
                                         </div>
                                     );
