@@ -102,6 +102,7 @@ const LocationPickerMap = dynamic(() => import("@/components/LocationPickerMap")
 interface CompanyRecord {
     id: number;
     name: string;
+    code?: string | null;
     address: string | null;
     is_active: boolean;
 }
@@ -273,7 +274,7 @@ export default function LocationsPage() {
 
     // ── Company management state ────────────────────────────
     const [companySheetOpen, setCompanySheetOpen] = useState(false);
-    const [companyForm, setCompanyForm] = useState({ name: "", email: "", phone: "", website: "", city: "", state: "", address: "" });
+    const [companyForm, setCompanyForm] = useState({ name: "", code: "", email: "", phone: "", website: "", city: "", state: "", address: "" });
     const [companyEditingId, setCompanyEditingId] = useState<number | null>(null);
     const [companySaving, setCompanySaving] = useState(false);
     const [companyDeleteTarget, setCompanyDeleteTarget] = useState<CompanyRecord | null>(null);
@@ -518,7 +519,7 @@ export default function LocationsPage() {
 
     const openCompanyCreateSheet = () => {
         setCompanyEditingId(null);
-        setCompanyForm({ name: "", email: "", phone: "", website: "", city: "", state: "", address: "" });
+        setCompanyForm({ name: "", code: "", email: "", phone: "", website: "", city: "", state: "", address: "" });
         setCompanySheetOpen(true);
     };
 
@@ -526,6 +527,7 @@ export default function LocationsPage() {
         setCompanyEditingId(company.id);
         setCompanyForm({ 
             name: company.name, 
+            code: company.code || "",
             email: company.email || "",
             phone: company.phone || "",
             website: company.website || "",
@@ -545,6 +547,7 @@ export default function LocationsPage() {
         try {
             const payload = {
                 name: companyForm.name.trim(),
+                code: companyForm.code?.trim() ? companyForm.code.trim().toUpperCase() : null,
                 email: companyForm.email?.trim() || null,
                 phone: companyForm.phone?.trim() || null,
                 website: companyForm.website?.trim() || null,
@@ -1445,6 +1448,24 @@ export default function LocationsPage() {
                                     className="rounded-xl border-slate-200 h-11 text-sm"
                                 />
                             </div>
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                        Employee ID Prefix (Req 2.2)
+                                    </Label>
+                                    <span className="text-[9px] text-slate-400 font-bold uppercase">Auto-derived if blank</span>
+                                </div>
+                                <Input
+                                    value={companyForm.code}
+                                    onChange={(e) => setCompanyForm((prev) => ({ ...prev, code: e.target.value.toUpperCase() }))}
+                                    placeholder="e.g. AS, BM, AL, PE"
+                                    maxLength={6}
+                                    className="rounded-xl border-slate-200 h-11 text-sm font-mono uppercase tracking-wider"
+                                />
+                                <p className="text-[10px] text-slate-500 font-medium">
+                                    Used as the sequential ID prefix (e.g. {companyForm.code ? `${companyForm.code}001` : "AS001, BM001, AL001, PE001"}) for all employees in this company.
+                                </p>
+                            </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
@@ -1530,9 +1551,14 @@ export default function LocationsPage() {
                                             >
                                                 <div className="flex items-center gap-2.5">
                                                     <div className="h-7 w-7 rounded-lg bg-slate-100 flex items-center justify-center text-[9px] font-black text-slate-600">
-                                                        {getInitials(c.name)}
+                                                        {c.code || getInitials(c.name)}
                                                     </div>
-                                                    <span className="text-xs font-bold text-slate-700">{c.name}</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs font-bold text-slate-700">{c.name}</span>
+                                                        <span className="px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-100 text-[9px] font-mono font-bold text-indigo-700">
+                                                            {c.code || "AUTO"}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                     <Button

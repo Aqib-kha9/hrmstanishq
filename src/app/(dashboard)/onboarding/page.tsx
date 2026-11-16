@@ -145,6 +145,7 @@ interface OfficeItem {
 interface CompanyItem {
     id: number;
     name: string;
+    code?: string;
     address?: string;
     is_active: boolean;
 }
@@ -967,8 +968,11 @@ function OnboardingForm() {
     };
 
     // ── Submission helpers ──
+    const selectedCompany = companies.find((c) => c.id.toString() === formData.company);
+    const currentPrefix = selectedCompany?.code || (suggestedEmpCode ? suggestedEmpCode.replace(/\d+$/, "") : "EMP");
+
     const generateEmpCode = (): string => {
-        return customEmpCode || suggestedEmpCode || `EMP${Date.now().toString().slice(-6)}`;
+        return customEmpCode || suggestedEmpCode || `${currentPrefix}001`;
     };
 
     const buildPayload = () => {
@@ -2045,11 +2049,11 @@ function OnboardingForm() {
                                                             Company-Specific Employee ID (Req 2.2)
                                                         </h4>
                                                         <Badge className="bg-indigo-600 text-white text-[9px] font-bold">
-                                                            Company Prefix Format
+                                                            {selectedCompany ? `${selectedCompany.name} (${currentPrefix})` : `Prefix: ${currentPrefix}`}
                                                         </Badge>
                                                     </div>
                                                     <p className="text-[10px] text-indigo-700 font-medium mt-0.5">
-                                                        Company prefix followed by unique sequential identifier (e.g. APA001)
+                                                        Company prefix format: {currentPrefix}001, {currentPrefix}002... (auto-synced with Company Entity)
                                                     </p>
                                                 </div>
                                             </div>
@@ -2057,7 +2061,7 @@ function OnboardingForm() {
                                                 <Input
                                                     value={customEmpCode}
                                                     onChange={(e) => setCustomEmpCode(e.target.value.toUpperCase())}
-                                                    placeholder={suggestedEmpCode || "APA001"}
+                                                    placeholder={suggestedEmpCode || `${currentPrefix}001`}
                                                     className="h-10 bg-white border border-indigo-200 rounded-xl font-mono font-black text-xs text-indigo-950 uppercase"
                                                 />
                                             </div>
@@ -2287,13 +2291,23 @@ function OnboardingForm() {
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-7">
                                             {/* 1. Company Entity */}
                                             <div className="space-y-2">
-                                                <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
-                                                    Company Entity <span className="text-red-500 font-bold ml-1">*</span>
-                                                </Label>
+                                                <div className="flex items-center justify-between">
+                                                    <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center">
+                                                        Company Entity <span className="text-red-500 font-bold ml-1">*</span>
+                                                    </Label>
+                                                    {selectedCompany && (
+                                                        <span className="text-[9px] font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md">
+                                                            ID Prefix: {selectedCompany.code || currentPrefix}
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <select
                                                     className="w-full h-12 bg-slate-50 border-none rounded-xl px-5 font-black text-[10px] uppercase tracking-widest outline-none"
                                                     value={formData.company}
-                                                    onChange={(e) => updateField("company", e.target.value)}
+                                                    onChange={(e) => {
+                                                        updateField("company", e.target.value);
+                                                        loadNextCode(e.target.value);
+                                                    }}
                                                     disabled={loadingLookups}
                                                 >
                                                     {loadingLookups ? (
@@ -2301,7 +2315,7 @@ function OnboardingForm() {
                                                     ) : (
                                                         companies.map((c) => (
                                                             <option key={c.id} value={c.id.toString()}>
-                                                                {c.name}
+                                                                {c.name} {c.code ? `(${c.code})` : ""}
                                                             </option>
                                                         ))
                                                     )}
@@ -3644,7 +3658,7 @@ function OnboardingForm() {
                                         className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 px-3 text-xs font-bold text-slate-800 outline-none"
                                     >
                                         <option value="">Select Company</option>
-                                        {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                        {companies.map(c => <option key={c.id} value={c.id}>{c.name} {c.code ? `(${c.code})` : ""}</option>)}
                                     </select>
                                 </div>
                                 <div>
@@ -3842,7 +3856,7 @@ function OnboardingForm() {
                                             className="w-full h-10 rounded-xl bg-slate-50 border border-slate-200 px-3 text-xs font-bold text-slate-800 outline-none"
                                         >
                                             <option value="">Select Company</option>
-                                            {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                            {companies.map(c => <option key={c.id} value={c.id}>{c.name} {c.code ? `(${c.code})` : ""}</option>)}
                                         </select>
                                     </div>
                                     <div>
