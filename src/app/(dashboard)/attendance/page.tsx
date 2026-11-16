@@ -233,6 +233,7 @@ export default function AttendancePage() {
     };
     const cycleDates = getDatesInCycle(selectedMonth, selectedYear, cycleType);
     const daysInSelectedMonth = cycleDates.length;
+    const calendarDaysInSelectedMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
     const formatCycleRange = () => {
         if (!cycleDates || cycleDates.length === 0) return "";
         const start = cycleDates[0];
@@ -1719,6 +1720,25 @@ export default function AttendancePage() {
                                 <div className="h-10 w-px bg-slate-700/60 hidden sm:block" />
 
                                 <div>
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block">Current Month Days</span>
+                                    <div className="flex items-center gap-2.5 mt-1.5">
+                                        <div className="h-8 w-8 rounded-xl bg-amber-500/15 flex items-center justify-center">
+                                            <span className="text-base font-black text-amber-400">{calendarDaysInSelectedMonth}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-base sm:text-lg font-black tracking-tight text-amber-400 block leading-none">
+                                                {calendarDaysInSelectedMonth} Days
+                                            </span>
+                                            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">
+                                                1st to {calendarDaysInSelectedMonth}th {monthNames[selectedMonth]}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="h-10 w-px bg-slate-700/60 hidden sm:block" />
+
+                                <div>
                                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block">Applicable Dates / Period</span>
                                     <div className="flex items-center gap-2.5 mt-1.5">
                                         <div className="h-8 w-8 rounded-xl bg-sky-500/10 flex items-center justify-center">
@@ -1740,7 +1760,9 @@ export default function AttendancePage() {
                                 <div className="h-10 w-px bg-slate-700/60 hidden sm:block" />
 
                                 <div>
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block">Total Calendar Days</span>
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block">
+                                        {cycleType === "payroll" ? "Payroll Cycle Days" : "Total Calendar Days"}
+                                    </span>
                                     <div className="flex items-center gap-2.5 mt-1.5">
                                         <div className="h-8 w-8 rounded-xl bg-emerald-500/10 flex items-center justify-center">
                                             <span className="text-base font-black text-emerald-400">{daysInSelectedMonth}</span>
@@ -1750,7 +1772,7 @@ export default function AttendancePage() {
                                                 {daysInSelectedMonth} Days
                                             </span>
                                             <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">
-                                                Active Working/Calendar Period
+                                                {cycleType === "payroll" ? "Active Payroll Muster Days" : "Active Working/Calendar Period"}
                                             </span>
                                         </div>
                                     </div>
@@ -1763,11 +1785,7 @@ export default function AttendancePage() {
                                     Dynamic Grid: {daysInSelectedMonth} Columns Active
                                 </Badge>
                                 <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider">
-                                    {cycleType === "calendar" && daysInSelectedMonth === 30 && "30-day month (No phantom 31st date)"}
-                                    {cycleType === "calendar" && daysInSelectedMonth === 28 && "28-day February (Exact 28 columns)"}
-                                    {cycleType === "calendar" && daysInSelectedMonth === 29 && "Leap February (Exact 29 columns)"}
-                                    {cycleType === "calendar" && daysInSelectedMonth === 31 && "31-day month (Full 31 columns)"}
-                                    {cycleType === "payroll" && `Payroll Cycle (26th to 25th: ${daysInSelectedMonth} days)`}
+                                    Current Month: {calendarDaysInSelectedMonth} Days {cycleType === "payroll" ? `• Payroll Cycle: ${daysInSelectedMonth} Days (26th–25th)` : `• Calendar Month: ${calendarDaysInSelectedMonth} Days`}
                                 </span>
                             </div>
                         </div>
