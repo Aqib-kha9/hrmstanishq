@@ -301,8 +301,8 @@ export default function LettersPage() {
       const data = await apiGet<any>("/letters/templates/all");
       const rows = Array.isArray(data) ? data : (data?.data || data?.rows || []);
       setTemplates(rows);
-    } catch {
-      // Non-critical
+    } catch (err) {
+      console.error("Failed to fetch templates:", err);
     } finally {
       setLoading(false);
     }
@@ -315,8 +315,8 @@ export default function LettersPage() {
       const data = await apiGet<any>("/letters", { limit: 200 });
       const rows = Array.isArray(data) ? data : (data?.data || data?.rows || []);
       setLetters(rows);
-    } catch {
-      // Non-critical
+    } catch (err) {
+      console.error("Failed to fetch letters:", err);
     } finally {
       setLettersLoading(false);
     }
