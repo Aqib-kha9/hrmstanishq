@@ -425,13 +425,39 @@ export default function AttendancePage() {
     const [cellAdjustReason, setCellAdjustReason] = useState("");
     const [cellAdjustSubmitting, setCellAdjustSubmitting] = useState(false);
 
-    // Rotational & Fixed Weekly-Off Schedule Modal (Req 2.5 C)
+    // Rotational & Fixed Weekly-Off & Shift Schedule Modal (Req 2.5 C)
     const [isWeeklyOffModalOpen, setIsWeeklyOffModalOpen] = useState(false);
     const [weeklyOffEmpSearch, setWeeklyOffEmpSearch] = useState("");
     const [editingEmpWeeklyOff, setEditingEmpWeeklyOff] = useState<any | null>(null);
     const [editOffDays, setEditOffDays] = useState<string[]>(["Sunday"]);
     const [editRotationalOff, setEditRotationalOff] = useState(false);
+    const [editShiftStart, setEditShiftStart] = useState("09:30");
+    const [editShiftEnd, setEditShiftEnd] = useState("18:30");
+    const [editRotationalShift, setEditRotationalShift] = useState(false);
+    const [editHalfDayLateMins, setEditHalfDayLateMins] = useState(60);
     const [weeklyOffSaving, setWeeklyOffSaving] = useState(false);
+
+    const calculateShiftDuration = (start: string, end: string): string => {
+        if (!start || !end) return "9.0 hrs";
+        const [sh, sm] = start.split(":").map(Number);
+        const [eh, em] = end.split(":").map(Number);
+        let startMins = (sh || 0) * 60 + (sm || 0);
+        let endMins = (eh || 0) * 60 + (em || 0);
+        if (endMins <= startMins) {
+            endMins += 24 * 60; // Overnight shift
+        }
+        const diff = endMins - startMins;
+        const hours = Math.floor(diff / 60);
+        const mins = diff % 60;
+        return mins > 0 ? `${hours}h ${mins}m` : `${hours} hrs`;
+    };
+
+    const SHIFT_PRESETS = [
+        { label: "General", start: "09:30", end: "18:30" },
+        { label: "Morning", start: "08:00", end: "17:00" },
+        { label: "Evening", start: "14:00", end: "23:00" },
+        { label: "Night", start: "22:00", end: "07:00" },
+    ];
 
     // Late Attendance Threshold State (Req 5.3)
     const [lateThresholdMinutes, setLateThresholdMinutes] = useState(60);
@@ -929,7 +955,7 @@ export default function AttendancePage() {
         }
     };
 
-    // Rotational & Fixed Weekly-Off Schedule Handlers (Req 2.5 C)
+    // Rotational & Fixed Weekly-Off & Shift Schedule Handlers (Req 2.5 C)
     const openWeeklyOffEdit = (emp: any) => {
         setEditingEmpWeeklyOff(emp);
         let offs = emp.weekly_off_days;
@@ -938,6 +964,13 @@ export default function AttendancePage() {
         }
         setEditOffDays(Array.isArray(offs) && offs.length > 0 ? offs : ["Sunday"]);
         setEditRotationalOff(Boolean(emp.rotational_weekly_off));
+
+        const start = emp.shift_start_time ? emp.shift_start_time.slice(0, 5) : "09:30";
+        const end = emp.shift_end_time ? emp.shift_end_time.slice(0, 5) : "18:30";
+        setEditShiftStart(start);
+        setEditShiftEnd(end);
+        setEditRotationalShift(Boolean(emp.is_rotational_shift));
+        setEditHalfDayLateMins(emp.half_day_late_minutes || 60);
     };
 
     const toggleEditOffDay = (dayName: string) => {
@@ -961,12 +994,16 @@ export default function AttendancePage() {
                 weekly_off_days: editOffDays,
                 rotational_weekly_off: editRotationalOff,
                 weekly_off_type: editRotationalOff ? "rotational" : "fixed",
+                shift_start_time: editShiftStart,
+                shift_end_time: editShiftEnd,
+                is_rotational_shift: editRotationalShift,
+                half_day_late_minutes: editHalfDayLateMins,
             });
             setEditingEmpWeeklyOff(null);
             await fetchMonthly();
         } catch (err: any) {
             console.error("Save weekly off schedule error:", err);
-            alert(err?.response?.data?.message || "Failed to update weekly off schedule.");
+            alert(err?.response?.data?.message || "Failed to update schedule & shift timings.");
         } finally {
             setWeeklyOffSaving(false);
         }
@@ -1042,10 +1079,10 @@ export default function AttendancePage() {
                             onClick={() => setIsWeeklyOffModalOpen(true)}
                             variant="outline"
                             className="border-purple-200 bg-purple-50/70 hover:bg-purple-100 text-purple-900 font-black uppercase text-[9px] tracking-widest px-4 h-11 rounded-2xl shadow-xs transition-all gap-2"
-                            title="Configure Fixed & Rotational Weekly Off Schedule (Req 2.5 C)"
+                            title="Configure Shift Timings & Fixed/Rotational Weekly Off Schedule (Req 2.5 C)"
                         >
                             <Sliders className="h-4 w-4 text-purple-600" />
-                            <span>Weekly Offs</span>
+                            <span>Shift & Off Days</span>
                         </Button>
                         <Button
                             onClick={() => setIsTourOpen(true)}
@@ -3154,9 +3191,9 @@ export default function AttendancePage() {
                 </DialogContent>
             </Dialog>
 
-            {/* Rotational & Fixed Weekly-Off Schedule Configuration Dialog (Req 2.5 C) */}
+            {/* Enterprise Shift Timings & Weekly-Off Schedule Configuration Dialog (Req 2.5 C) */}
             <Dialog open={isWeeklyOffModalOpen} onOpenChange={setIsWeeklyOffModalOpen}>
-                <DialogContent className="sm:max-w-[650px] rounded-2xl p-0 overflow-hidden bg-white border border-slate-200 shadow-xl max-h-[90vh] flex flex-col">
+                <DialogContent className="sm:max-w-[720px] rounded-2xl p-0 overflow-hidden bg-white border border-slate-200 shadow-xl max-h-[92vh] flex flex-col">
                     <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
                         <div className="flex items-center gap-3">
                             <div className="h-10 w-10 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-700 shrink-0">
@@ -3164,85 +3201,232 @@ export default function AttendancePage() {
                             </div>
                             <div>
                                 <DialogTitle className="text-base font-bold text-slate-900 tracking-tight">
-                                    Weekly-Off Schedule Control
+                                    Shift & Work Schedule Control
                                 </DialogTitle>
                                 <DialogDescription className="text-xs text-slate-500 font-normal mt-0.5">
-                                    Configure fixed or rotational off days per employee (Req 2.5 C)
+                                    Configure shift timings (General, Morning, Evening, Night, Custom) and fixed/rotational weekly off schedule (Req 2.5 C)
                                 </DialogDescription>
                             </div>
                         </div>
                         <Badge variant="outline" className="text-[11px] font-semibold text-purple-700 bg-purple-50 border-purple-200 px-2.5 py-1">
-                            Req 2.5 C
+                            Req 2.5 C • Roster
                         </Badge>
                     </div>
 
                     <div className="p-6 space-y-4 overflow-y-auto flex-1">
                         {editingEmpWeeklyOff ? (
                             /* Edit screen for selected employee */
-                            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <span className="text-xs font-bold text-slate-900">{editingEmpWeeklyOff.name}</span>
-                                        <span className="text-[11px] text-slate-500 block">{editingEmpWeeklyOff.id} • {editingEmpWeeklyOff.role}</span>
+                            <div className="p-4 sm:p-5 rounded-xl bg-slate-50 border border-slate-200 space-y-5">
+                                <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="h-9 w-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                                            {editingEmpWeeklyOff.name.charAt(0)}
+                                        </div>
+                                        <div>
+                                            <span className="text-sm font-bold text-slate-900 block leading-tight">{editingEmpWeeklyOff.name}</span>
+                                            <span className="text-[11px] text-slate-500">{editingEmpWeeklyOff.id} • {editingEmpWeeklyOff.department || editingEmpWeeklyOff.role || "Staff"}</span>
+                                        </div>
                                     </div>
                                     <Button
-                                        variant="ghost"
+                                        variant="outline"
                                         size="sm"
                                         onClick={() => setEditingEmpWeeklyOff(null)}
-                                        className="text-xs font-medium text-slate-600 hover:text-slate-900"
+                                        className="text-xs font-semibold text-slate-700 border-slate-200 hover:bg-slate-100 h-8"
                                     >
                                         Back to Staff List
                                     </Button>
                                 </div>
 
-                                {/* Rotational Toggle */}
-                                <div className="p-3.5 rounded-lg bg-white border border-slate-200 flex items-center justify-between">
-                                    <div>
-                                        <span className="text-xs font-semibold text-slate-900 block">Rotational Weekly Off Schedule</span>
-                                        <span className="text-[11px] text-slate-500">Enable for employees whose weekly offs rotate</span>
+                                {/* SECTION 1: Shift Timing & Roster Assignment */}
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-1.5">
+                                            <Clock className="h-4 w-4 text-indigo-600" />
+                                            <Label className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                                                Shift Timings & Work Hours
+                                            </Label>
+                                        </div>
+                                        <Badge variant="outline" className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border-indigo-200 px-2 py-0.5">
+                                            Duration: {calculateShiftDuration(editShiftStart, editShiftEnd)}
+                                        </Badge>
                                     </div>
-                                    <input
-                                        type="checkbox"
-                                        checked={editRotationalOff}
-                                        onChange={(e) => setEditRotationalOff(e.target.checked)}
-                                        className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900 cursor-pointer"
-                                    />
+
+                                    {/* 1-Click Shift Presets */}
+                                    <div className="space-y-1.5">
+                                        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
+                                            Standard Shift Presets (1-Click)
+                                        </span>
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                            {SHIFT_PRESETS.map((preset) => {
+                                                const isActive = editShiftStart === preset.start && editShiftEnd === preset.end;
+                                                return (
+                                                    <button
+                                                        key={preset.label}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setEditShiftStart(preset.start);
+                                                            setEditShiftEnd(preset.end);
+                                                        }}
+                                                        className={cn(
+                                                            "p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between",
+                                                            isActive
+                                                                ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                                                                : "bg-white text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30"
+                                                        )}
+                                                    >
+                                                        <div className="flex items-center justify-between w-full">
+                                                            <span className="text-xs font-bold">{preset.label}</span>
+                                                            {isActive && <Check className="h-3.5 w-3.5" />}
+                                                        </div>
+                                                        <span className={cn("text-[10px] mt-0.5", isActive ? "text-indigo-100" : "text-slate-500")}>
+                                                            {preset.start} - {preset.end}
+                                                        </span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* Custom Time Pickers */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                        <div className="space-y-1">
+                                            <Label className="text-[11px] font-semibold text-slate-600">Shift Start Time (Check-In)</Label>
+                                            <Input
+                                                type="time"
+                                                value={editShiftStart}
+                                                onChange={(e) => setEditShiftStart(e.target.value)}
+                                                className="h-10 rounded-lg bg-white border-slate-200 text-xs font-mono font-semibold"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label className="text-[11px] font-semibold text-slate-600">Shift End Time (Check-Out)</Label>
+                                            <Input
+                                                type="time"
+                                                value={editShiftEnd}
+                                                onChange={(e) => setEditShiftEnd(e.target.value)}
+                                                className="h-10 rounded-lg bg-white border-slate-200 text-xs font-mono font-semibold"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Rotational Shift Toggle & Half-Day Late Grace */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                        {/* Rotational Shift Toggle */}
+                                        <div className="p-3 rounded-xl bg-white border border-slate-200 flex items-center justify-between">
+                                            <div>
+                                                <span className="text-xs font-semibold text-slate-900 block">Rotational Shift Assignment</span>
+                                                <span className="text-[10.5px] text-slate-500">Employee rotates on shifting roster</span>
+                                            </div>
+                                            <input
+                                                type="checkbox"
+                                                checked={editRotationalShift}
+                                                onChange={(e) => setEditRotationalShift(e.target.checked)}
+                                                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600 cursor-pointer"
+                                            />
+                                        </div>
+
+                                        {/* Half-Day Grace Cutoff */}
+                                        <div className="p-3 rounded-xl bg-white border border-slate-200 flex flex-col justify-between">
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className="text-xs font-semibold text-slate-900">Half-Day Late Cutoff</span>
+                                                <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
+                                                    {editHalfDayLateMins}m Grace
+                                                </span>
+                                            </div>
+                                            <select
+                                                value={editHalfDayLateMins}
+                                                onChange={(e) => setEditHalfDayLateMins(Number(e.target.value))}
+                                                className="h-8 w-full rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium px-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                            >
+                                                <option value={30}>30 mins (Strict Grace)</option>
+                                                <option value={45}>45 mins Grace</option>
+                                                <option value={60}>60 mins (Standard 1 Hour)</option>
+                                                <option value={90}>90 mins (Relaxed 1.5 Hours)</option>
+                                                <option value={120}>120 mins (2 Hours Maximum)</option>
+                                            </select>
+                                        </div>
+                                    </div>
                                 </div>
 
-                                {/* Off Days Selector */}
-                                <div className="space-y-2">
-                                    <Label className="text-xs font-semibold text-slate-700">Designated Weekly Off Days</Label>
-                                    <div className="grid grid-cols-7 gap-1.5">
-                                        {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((day) => {
-                                            const isSelected = editOffDays.includes(day);
-                                            return (
-                                                <button
-                                                    key={day}
-                                                    type="button"
-                                                    onClick={() => toggleEditOffDay(day)}
-                                                    className={cn(
-                                                        "h-10 rounded-lg text-xs font-semibold transition-all border flex flex-col items-center justify-center",
-                                                        isSelected
-                                                            ? "bg-purple-600 text-white border-purple-600 shadow-xs"
-                                                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-                                                    )}
-                                                >
-                                                    <span>{day.slice(0, 3)}</span>
-                                                </button>
-                                            );
-                                        })}
+                                {/* SECTION 2: Designated Weekly-Off Schedule */}
+                                <div className="space-y-3 pt-2 border-t border-slate-200">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-1.5">
+                                            <Calendar className="h-4 w-4 text-purple-600" />
+                                            <Label className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                                                Weekly-Off Days (Designated Off)
+                                            </Label>
+                                        </div>
+                                        <Badge variant="outline" className={cn("text-[10px] font-bold px-2 py-0.5", editRotationalOff ? "text-purple-700 bg-purple-50 border-purple-200" : "text-slate-700 bg-slate-100 border-slate-200")}>
+                                            {editRotationalOff ? "Rotational Off" : "Fixed Weekly Off"}
+                                        </Badge>
                                     </div>
-                                    <p className="text-[11px] text-slate-500 mt-1">
-                                        Current Off Days: <strong className="text-purple-700">{editOffDays.join(", ")}</strong>. Attendance recalculates automatically.
-                                    </p>
+
+                                    {/* Rotational Toggle */}
+                                    <div className="p-3 rounded-xl bg-white border border-slate-200 flex items-center justify-between">
+                                        <div>
+                                            <span className="text-xs font-semibold text-slate-900 block">Rotational Weekly-Off Schedule</span>
+                                            <span className="text-[10.5px] text-slate-500">Enable for staff whose off days alternate by week</span>
+                                        </div>
+                                        <input
+                                            type="checkbox"
+                                            checked={editRotationalOff}
+                                            onChange={(e) => setEditRotationalOff(e.target.checked)}
+                                            className="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-600 cursor-pointer"
+                                        />
+                                    </div>
+
+                                    {/* Off Days Selector */}
+                                    <div className="space-y-1.5">
+                                        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
+                                            Select Off Days (Click to Toggle)
+                                        </span>
+                                        <div className="grid grid-cols-7 gap-1.5">
+                                            {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((day) => {
+                                                const isSelected = editOffDays.includes(day);
+                                                return (
+                                                    <button
+                                                        key={day}
+                                                        type="button"
+                                                        onClick={() => toggleEditOffDay(day)}
+                                                        className={cn(
+                                                            "h-10 rounded-xl text-xs font-bold transition-all border flex flex-col items-center justify-center cursor-pointer",
+                                                            isSelected
+                                                                ? "bg-purple-600 text-white border-purple-600 shadow-xs"
+                                                                : "bg-white text-slate-700 border-slate-200 hover:bg-purple-50/50 hover:border-purple-200"
+                                                        )}
+                                                    >
+                                                        <span>{day.slice(0, 3)}</span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
                                 </div>
 
-                                <div className="flex justify-end gap-2 pt-2">
+                                {/* Live Summary Banner */}
+                                <div className="p-3.5 rounded-xl bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
+                                    <div className="space-y-0.5">
+                                        <span className="font-bold text-slate-900 block text-[11.5px]">
+                                            Configured Schedule Summary
+                                        </span>
+                                        <span className="text-slate-600 text-[11px] block">
+                                            Shift: <strong className="text-indigo-700">{editShiftStart} - {editShiftEnd}</strong> ({calculateShiftDuration(editShiftStart, editShiftEnd)}) • {editRotationalShift ? "Rotational" : "Fixed"}
+                                            {" | "}
+                                            Offs: <strong className="text-purple-700">{editOffDays.join(", ") || "None"}</strong> {editRotationalOff ? "(Rotational)" : "(Fixed)"}
+                                        </span>
+                                    </div>
+                                    <Badge variant="outline" className="text-[10px] font-bold text-slate-600 border-slate-300 bg-white shrink-0">
+                                        {editHalfDayLateMins}m Grace Cutoff
+                                    </Badge>
+                                </div>
+
+                                <div className="flex justify-end gap-2.5 pt-1">
                                     <Button
                                         type="button"
                                         variant="outline"
                                         onClick={() => setEditingEmpWeeklyOff(null)}
-                                        className="h-9 px-4 rounded-lg border-slate-200 text-xs font-medium text-slate-700"
+                                        className="h-9 px-4 rounded-xl border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100"
                                     >
                                         Cancel
                                     </Button>
@@ -3250,9 +3434,9 @@ export default function AttendancePage() {
                                         type="button"
                                         onClick={handleSaveWeeklyOffSchedule}
                                         disabled={weeklyOffSaving}
-                                        className="h-9 px-5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs"
+                                        className="h-9 px-5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-sm"
                                     >
-                                        {weeklyOffSaving ? "Saving..." : "Save Schedule"}
+                                        {weeklyOffSaving ? "Saving Schedule..." : "Save Schedule & Shift"}
                                     </Button>
                                 </div>
                             </div>
@@ -3262,41 +3446,52 @@ export default function AttendancePage() {
                                 <div className="relative">
                                     <Search className="h-4 w-4 absolute left-3 top-3 text-slate-400" />
                                     <Input
-                                        placeholder="Search employee by name or ID..."
+                                        placeholder="Search employee by name, ID or department..."
                                         value={weeklyOffEmpSearch}
                                         onChange={(e) => setWeeklyOffEmpSearch(e.target.value)}
-                                        className="h-10 pl-9 rounded-lg bg-slate-50 border-slate-200 text-xs"
+                                        className="h-10 pl-9 rounded-xl bg-slate-50 border-slate-200 text-xs"
                                     />
                                 </div>
 
-                                <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100 max-h-[360px] overflow-y-auto">
+                                <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100 max-h-[420px] overflow-y-auto">
                                     {monthlyRows
-                                        .filter(emp => !weeklyOffEmpSearch || emp.name.toLowerCase().includes(weeklyOffEmpSearch.toLowerCase()) || (emp.id && emp.id.toLowerCase().includes(weeklyOffEmpSearch.toLowerCase())))
+                                        .filter(emp => !weeklyOffEmpSearch || emp.name.toLowerCase().includes(weeklyOffEmpSearch.toLowerCase()) || (emp.id && emp.id.toLowerCase().includes(weeklyOffEmpSearch.toLowerCase())) || (emp.department && emp.department.toLowerCase().includes(weeklyOffEmpSearch.toLowerCase())))
                                         .map((emp) => {
                                             const currentOffs = Array.isArray(emp.weekly_off_days) ? emp.weekly_off_days.join(", ") : "Sunday";
+                                            const shiftStart = emp.shift_start_time ? emp.shift_start_time.slice(0, 5) : "09:30";
+                                            const shiftEnd = emp.shift_end_time ? emp.shift_end_time.slice(0, 5) : "18:30";
                                             return (
                                                 <div key={emp.employee_id || emp.id} className="p-3 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                                                    <div className="flex items-center gap-2.5">
-                                                        <div className="h-8 w-8 rounded-lg bg-slate-100 text-slate-800 flex items-center justify-center font-bold text-xs">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="h-9 w-9 rounded-xl bg-slate-100 text-slate-800 border border-slate-200 flex items-center justify-center font-bold text-xs shrink-0">
                                                             {emp.name.charAt(0)}
                                                         </div>
                                                         <div>
-                                                            <span className="text-xs font-semibold text-slate-900 block leading-tight">{emp.name}</span>
+                                                            <span className="text-xs font-bold text-slate-900 block leading-tight">{emp.name}</span>
                                                             <span className="text-[11px] text-slate-500">{emp.id} • {emp.department}</span>
                                                         </div>
                                                     </div>
-                                                    <div className="flex items-center gap-3">
+                                                    <div className="flex items-center gap-2.5">
+                                                        {/* Shift timing pill */}
+                                                        <div className="text-right hidden sm:block">
+                                                            <span className="text-[10px] text-slate-400 font-medium block">Shift Timing</span>
+                                                            <Badge variant="outline" className={cn("text-[10px] font-bold px-2 py-0.5 gap-1", emp.is_rotational_shift ? "bg-indigo-50 text-indigo-700 border-indigo-200" : "bg-slate-50 text-slate-700 border-slate-200")}>
+                                                                <Clock className="h-2.5 w-2.5 text-indigo-600 inline" />
+                                                                {shiftStart} - {shiftEnd} {emp.is_rotational_shift ? "(Rot)" : ""}
+                                                            </Badge>
+                                                        </div>
+                                                        {/* Weekly Off pill */}
                                                         <div className="text-right">
                                                             <span className="text-[10px] text-slate-400 font-medium block">Weekly Off</span>
-                                                            <Badge variant="outline" className={cn("text-[10px] font-medium px-2 py-0.5", emp.rotational_weekly_off ? "bg-purple-50 text-purple-700 border-purple-200" : "bg-slate-50 text-slate-700 border-slate-200")}>
-                                                                {currentOffs} {emp.rotational_weekly_off ? "(Rotational)" : "(Fixed)"}
+                                                            <Badge variant="outline" className={cn("text-[10px] font-bold px-2 py-0.5", emp.rotational_weekly_off ? "bg-purple-50 text-purple-700 border-purple-200" : "bg-slate-50 text-slate-700 border-slate-200")}>
+                                                                {currentOffs} {emp.rotational_weekly_off ? "(Rot)" : "(Fixed)"}
                                                             </Badge>
                                                         </div>
                                                         <Button
                                                             size="sm"
                                                             variant="outline"
                                                             onClick={() => openWeeklyOffEdit(emp)}
-                                                            className="h-8 px-3 rounded-lg border-slate-200 hover:bg-slate-100 text-slate-800 text-xs font-medium"
+                                                            className="h-8 px-3 rounded-lg border-slate-200 hover:bg-slate-100 text-slate-800 text-xs font-semibold cursor-pointer ml-1"
                                                         >
                                                             Configure
                                                         </Button>
@@ -3310,12 +3505,12 @@ export default function AttendancePage() {
                     </div>
 
                     <div className="p-4 px-6 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
-                        <span>Configured schedule applies immediately to attendance & payroll</span>
+                        <span>Configured shift timings & weekly-off schedule apply immediately across attendance calculations & payroll</span>
                         <Button
                             variant="outline"
                             size="sm"
                             onClick={() => setIsWeeklyOffModalOpen(false)}
-                            className="h-9 px-4 rounded-lg border-slate-200 text-xs font-medium text-slate-700"
+                            className="h-9 px-4 rounded-xl border-slate-200 text-xs font-semibold text-slate-700"
                         >
                             Close
                         </Button>
