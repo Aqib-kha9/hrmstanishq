@@ -679,29 +679,29 @@ export function EmployeeIdCardModal({
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
             <DialogContent
                 showCloseButton={false}
-                className="w-[96vw] max-w-[1100px]! sm:max-w-[1100px]! max-h-[92vh] flex flex-col p-0 gap-0 rounded-2xl sm:rounded-3xl bg-slate-900 border border-slate-800 shadow-2xl text-white overflow-hidden my-auto"
+                className="w-[96vw] max-w-[1100px]! sm:max-w-[1100px]! max-h-[92vh] flex flex-col p-0 gap-0 rounded-2xl sm:rounded-3xl bg-white border border-slate-200 shadow-2xl text-slate-900 overflow-hidden my-auto"
             >
                 {/* ── MODAL TOP BAR (Sticky) ── */}
-                <div className="shrink-0 p-4 sm:p-5 pb-3.5 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950/80">
+                <div className="shrink-0 p-4 sm:p-5 pb-3.5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/90">
                     <div>
-                        <DialogTitle className="text-sm sm:text-base font-black uppercase tracking-wider text-white flex items-center gap-2">
+                        <DialogTitle className="text-sm sm:text-base font-black uppercase tracking-wider text-slate-900 flex items-center gap-2">
                             <Sparkles className="h-4 w-4 text-[#E61F26]" />
                             Official Identity Badge Production Studio
                         </DialogTitle>
-                        <DialogDescription className="text-xs text-slate-400 mt-0.5">
+                        <DialogDescription className="text-xs text-slate-500 mt-0.5">
                             CR80 International Standard Badge (85.6 × 54.0 mm) — {cardData.orgName}
                         </DialogDescription>
                     </div>
 
                     <div className="flex items-center gap-3 ml-auto sm:ml-0">
                         {/* View mode switcher */}
-                        <div className="flex items-center gap-1 bg-slate-800/90 p-1 rounded-xl border border-slate-700">
+                        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
                             <button
                                 type="button"
                                 onClick={() => setViewMode("both")}
                                 className={cn(
                                     "px-2.5 sm:px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer",
-                                    viewMode === "both" ? "bg-[#124479] text-white shadow-md" : "text-slate-400 hover:text-white"
+                                    viewMode === "both" ? "bg-[#124479] text-white shadow-sm" : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
                                 )}
                             >
                                 Both Sides
@@ -711,7 +711,7 @@ export function EmployeeIdCardModal({
                                 onClick={() => setViewMode("front")}
                                 className={cn(
                                     "px-2.5 sm:px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer",
-                                    viewMode === "front" ? "bg-[#124479] text-white shadow-md" : "text-slate-400 hover:text-white"
+                                    viewMode === "front" ? "bg-[#124479] text-white shadow-sm" : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
                                 )}
                             >
                                 Front
@@ -721,7 +721,7 @@ export function EmployeeIdCardModal({
                                 onClick={() => setViewMode("back")}
                                 className={cn(
                                     "px-2.5 sm:px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer",
-                                    viewMode === "back" ? "bg-[#124479] text-white shadow-md" : "text-slate-400 hover:text-white"
+                                    viewMode === "back" ? "bg-[#124479] text-white shadow-sm" : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
                                 )}
                             >
                                 Back
@@ -732,7 +732,7 @@ export function EmployeeIdCardModal({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="h-8 w-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center border border-slate-700 transition-colors cursor-pointer shrink-0"
+                            className="h-8 w-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 flex items-center justify-center border border-slate-200 transition-colors cursor-pointer shrink-0"
                             title="Close Modal"
                         >
                             <X className="h-4 w-4 stroke-[2.5]" />
@@ -741,7 +741,7 @@ export function EmployeeIdCardModal({
                 </div>
 
                 {/* ── TOOLBAR: PHOTO UPLOAD, PRINT FORMAT & QUICK EDIT ── */}
-                <div className="shrink-0 px-4 sm:px-6 py-2.5 bg-slate-950/40 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="shrink-0 px-4 sm:px-6 py-2.5 bg-slate-50/80 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
                     <div className="flex items-center gap-2">
                         <Button
                             type="button"
@@ -752,7 +752,7 @@ export function EmployeeIdCardModal({
                                 "h-8 px-3 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer",
                                 isEditing
                                     ? "bg-amber-400 text-slate-950 border-amber-400 hover:bg-amber-300"
-                                    : "border-slate-700 bg-slate-800/80 hover:bg-slate-800 text-slate-200"
+                                    : "border-slate-200 bg-white hover:bg-slate-100 text-slate-700 shadow-sm"
                             )}
                         >
                             <Edit2 className="h-3 w-3" />
@@ -760,14 +760,14 @@ export function EmployeeIdCardModal({
                         </Button>
 
                         {/* Print Layout Selector */}
-                        <div className="hidden sm:flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-xl px-2 py-0.5 text-[9px] font-black uppercase text-slate-300">
-                            <span className="text-slate-500 mr-1">Print:</span>
+                        <div className="hidden sm:flex items-center gap-1 bg-white border border-slate-200 rounded-xl px-2 py-0.5 text-[9px] font-black uppercase text-slate-700 shadow-sm">
+                            <span className="text-slate-400 mr-1">Print:</span>
                             <button
                                 type="button"
                                 onClick={() => setPrintLayout("foldable")}
                                 className={cn(
                                     "px-2 py-0.5 rounded cursor-pointer transition-colors",
-                                    printLayout === "foldable" ? "bg-[#124479] text-white" : "hover:text-white"
+                                    printLayout === "foldable" ? "bg-[#124479] text-white" : "text-slate-600 hover:text-slate-900"
                                 )}
                             >
                                 Foldable A4
@@ -777,7 +777,7 @@ export function EmployeeIdCardModal({
                                 onClick={() => setPrintLayout("sideBySide")}
                                 className={cn(
                                     "px-2 py-0.5 rounded cursor-pointer transition-colors",
-                                    printLayout === "sideBySide" ? "bg-[#124479] text-white" : "hover:text-white"
+                                    printLayout === "sideBySide" ? "bg-[#124479] text-white" : "text-slate-600 hover:text-slate-900"
                                 )}
                             >
                                 Side-by-Side
@@ -785,15 +785,15 @@ export function EmployeeIdCardModal({
                         </div>
 
                         {/* Print Size Scale Selector */}
-                        <div className="hidden md:flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-xl px-2 py-0.5 text-[9px] font-black uppercase text-slate-300">
-                            <span className="text-slate-500 mr-1">Scale:</span>
+                        <div className="hidden md:flex items-center gap-1 bg-white border border-slate-200 rounded-xl px-2 py-0.5 text-[9px] font-black uppercase text-slate-700 shadow-sm">
+                            <span className="text-slate-400 mr-1">Scale:</span>
                             <button
                                 type="button"
                                 onClick={() => setPrintScale("cr80")}
                                 title="Standard 85.6mm × 54.0mm wallet/lanyard badge"
                                 className={cn(
                                     "px-2 py-0.5 rounded cursor-pointer transition-colors",
-                                    printScale === "cr80" ? "bg-[#124479] text-white" : "hover:text-white"
+                                    printScale === "cr80" ? "bg-[#124479] text-white" : "text-slate-600 hover:text-slate-900"
                                 )}
                             >
                                 CR80 Standard (85.6×54mm)
@@ -804,7 +804,7 @@ export function EmployeeIdCardModal({
                                 title="Large Display Badge (120mm × 76mm)"
                                 className={cn(
                                     "px-2 py-0.5 rounded cursor-pointer transition-colors",
-                                    printScale === "large" ? "bg-[#124479] text-white" : "hover:text-white"
+                                    printScale === "large" ? "bg-[#124479] text-white" : "text-slate-600 hover:text-slate-900"
                                 )}
                             >
                                 Large (120×76mm)
@@ -817,7 +817,7 @@ export function EmployeeIdCardModal({
                                 variant="ghost"
                                 size="sm"
                                 onClick={syncFromEmployee}
-                                className="h-8 px-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
+                                className="h-8 px-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider text-slate-500 hover:text-slate-900 flex items-center gap-1 cursor-pointer"
                                 title="Reset all fields back to database employee details"
                             >
                                 <RotateCcw className="h-3 w-3" />
@@ -841,7 +841,7 @@ export function EmployeeIdCardModal({
                             size="sm"
                             disabled={uploadingPhoto}
                             onClick={() => fileInputRef.current?.click()}
-                            className="h-8 px-3.5 rounded-xl border-slate-700 bg-slate-800/80 hover:bg-slate-800 text-slate-200 text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer"
+                            className="h-8 px-3.5 rounded-xl border-slate-200 bg-white hover:bg-slate-100 text-slate-700 text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-sm"
                         >
                             {uploadingPhoto ? (
                                 <Loader2 className="h-3 w-3 animate-spin mr-1" />
@@ -855,124 +855,124 @@ export function EmployeeIdCardModal({
 
                 {/* ── OPTIONAL INLINE FIELD EDITOR ── */}
                 {isEditing && (
-                    <div className="shrink-0 max-h-[190px] overflow-y-auto p-4 bg-slate-950/95 border-b border-slate-800 text-xs">
+                    <div className="shrink-0 max-h-[190px] overflow-y-auto p-4 bg-slate-50 border-b border-slate-200 text-xs">
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
                             <div>
-                                <label className="text-[9px] font-black text-slate-400 uppercase">Company Name</label>
+                                <label className="text-[9px] font-black text-slate-500 uppercase">Company Name</label>
                                 <Input
                                     value={cardData.orgName}
                                     onChange={(e) => setCardData({ ...cardData, orgName: e.target.value })}
-                                    className="h-8 text-xs bg-slate-900 border-slate-700 text-white"
+                                    className="h-8 text-xs bg-white border-slate-200 text-slate-900 shadow-xs focus-visible:ring-1 focus-visible:ring-blue-600"
                                 />
                             </div>
                             <div>
-                                <label className="text-[9px] font-black text-slate-400 uppercase">Logo Initials</label>
+                                <label className="text-[9px] font-black text-slate-500 uppercase">Logo Initials</label>
                                 <Input
                                     value={cardData.orgInitials}
                                     onChange={(e) => setCardData({ ...cardData, orgInitials: e.target.value })}
-                                    className="h-8 text-xs bg-slate-900 border-slate-700 text-white uppercase"
+                                    className="h-8 text-xs bg-white border-slate-200 text-slate-900 uppercase shadow-xs focus-visible:ring-1 focus-visible:ring-blue-600"
                                     maxLength={3}
                                 />
                             </div>
                             <div>
-                                <label className="text-[9px] font-black text-slate-400 uppercase">Branch / Unit Subtitle</label>
+                                <label className="text-[9px] font-black text-slate-500 uppercase">Branch / Unit Subtitle</label>
                                 <Input
                                     value={cardData.unitName}
                                     onChange={(e) => setCardData({ ...cardData, unitName: e.target.value })}
-                                    className="h-8 text-xs bg-slate-900 border-slate-700 text-white"
+                                    className="h-8 text-xs bg-white border-slate-200 text-slate-900 shadow-xs focus-visible:ring-1 focus-visible:ring-blue-600"
                                 />
                             </div>
                             <div>
-                                <label className="text-[9px] font-black text-slate-400 uppercase">Branch / Location</label>
+                                <label className="text-[9px] font-black text-slate-500 uppercase">Branch / Location</label>
                                 <Input
                                     value={cardData.stateUnit}
                                     onChange={(e) => setCardData({ ...cardData, stateUnit: e.target.value })}
-                                    className="h-8 text-xs bg-slate-900 border-slate-700 text-white"
+                                    className="h-8 text-xs bg-white border-slate-200 text-slate-900 shadow-xs focus-visible:ring-1 focus-visible:ring-blue-600"
                                 />
                             </div>
                             <div>
-                                <label className="text-[9px] font-black text-slate-400 uppercase">Employee Name</label>
+                                <label className="text-[9px] font-black text-slate-500 uppercase">Employee Name</label>
                                 <Input
                                     value={cardData.name}
                                     onChange={(e) => setCardData({ ...cardData, name: e.target.value })}
-                                    className="h-8 text-xs bg-slate-900 border-slate-700 text-white"
+                                    className="h-8 text-xs bg-white border-slate-200 text-slate-900 shadow-xs focus-visible:ring-1 focus-visible:ring-blue-600"
                                 />
                             </div>
                             <div>
-                                <label className="text-[9px] font-black text-slate-400 uppercase">Designation</label>
+                                <label className="text-[9px] font-black text-slate-500 uppercase">Designation</label>
                                 <Input
                                     value={cardData.designation}
                                     onChange={(e) => setCardData({ ...cardData, designation: e.target.value })}
-                                    className="h-8 text-xs bg-slate-900 border-slate-700 text-white"
+                                    className="h-8 text-xs bg-white border-slate-200 text-slate-900 shadow-xs focus-visible:ring-1 focus-visible:ring-blue-600"
                                 />
                             </div>
                             <div>
-                                <label className="text-[9px] font-black text-slate-400 uppercase">Father/Spouse (S/O)</label>
+                                <label className="text-[9px] font-black text-slate-500 uppercase">Father/Spouse (S/O)</label>
                                 <Input
                                     value={cardData.fatherName}
                                     onChange={(e) => setCardData({ ...cardData, fatherName: e.target.value })}
-                                    className="h-8 text-xs bg-slate-900 border-slate-700 text-white"
+                                    className="h-8 text-xs bg-white border-slate-200 text-slate-900 shadow-xs focus-visible:ring-1 focus-visible:ring-blue-600"
                                 />
                             </div>
                             <div>
-                                <label className="text-[9px] font-black text-slate-400 uppercase">Date of Birth</label>
+                                <label className="text-[9px] font-black text-slate-500 uppercase">Date of Birth</label>
                                 <Input
                                     value={cardData.dob}
                                     onChange={(e) => setCardData({ ...cardData, dob: e.target.value })}
-                                    className="h-8 text-xs bg-slate-900 border-slate-700 text-white"
+                                    className="h-8 text-xs bg-white border-slate-200 text-slate-900 shadow-xs focus-visible:ring-1 focus-visible:ring-blue-600"
                                 />
                             </div>
                             <div>
-                                <label className="text-[9px] font-black text-slate-400 uppercase">Phone Number</label>
+                                <label className="text-[9px] font-black text-slate-500 uppercase">Phone Number</label>
                                 <Input
                                     value={cardData.phone}
                                     onChange={(e) => setCardData({ ...cardData, phone: e.target.value })}
-                                    className="h-8 text-xs bg-slate-900 border-slate-700 text-white"
+                                    className="h-8 text-xs bg-white border-slate-200 text-slate-900 shadow-xs focus-visible:ring-1 focus-visible:ring-blue-600"
                                 />
                             </div>
                             <div>
-                                <label className="text-[9px] font-black text-slate-400 uppercase">Blood Group</label>
+                                <label className="text-[9px] font-black text-slate-500 uppercase">Blood Group</label>
                                 <Input
                                     value={cardData.bloodGroup}
                                     onChange={(e) => setCardData({ ...cardData, bloodGroup: e.target.value })}
-                                    className="h-8 text-xs bg-slate-900 border-slate-700 text-white"
+                                    className="h-8 text-xs bg-white border-slate-200 text-slate-900 shadow-xs focus-visible:ring-1 focus-visible:ring-blue-600"
                                 />
                             </div>
                             <div>
-                                <label className="text-[9px] font-black text-slate-400 uppercase">Employee ID</label>
+                                <label className="text-[9px] font-black text-slate-500 uppercase">Employee ID</label>
                                 <Input
                                     value={cardData.memberId}
                                     onChange={(e) => setCardData({ ...cardData, memberId: e.target.value })}
-                                    className="h-8 text-xs bg-slate-900 border-slate-700 text-white"
+                                    className="h-8 text-xs bg-white border-slate-200 text-slate-900 shadow-xs focus-visible:ring-1 focus-visible:ring-blue-600"
                                 />
                             </div>
                             <div>
-                                <label className="text-[9px] font-black text-slate-400 uppercase">Company Website</label>
+                                <label className="text-[9px] font-black text-slate-500 uppercase">Company Website</label>
                                 <Input
                                     value={cardData.website}
                                     onChange={(e) => setCardData({ ...cardData, website: e.target.value })}
-                                    className="h-8 text-xs bg-slate-900 border-slate-700 text-white"
+                                    className="h-8 text-xs bg-white border-slate-200 text-slate-900 shadow-xs focus-visible:ring-1 focus-visible:ring-blue-600"
                                 />
                             </div>
                             <div className="col-span-2">
-                                <label className="text-[9px] font-black text-slate-400 uppercase">Company Tagline</label>
+                                <label className="text-[9px] font-black text-slate-500 uppercase">Company Tagline</label>
                                 <Input
                                     value={cardData.tagline}
                                     onChange={(e) => setCardData({ ...cardData, tagline: e.target.value })}
-                                    className="h-8 text-xs bg-slate-900 border-slate-700 text-white"
+                                    className="h-8 text-xs bg-white border-slate-200 text-slate-900 shadow-xs focus-visible:ring-1 focus-visible:ring-blue-600"
                                 />
                             </div>
                             <div className="col-span-2">
-                                <label className="text-[9px] font-black text-slate-400 uppercase">Full Address</label>
+                                <label className="text-[9px] font-black text-slate-500 uppercase">Full Address</label>
                                 <Input
                                     value={cardData.address}
                                     onChange={(e) => setCardData({ ...cardData, address: e.target.value })}
-                                    className="h-8 text-xs bg-slate-900 border-slate-700 text-white"
+                                    className="h-8 text-xs bg-white border-slate-200 text-slate-900 shadow-xs focus-visible:ring-1 focus-visible:ring-blue-600"
                                 />
                             </div>
 
                             {/* ── AUTHORIZED SIGNATORY CONTROLS ── */}
-                            <div className="col-span-2 sm:col-span-3 md:col-span-4 border-t border-slate-800 pt-2.5 mt-1">
+                            <div className="col-span-2 sm:col-span-3 md:col-span-4 border-t border-slate-200 pt-2.5 mt-1">
                                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                                     <span className="text-[10px] font-black uppercase text-[#124479] tracking-wider flex items-center gap-1.5">
                                         <ShieldCheck className="h-3.5 w-3.5" />
@@ -991,7 +991,7 @@ export function EmployeeIdCardModal({
                                             variant="outline"
                                             size="sm"
                                             onClick={() => sigFileInputRef.current?.click()}
-                                            className="h-7 px-2.5 text-[9px] font-black uppercase tracking-wider rounded-lg border-slate-700 bg-slate-800/90 hover:bg-slate-800 text-slate-200 cursor-pointer"
+                                            className="h-7 px-2.5 text-[9px] font-black uppercase tracking-wider rounded-lg border-slate-200 bg-white hover:bg-slate-100 text-slate-700 shadow-xs cursor-pointer"
                                         >
                                             <Upload className="h-3 w-3 mr-1 text-[#124479]" />
                                             {cardData.signatureUrl ? "Change Signature Image" : "Upload Signature Image"}
@@ -1002,7 +1002,7 @@ export function EmployeeIdCardModal({
                                                 variant="ghost"
                                                 size="sm"
                                                 onClick={() => setCardData((prev) => ({ ...prev, signatureUrl: null }))}
-                                                className="h-7 px-2 text-[9px] font-black uppercase text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 rounded-lg cursor-pointer"
+                                                className="h-7 px-2 text-[9px] font-black uppercase text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg cursor-pointer"
                                             >
                                                 Remove Signature
                                             </Button>
@@ -1012,7 +1012,7 @@ export function EmployeeIdCardModal({
 
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                                     <div>
-                                        <label className="text-[9px] font-black text-slate-400 uppercase">Select Saved Signatory</label>
+                                        <label className="text-[9px] font-black text-slate-500 uppercase">Select Saved Signatory</label>
                                         <select
                                             value={
                                                 signatoriesList.find((s) => s.signature_url === cardData.signatureUrl)?.id || ""
@@ -1038,7 +1038,7 @@ export function EmployeeIdCardModal({
                                                     }
                                                 }
                                             }}
-                                            className="h-8 w-full text-xs bg-slate-900 border border-slate-700 rounded-md px-2 text-white focus:outline-none focus:ring-1 focus:ring-blue-600"
+                                            className="h-8 w-full text-xs bg-white border border-slate-200 rounded-md px-2 text-slate-900 shadow-xs focus:outline-none focus:ring-1 focus:ring-blue-600"
                                         >
                                             <option value="">None (Blank Physical Signature Line)</option>
                                             {signatoriesList.map((sig) => (
@@ -1049,21 +1049,21 @@ export function EmployeeIdCardModal({
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="text-[9px] font-black text-slate-400 uppercase">Signatory Name</label>
+                                        <label className="text-[9px] font-black text-slate-500 uppercase">Signatory Name</label>
                                         <Input
                                             value={cardData.signatoryName}
                                             onChange={(e) => setCardData({ ...cardData, signatoryName: e.target.value })}
                                             placeholder="e.g. JOHN"
-                                            className="h-8 text-xs bg-slate-900 border-slate-700 text-white uppercase"
+                                            className="h-8 text-xs bg-white border-slate-200 text-slate-900 uppercase shadow-xs focus-visible:ring-1 focus-visible:ring-blue-600"
                                         />
                                     </div>
                                     <div>
-                                        <label className="text-[9px] font-black text-slate-400 uppercase">Signatory Designation</label>
+                                        <label className="text-[9px] font-black text-slate-500 uppercase">Signatory Designation</label>
                                         <Input
                                             value={cardData.signatoryTitle}
                                             onChange={(e) => setCardData({ ...cardData, signatoryTitle: e.target.value })}
                                             placeholder="e.g. DIRECTOR / HR MANAGER"
-                                            className="h-8 text-xs bg-slate-900 border-slate-700 text-white uppercase"
+                                            className="h-8 text-xs bg-white border-slate-200 text-slate-900 uppercase shadow-xs focus-visible:ring-1 focus-visible:ring-blue-600"
                                         />
                                     </div>
                                 </div>
@@ -1073,11 +1073,11 @@ export function EmployeeIdCardModal({
                 )}
 
                 {/* ── CARD PREVIEW CANVAS (Flex-1, Scrollable, Never overflows viewport) ── */}
-                <div className="flex-1 overflow-y-auto overflow-x-auto p-4 sm:p-6 md:p-8 flex items-center justify-center bg-slate-950/90 min-h-0">
+                <div className="flex-1 overflow-y-auto overflow-x-auto p-4 sm:p-6 md:p-8 flex items-center justify-center bg-slate-100/80 min-h-0">
                     <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-8 my-auto">
                         {(viewMode === "front" || viewMode === "both") && (
                             <div className="flex flex-col items-center gap-2 shrink-0">
-                                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-800/60 px-3 py-1 rounded-full border border-slate-700/60">
+                                <span className="text-[9px] font-black uppercase tracking-widest text-slate-600 bg-white px-3 py-1 rounded-full border border-slate-200 shadow-xs">
                                     Front Side (CR80)
                                 </span>
                                 {renderFrontCard(false, "preview-front")}
@@ -1086,7 +1086,7 @@ export function EmployeeIdCardModal({
 
                         {(viewMode === "back" || viewMode === "both") && (
                             <div className="flex flex-col items-center gap-2 shrink-0">
-                                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-800/60 px-3 py-1 rounded-full border border-slate-700/60">
+                                <span className="text-[9px] font-black uppercase tracking-widest text-slate-600 bg-white px-3 py-1 rounded-full border border-slate-200 shadow-xs">
                                     Back Side (CR80)
                                 </span>
                                 {renderBackCard(false, "preview-back")}
@@ -1150,10 +1150,10 @@ export function EmployeeIdCardModal({
 
 
                 {/* ── MODAL FOOTER (Sticky) ── */}
-                <div className="shrink-0 p-4 sm:p-5 border-t border-slate-800 bg-slate-950/90 flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 text-xs text-slate-400">
-                        <span className="hidden sm:inline-flex items-center gap-1.5 font-medium">
-                            <FileCheck2 className="h-3.5 w-3.5 text-emerald-400" />
+                <div className="shrink-0 p-4 sm:p-5 border-t border-slate-200 bg-slate-50/90 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 text-xs text-slate-500">
+                        <span className="hidden sm:inline-flex items-center gap-1.5 font-bold text-emerald-700">
+                            <FileCheck2 className="h-3.5 w-3.5 text-emerald-600" />
                             CR80 Standard (85.6 × 54 mm) ready
                         </span>
                     </div>
@@ -1163,7 +1163,7 @@ export function EmployeeIdCardModal({
                             type="button"
                             variant="outline"
                             onClick={onClose}
-                            className="h-9 sm:h-10 px-4 sm:px-5 rounded-xl border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs cursor-pointer"
+                            className="h-9 sm:h-10 px-4 sm:px-5 rounded-xl border-slate-200 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs cursor-pointer shadow-xs"
                         >
                             Close
                         </Button>
@@ -1173,13 +1173,13 @@ export function EmployeeIdCardModal({
                             variant="outline"
                             disabled={generatingPdf}
                             onClick={handleDownloadPdf}
-                            className="h-9 sm:h-10 px-4 sm:px-5 rounded-xl border-slate-700 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-md"
+                            className="h-9 sm:h-10 px-4 sm:px-5 rounded-xl border-slate-200 bg-white hover:bg-slate-100 text-slate-900 font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
                             title="Download print-ready PDF at Ultra HD 700+ DPI (CR80 Plastic Card + A4 Foldable Sheet)"
                         >
                             {generatingPdf ? (
                                 <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
                             ) : (
-                                <Download className="h-3.5 w-3.5 text-blue-400" />
+                                <Download className="h-3.5 w-3.5 text-[#124479]" />
                             )}
                             Download PDF (Ultra HD)
                         </Button>
@@ -1187,7 +1187,7 @@ export function EmployeeIdCardModal({
                         <Button
                             type="button"
                             onClick={() => window.print()}
-                            className="h-9 sm:h-10 px-5 sm:px-6 rounded-xl font-black text-xs uppercase tracking-wider bg-[#124479] hover:bg-[#0E335C] text-white shadow-lg shadow-blue-900/30 flex items-center gap-2 cursor-pointer"
+                            className="h-9 sm:h-10 px-5 sm:px-6 rounded-xl font-black text-xs uppercase tracking-wider bg-[#124479] hover:bg-[#0E335C] text-white shadow-lg shadow-blue-900/20 flex items-center gap-2 cursor-pointer"
                         >
                             <Printer className="h-4 w-4 stroke-[2.5]" />
                             Print Card
