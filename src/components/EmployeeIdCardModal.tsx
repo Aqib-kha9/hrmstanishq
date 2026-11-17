@@ -4,7 +4,6 @@ import React, { useState, useRef, useEffect } from "react";
 import {
     Dialog,
     DialogContent,
-    DialogHeader,
     DialogTitle,
     DialogDescription,
 } from "@/components/ui/dialog";
@@ -22,7 +21,6 @@ import {
     ShieldCheck,
     Loader2,
     Edit2,
-    Check,
     RotateCcw,
     Sparkles,
     X,
@@ -49,9 +47,9 @@ export function EmployeeIdCardModal({
     const [localPhoto, setLocalPhoto] = useState<string | null>(rawEmployee?.profile_image || null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Format Date helper
+    // Helpers
     const formatDate = (dateStr: string | null | undefined): string => {
-        if (!dateStr) return "14/01/1990";
+        if (!dateStr) return "N/A";
         try {
             const d = new Date(dateStr);
             if (isNaN(d.getTime())) return String(dateStr);
@@ -64,60 +62,110 @@ export function EmployeeIdCardModal({
         }
     };
 
-    // Editable Card Data State matching the exact design
+    const getInitials = (str: string): string => {
+        if (!str) return "CO";
+        const words = str.trim().split(/\s+/);
+        if (words.length >= 2) {
+            return (words[0][0] + words[1][0]).toUpperCase();
+        }
+        return str.slice(0, 2).toUpperCase();
+    };
+
+    const getCompanyWebsite = (compName: string, rawWebsite?: string | null): string => {
+        if (rawWebsite && rawWebsite.trim()) {
+            return rawWebsite.trim().toUpperCase();
+        }
+        const clean = compName.toLowerCase().replace(/[^a-z0-9]/g, "");
+        return `WWW.${clean || "company"}.COM`;
+    };
+
+    // Dynamic Card Data State
     const [cardData, setCardData] = useState({
-        orgName: "AKHIL BHARAT HINDU MAHASABHA",
-        unitName: "MADHYA PRADESH UNIT",
-        name: "RAM KUMAR SINGH",
-        designation: "DISTRICT MEMBER",
-        fatherName: "SHRI SURESH SINGH",
-        dob: "14/01/1990",
-        address: "108, SHIV NAGAR, MP NAGAR, BHOPAL, MADHYA PRADESH",
-        phone: "+91 98765 43210",
+        orgName: "APAAR LOGISTICS",
+        orgInitials: "AL",
+        unitName: "UJJAIN BRANCH",
+        name: "ADAM",
+        designation: "EXECUTIVE",
+        fatherName: "OMPRAKASH SHARMA",
+        dob: "20/05/1998",
+        address: "12/3, MG ROAD, VIJAY NAGAR, INDORE, MP 452010",
+        phone: "+91 8601677140",
         bloodGroup: "B+VE",
         status: "ACTIVE",
-        memberId: "ABHM-MP-2024-1008",
-        stateUnit: "MADHYA PRADESH",
-        tagline: "SANGATHIT HINDU - SAMARTH BHARAT",
-        website: "WWW.ABHM-MP.ORG",
+        memberId: "APA003",
+        stateUnit: "UJJAIN",
+        tagline: "COMMITTED TO EXCELLENCE & INTEGRITY",
+        website: "WWW.APAARLOGISTICS.COM",
     });
 
-    // Sync from employee / rawEmployee on load
-    useEffect(() => {
-        if (employee) {
-            const empName = (rawEmployee?.name || employee.name || "RAM KUMAR SINGH").toUpperCase();
-            const empDesig = (rawEmployee?.designation || employee.jobTitle || "DISTRICT MEMBER").toUpperCase();
-            const empCode = rawEmployee?.emp_code || employee.id || "ABHM-MP-2024-1008";
-            const empPhone = rawEmployee?.phone || employee.phone || "+91 98765 43210";
-            const empFather = (rawEmployee?.father_or_husband_name || "SHRI SURESH SINGH").toUpperCase();
-            const empDob = rawEmployee?.date_of_birth ? formatDate(rawEmployee.date_of_birth) : "14/01/1990";
-            const empAddr = (rawEmployee?.address || "108, SHIV NAGAR, MP NAGAR, BHOPAL, MADHYA PRADESH").toUpperCase();
-            const empBlood = (rawEmployee?.blood_group || "B+VE").toUpperCase().replace("POSITIVE", "+VE").replace("POS", "+VE");
-            
-            // Clean stateUnit: Default to MADHYA PRADESH (matches the card design and reference)
-            let empLocation = "MADHYA PRADESH";
-            if (employee.location && employee.location !== "Unknown" && !employee.location.toLowerCase().includes("apaar")) {
-                empLocation = employee.location.toUpperCase();
-            }
-            const org = (rawEmployee?.company?.name || rawEmployee?.company_name || "AKHIL BHARAT HINDU MAHASABHA").toUpperCase();
+    // Populate data dynamically from employee, office, and company records
+    const syncFromEmployee = () => {
+        if (!employee) return;
 
-            setCardData({
-                orgName: org,
-                unitName: "MADHYA PRADESH UNIT",
-                name: empName,
-                designation: empDesig,
-                fatherName: empFather,
-                dob: empDob,
-                address: empAddr,
-                phone: empPhone.startsWith("+") ? empPhone : `+91 ${empPhone}`,
-                bloodGroup: empBlood.includes("+") || empBlood.includes("-") ? empBlood : `${empBlood}+VE`,
-                status: (rawEmployee?.status || employee.status || "ACTIVE").toUpperCase(),
-                memberId: empCode,
-                stateUnit: empLocation,
-                tagline: "SANGATHIT HINDU - SAMARTH BHARAT",
-                website: "WWW.ABHM-MP.ORG",
-            });
+        const org = (
+            rawEmployee?.company?.name ||
+            rawEmployee?.company_name ||
+            employee.company ||
+            "APAAR LOGISTICS"
+        ).toUpperCase();
+
+        const initials = (rawEmployee?.company?.code || getInitials(org)).toUpperCase();
+
+        // Branch / Office location resolution
+        const officeName = rawEmployee?.office?.name || "";
+        const officeCity = rawEmployee?.office?.city || "";
+        let cleanLocation = officeCity;
+        if (!cleanLocation && officeName) {
+            if (officeName.includes("—")) {
+                cleanLocation = officeName.split("—")[1].trim();
+            } else if (officeName.includes("-")) {
+                cleanLocation = officeName.split("-")[1].trim();
+            } else {
+                cleanLocation = officeName;
+            }
         }
+        if (!cleanLocation && employee.location && employee.location !== "Unknown") {
+            cleanLocation = employee.location;
+        }
+        if (!cleanLocation) {
+            cleanLocation = "CENTRAL";
+        }
+
+        const branchUnit = `${cleanLocation.toUpperCase()} BRANCH`;
+        const locationDisplay = cleanLocation.toUpperCase();
+        const compWebsite = getCompanyWebsite(org, rawEmployee?.company?.website);
+
+        const empName = (rawEmployee?.name || employee.name || "EMPLOYEE").toUpperCase();
+        const empDesig = (rawEmployee?.designation || employee.jobTitle || "EXECUTIVE").toUpperCase();
+        const empCode = rawEmployee?.emp_code || employee.id || "EMP001";
+        const empPhone = rawEmployee?.phone || employee.phone || "+91 00000 00000";
+        const empFather = (rawEmployee?.father_or_husband_name || "N/A").toUpperCase();
+        const empDob = rawEmployee?.date_of_birth ? formatDate(rawEmployee.date_of_birth) : "N/A";
+        const empAddr = (rawEmployee?.address || rawEmployee?.office?.address || "N/A").toUpperCase();
+        const empBlood = (rawEmployee?.blood_group || "B+VE").toUpperCase().replace("POSITIVE", "+VE").replace("POS", "+VE");
+        const empStatus = (rawEmployee?.status || employee.status || "ACTIVE").toUpperCase();
+
+        setCardData({
+            orgName: org,
+            orgInitials: initials,
+            unitName: branchUnit,
+            name: empName,
+            designation: empDesig,
+            fatherName: empFather,
+            dob: empDob,
+            address: empAddr,
+            phone: empPhone.startsWith("+") ? empPhone : `+91 ${empPhone}`,
+            bloodGroup: empBlood.includes("+") || empBlood.includes("-") ? empBlood : `${empBlood}+VE`,
+            status: empStatus,
+            memberId: empCode,
+            stateUnit: locationDisplay,
+            tagline: "COMMITTED TO EXCELLENCE & INTEGRITY",
+            website: compWebsite,
+        });
+    };
+
+    useEffect(() => {
+        syncFromEmployee();
         if (rawEmployee?.profile_image) {
             setLocalPhoto(rawEmployee.profile_image);
         }
@@ -154,20 +202,18 @@ export function EmployeeIdCardModal({
         reader.readAsDataURL(file);
     };
 
-    // ── FALLBACK VECTOR QR CODE SVG (Rendered in vibrant orange #EA580C) ──
+    // ── DYNAMIC VECTOR QR CODE (Rendered in vibrant corporate orange #EA580C) ──
     const renderOrangeQRCode = () => {
-        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&color=ea580c&bgcolor=ffffff&data=${encodeURIComponent(
-            `ID:${cardData.memberId}|NAME:${cardData.name}|UNIT:${cardData.stateUnit}|STATUS:${cardData.status}`
-        )}`;
+        const qrPayload = `COMPANY:${cardData.orgName}|EMP_ID:${cardData.memberId}|NAME:${cardData.name}|DESIG:${cardData.designation}|BRANCH:${cardData.stateUnit}|STATUS:${cardData.status}`;
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&color=ea580c&bgcolor=ffffff&data=${encodeURIComponent(qrPayload)}`;
 
         return (
             <div className="w-[105px] h-[105px] rounded-xl p-1 bg-white border border-orange-200/60 shadow-sm flex items-center justify-center overflow-hidden">
                 <img
                     src={qrUrl}
-                    alt="Verification QR Code"
+                    alt="Corporate Verification QR Code"
                     className="w-full h-full object-contain"
                     onError={(e) => {
-                        // Fallback SVG representation if network image is blocked
                         const target = e.currentTarget;
                         target.style.display = "none";
                         const parent = target.parentElement;
@@ -200,7 +246,7 @@ export function EmployeeIdCardModal({
         );
     };
 
-    // ── FRONT SIDE CARD (Matches Image 2 exactly) ──
+    // ── FRONT SIDE CARD (Matches CR80 Horizontal Specification) ──
     const renderFrontCard = (isPrint = false) => {
         return (
             <div
@@ -209,34 +255,35 @@ export function EmployeeIdCardModal({
                     isPrint && "shadow-none border-slate-300"
                 )}
             >
-                {/* ── TOP HEADER (Diagonal Split Black & Orange) ── */}
+                {/* ── TOP HEADER (Diagonal Split Black & Vibrant Orange) ── */}
                 <div className="relative h-[54px] w-full shrink-0 overflow-hidden">
                     {/* Background SVG with Diagonal Cut */}
                     <svg viewBox="0 0 480 54" preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
                         {/* Right Orange Section */}
                         <rect x="0" y="0" width="480" height="54" fill="#E65100" />
-                        {/* Left Black Angled Section (polygon points: 0,0 -> 350,0 -> 332,54 -> 0,54) */}
+                        {/* Left Black Angled Section (slanted diagonal cut) */}
                         <polygon points="0,0 350,0 332,54 0,54" fill="#0A0A0A" />
                     </svg>
 
                     {/* Content inside Header */}
                     <div className="relative z-10 flex items-center justify-between h-full px-4">
-                        {/* Left Logo + Text */}
+                        {/* Left: Dynamic Company Logo Emblem + Names */}
                         <div className="flex items-center gap-2.5 max-w-[325px]">
-                            {/* Circular Orange Emblem Logo matching reference */}
+                            {/* Circular Corporate Logo Badge */}
                             <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-orange-600 via-amber-500 to-orange-500 border-2 border-white shadow-md flex items-center justify-center shrink-0 p-0.5">
                                 <div className="w-full h-full rounded-full border border-white/80 flex flex-col items-center justify-center bg-orange-600 relative overflow-hidden">
                                     <svg viewBox="0 0 100 100" className="w-full h-full">
                                         <circle cx="50" cy="50" r="48" fill="#E65100" />
                                         <circle cx="50" cy="50" r="38" fill="none" stroke="#FFFFFF" strokeWidth="2" strokeDasharray="4 2" />
                                         <path id="badgePath" d="M 50,50 m -30,0 a 30,30 0 1,1 60,0 a 30,30 0 1,1 -60,0" fill="none" />
-                                        <text fill="#FFFFFF" fontSize="8.5" fontWeight="900" letterSpacing="0.5">
+                                        <text fill="#FFFFFF" fontSize="7.5" fontWeight="900" letterSpacing="0.5">
                                             <textPath href="#badgePath" startOffset="50%" textAnchor="middle">
-                                                जय हिन्दू राष्ट्र
+                                                {cardData.orgName.slice(0, 24)}
                                             </textPath>
                                         </text>
-                                        <polygon points="46,40 58,46 46,52" fill="#FFA726" stroke="#FFFFFF" strokeWidth="0.8" />
-                                        <line x1="46" y1="37" x2="46" y2="61" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
+                                        <text x="50" y="55" fill="#FFFFFF" fontSize="16" fontWeight="900" textAnchor="middle" dominantBaseline="middle" fontFamily="sans-serif">
+                                            {cardData.orgInitials}
+                                        </text>
                                     </svg>
                                 </div>
                             </div>
@@ -252,15 +299,28 @@ export function EmployeeIdCardModal({
                             </div>
                         </div>
 
-                        {/* Right Flag Graphic matching reference */}
-                        <div className="flex items-center justify-end pr-2.5">
-                            <svg viewBox="0 0 46 30" className="w-11 h-7 drop-shadow">
-                                <line x1="6" y1="3" x2="6" y2="28" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" />
-                                <circle cx="6" cy="3" r="1.5" fill="#FFFFFF" />
-                                <path d="M7,5 L42,13 L7,21 Z" fill="#FFA726" />
-                                <line x1="7" y1="5" x2="42" y2="13" stroke="#FFFFFF" strokeWidth="0.8" />
-                                <line x1="42" y1="13" x2="7" y2="21" stroke="#FFFFFF" strokeWidth="0.8" />
-                                <text x="18" y="14" fill="#FFFFFF" fontSize="8" fontWeight="900" textAnchor="middle" dominantBaseline="middle">卐</text>
+                        {/* Right: Corporate Security Shield Graphic */}
+                        <div className="flex items-center justify-end pr-3">
+                            <svg viewBox="0 0 46 32" className="w-11 h-8 drop-shadow">
+                                <path
+                                    d="M23,2 L40,7 C40,18 31,27 23,30 C15,27 6,18 6,7 Z"
+                                    fill="#FFA726"
+                                    stroke="#FFFFFF"
+                                    strokeWidth="1.8"
+                                />
+                                <path
+                                    d="M23,6 L35,10 C35,17 28,24 23,26 C18,24 11,17 11,10 Z"
+                                    fill="#E65100"
+                                    opacity="0.4"
+                                />
+                                <path
+                                    d="M17,15 L21,19 L29,11"
+                                    fill="none"
+                                    stroke="#FFFFFF"
+                                    strokeWidth="2.5"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                />
                             </svg>
                         </div>
                     </div>
@@ -314,12 +374,12 @@ export function EmployeeIdCardModal({
                     {/* Right Column: Name, Designation & Data Grid */}
                     <div className="flex flex-col justify-center grow space-y-1 pr-1">
                         {/* Name */}
-                        <h2 className="text-[17px] font-black text-slate-900 tracking-tight leading-none uppercase">
+                        <h2 className="text-[17px] font-black text-slate-900 tracking-tight leading-none uppercase truncate">
                             {cardData.name}
                         </h2>
 
                         {/* Designation / Role in Orange */}
-                        <div className="text-[11.5px] font-black text-[#EA580C] uppercase tracking-wider leading-none pb-1">
+                        <div className="text-[11.5px] font-black text-[#EA580C] uppercase tracking-wider leading-none pb-1 truncate">
                             {cardData.designation}
                         </div>
 
@@ -350,7 +410,7 @@ export function EmployeeIdCardModal({
                                 <span className="font-black text-slate-500 uppercase w-12 shrink-0 pt-0.5">
                                     ADDR:
                                 </span>
-                                <span className="font-black text-slate-800 uppercase leading-[1.2] text-[9.5px] line-clamp-2">
+                                <span className="font-black text-slate-800 uppercase leading-[1.25] text-[9.5px] line-clamp-2">
                                     {cardData.address}
                                 </span>
                             </div>
@@ -372,20 +432,20 @@ export function EmployeeIdCardModal({
 
                 {/* ── BOTTOM FOOTER BAR ── */}
                 <div className="h-[46px] w-full bg-[#F1F5F9] border-t border-slate-200/90 px-5 flex items-center justify-between shrink-0">
-                    {/* Left: Member ID */}
+                    {/* Left: Employee ID */}
                     <div className="flex flex-col">
                         <span className="text-[8.5px] font-black text-slate-400 uppercase tracking-widest leading-none">
-                            MEMBER ID
+                            EMPLOYEE ID
                         </span>
                         <span className="text-[12px] font-black text-slate-900 uppercase tracking-wider font-mono mt-0.5 leading-tight">
                             {cardData.memberId}
                         </span>
                     </div>
 
-                    {/* Right: State Unit */}
+                    {/* Right: Branch / Location */}
                     <div className="flex flex-col items-end">
                         <span className="text-[8.5px] font-black text-slate-400 uppercase tracking-widest leading-none">
-                            STATE UNIT
+                            BRANCH / LOCATION
                         </span>
                         <span className="text-[12px] font-black text-[#EA580C] uppercase tracking-wider mt-0.5 leading-tight">
                             {cardData.stateUnit}
@@ -396,7 +456,7 @@ export function EmployeeIdCardModal({
         );
     };
 
-    // ── BACK SIDE CARD (Matches Image 3 exactly) ──
+    // ── BACK SIDE CARD (Corporate Specification with Watermark & Instructions) ──
     const renderBackCard = (isPrint = false) => {
         return (
             <div
@@ -405,27 +465,27 @@ export function EmployeeIdCardModal({
                     isPrint && "shadow-none border-slate-300"
                 )}
             >
-                {/* Center Faint Watermark Logo */}
+                {/* Center Faint Corporate Watermark Logo */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.04] overflow-hidden">
-                    <svg viewBox="0 0 200 200" className="w-44 h-44 text-[#E65100]">
+                    <svg viewBox="0 0 200 200" className="w-48 h-48 text-[#E65100]">
                         <circle cx="100" cy="100" r="88" fill="none" stroke="currentColor" strokeWidth="3" />
                         <circle cx="100" cy="100" r="74" fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 2" />
                         <circle cx="100" cy="100" r="52" fill="none" stroke="currentColor" strokeWidth="1.5" />
                         <path id="watermarkPath" d="M 100,100 m -62,0 a 62,62 0 1,1 124,0 a 62,62 0 1,1 -124,0" fill="none" />
-                        <text fill="currentColor" fontSize="9.5" fontWeight="900" letterSpacing="1">
+                        <text fill="currentColor" fontSize="8.5" fontWeight="900" letterSpacing="1">
                             <textPath href="#watermarkPath" startOffset="50%" textAnchor="middle">
-                                अखिल भारत हिन्दू महासभा
+                                {cardData.orgName} • OFFICIAL IDENTITY BADGE
                             </textPath>
                         </text>
-                        <polygon points="90,78 122,94 90,110" fill="currentColor" />
-                        <line x1="90" y1="74" x2="90" y2="132" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" />
-                        <text x="100" y="96" fill="#FFFFFF" fontSize="11" fontWeight="900" textAnchor="middle" dominantBaseline="middle">卐</text>
+                        <text x="100" y="106" fill="currentColor" fontSize="30" fontWeight="900" textAnchor="middle" dominantBaseline="middle" fontFamily="sans-serif">
+                            {cardData.orgInitials}
+                        </text>
                     </svg>
                 </div>
 
                 {/* ── MAIN CONTENT (Instructions + Orange QR Code) ── */}
                 <div className="p-6 pb-2 grow flex items-start justify-between gap-4 z-10">
-                    {/* Left: General Instructions */}
+                    {/* Left: General Corporate Instructions */}
                     <div className="flex flex-col space-y-2 max-w-[310px]">
                         <h3 className="text-[13.5px] font-black uppercase tracking-wider text-slate-900 border-b pb-1.5 border-slate-200">
                             GENERAL INSTRUCTIONS
@@ -433,19 +493,19 @@ export function EmployeeIdCardModal({
                         <ul className="space-y-1.5 text-[9.5px] font-black text-slate-800 uppercase leading-snug">
                             <li className="flex items-start gap-2">
                                 <span className="text-[#EA580C] text-[11px] leading-none shrink-0 mt-0.5">▪</span>
-                                <span>THIS CARD IS NON-TRANSFERABLE.</span>
+                                <span>THIS IDENTITY CARD IS STRICTLY NON-TRANSFERABLE.</span>
                             </li>
                             <li className="flex items-start gap-2">
                                 <span className="text-[#EA580C] text-[11px] leading-none shrink-0 mt-0.5">▪</span>
-                                <span>VALID ONLY WITH OFFICIAL SIGNATURE.</span>
+                                <span>VALID ONLY WITH AUTHORIZED SIGNATURE.</span>
                             </li>
                             <li className="flex items-start gap-2">
                                 <span className="text-[#EA580C] text-[11px] leading-none shrink-0 mt-0.5">▪</span>
-                                <span>REPORT LOSS IMMEDIATELY TO STATE UNIT.</span>
+                                <span>IF FOUND OR LOST, REPORT IMMEDIATELY TO HR DEPARTMENT.</span>
                             </li>
                             <li className="flex items-start gap-2">
                                 <span className="text-[#EA580C] text-[11px] leading-none shrink-0 mt-0.5">▪</span>
-                                <span>VERIFICATION AVAILABLE AT {cardData.website.replace("WWW.", "")}.</span>
+                                <span>ONLINE VERIFICATION AVAILABLE AT {cardData.website.replace(/^HTTPS?:\/\//i, "").replace(/^WWW\./i, "").toLowerCase()}.</span>
                             </li>
                         </ul>
                     </div>
@@ -459,9 +519,9 @@ export function EmployeeIdCardModal({
                     </div>
                 </div>
 
-                {/* ── BOTTOM FOOTER (Signature & State Unit Info) ── */}
-                <div className="h-[62px] w-full bg-[#F8FAFC] border-t border-slate-200/90 px-6 flex items-center justify-between shrink-0 z-10">
-                    {/* Left: Issuing Authority Signature */}
+                {/* ── BOTTOM FOOTER (Authorized Signature & Company Info) ── */}
+                <div className="h-[58px] w-full bg-[#F8FAFC] border-t border-slate-200/90 px-6 flex items-center justify-between shrink-0 z-10">
+                    {/* Left: Authorized Signatory */}
                     <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-xl border border-slate-200 bg-white flex items-center justify-center text-slate-400 shadow-sm shrink-0">
                             <ShieldCheck className="h-5 w-5 text-slate-400 stroke-[1.5]" />
@@ -469,15 +529,15 @@ export function EmployeeIdCardModal({
                         <div className="flex flex-col">
                             <div className="w-28 h-[1px] bg-slate-300 mt-2 mb-1" />
                             <span className="text-[7.5px] font-black uppercase tracking-widest text-slate-500 leading-none">
-                                ISSUING AUTHORITY SIGNATURE
+                                AUTHORIZED SIGNATORY
                             </span>
                         </div>
                     </div>
 
-                    {/* Right: State Unit Titles & Website */}
+                    {/* Right: Company Titles & Website */}
                     <div className="flex flex-col items-end leading-tight">
                         <span className="text-[11px] font-black text-slate-900 uppercase tracking-tight">
-                            {cardData.stateUnit} STATE UNIT
+                            {cardData.orgName} • {cardData.stateUnit}
                         </span>
                         <span className="text-[8.5px] font-black text-[#EA580C] uppercase tracking-wider mt-0.5">
                             {cardData.tagline}
@@ -505,7 +565,7 @@ export function EmployeeIdCardModal({
                             Official Identity Badge Preview
                         </DialogTitle>
                         <DialogDescription className="text-xs text-slate-400 mt-0.5">
-                            CR80 PVC badge format (Front & Back) — ready for physical printing
+                            CR80 PVC badge format (Front & Back) — customized for {cardData.orgName}
                         </DialogDescription>
                     </div>
 
@@ -574,6 +634,20 @@ export function EmployeeIdCardModal({
                             <Edit2 className="h-3 w-3" />
                             {isEditing ? "Hide Field Editor" : "Edit Card Details"}
                         </Button>
+
+                        {isEditing && (
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={syncFromEmployee}
+                                className="h-8 px-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
+                                title="Reset all fields back to database employee details"
+                            >
+                                <RotateCcw className="h-3 w-3" />
+                                Reset to Defaults
+                            </Button>
+                        )}
                     </div>
 
                     {/* Photo Upload Trigger */}
@@ -608,6 +682,39 @@ export function EmployeeIdCardModal({
                     <div className="shrink-0 max-h-[190px] overflow-y-auto p-4 bg-slate-950/95 border-b border-slate-800 text-xs">
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
                             <div>
+                                <label className="text-[9px] font-black text-slate-400 uppercase">Company Name</label>
+                                <Input
+                                    value={cardData.orgName}
+                                    onChange={(e) => setCardData({ ...cardData, orgName: e.target.value })}
+                                    className="h-8 text-xs bg-slate-900 border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[9px] font-black text-slate-400 uppercase">Logo Initials</label>
+                                <Input
+                                    value={cardData.orgInitials}
+                                    onChange={(e) => setCardData({ ...cardData, orgInitials: e.target.value })}
+                                    className="h-8 text-xs bg-slate-900 border-slate-700 text-white uppercase"
+                                    maxLength={3}
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[9px] font-black text-slate-400 uppercase">Branch / Unit Subtitle</label>
+                                <Input
+                                    value={cardData.unitName}
+                                    onChange={(e) => setCardData({ ...cardData, unitName: e.target.value })}
+                                    className="h-8 text-xs bg-slate-900 border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[9px] font-black text-slate-400 uppercase">Branch / Location</label>
+                                <Input
+                                    value={cardData.stateUnit}
+                                    onChange={(e) => setCardData({ ...cardData, stateUnit: e.target.value })}
+                                    className="h-8 text-xs bg-slate-900 border-slate-700 text-white"
+                                />
+                            </div>
+                            <div>
                                 <label className="text-[9px] font-black text-slate-400 uppercase">Employee Name</label>
                                 <Input
                                     value={cardData.name}
@@ -624,7 +731,7 @@ export function EmployeeIdCardModal({
                                 />
                             </div>
                             <div>
-                                <label className="text-[9px] font-black text-slate-400 uppercase">Father/Husband (S/O)</label>
+                                <label className="text-[9px] font-black text-slate-400 uppercase">Father/Spouse (S/O)</label>
                                 <Input
                                     value={cardData.fatherName}
                                     onChange={(e) => setCardData({ ...cardData, fatherName: e.target.value })}
@@ -656,7 +763,7 @@ export function EmployeeIdCardModal({
                                 />
                             </div>
                             <div>
-                                <label className="text-[9px] font-black text-slate-400 uppercase">Member / Emp ID</label>
+                                <label className="text-[9px] font-black text-slate-400 uppercase">Employee ID</label>
                                 <Input
                                     value={cardData.memberId}
                                     onChange={(e) => setCardData({ ...cardData, memberId: e.target.value })}
@@ -664,10 +771,18 @@ export function EmployeeIdCardModal({
                                 />
                             </div>
                             <div>
-                                <label className="text-[9px] font-black text-slate-400 uppercase">State Unit / Branch</label>
+                                <label className="text-[9px] font-black text-slate-400 uppercase">Company Website</label>
                                 <Input
-                                    value={cardData.stateUnit}
-                                    onChange={(e) => setCardData({ ...cardData, stateUnit: e.target.value })}
+                                    value={cardData.website}
+                                    onChange={(e) => setCardData({ ...cardData, website: e.target.value })}
+                                    className="h-8 text-xs bg-slate-900 border-slate-700 text-white"
+                                />
+                            </div>
+                            <div className="col-span-2">
+                                <label className="text-[9px] font-black text-slate-400 uppercase">Company Tagline</label>
+                                <Input
+                                    value={cardData.tagline}
+                                    onChange={(e) => setCardData({ ...cardData, tagline: e.target.value })}
                                     className="h-8 text-xs bg-slate-900 border-slate-700 text-white"
                                 />
                             </div>
@@ -676,22 +791,6 @@ export function EmployeeIdCardModal({
                                 <Input
                                     value={cardData.address}
                                     onChange={(e) => setCardData({ ...cardData, address: e.target.value })}
-                                    className="h-8 text-xs bg-slate-900 border-slate-700 text-white"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-[9px] font-black text-slate-400 uppercase">Organization Header</label>
-                                <Input
-                                    value={cardData.orgName}
-                                    onChange={(e) => setCardData({ ...cardData, orgName: e.target.value })}
-                                    className="h-8 text-xs bg-slate-900 border-slate-700 text-white"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-[9px] font-black text-slate-400 uppercase">Unit Subtitle</label>
-                                <Input
-                                    value={cardData.unitName}
-                                    onChange={(e) => setCardData({ ...cardData, unitName: e.target.value })}
                                     className="h-8 text-xs bg-slate-900 border-slate-700 text-white"
                                 />
                             </div>

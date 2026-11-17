@@ -23,8 +23,8 @@ export interface BackendEmployee {
   office_id: number;
   is_first_login: boolean;
   last_login_at: string | null;
-  office?: { id: number; name: string } | null;
-  company?: { id: number; name: string } | null;
+  office?: { id: number; name: string; city?: string; state?: string; address?: string; code?: string } | null;
+  company?: { id: number; name: string; code?: string; website?: string; city?: string; state?: string; address?: string } | null;
   // Financial / bank
   bank_name: string | null;
   bank_account_number: string | null;
