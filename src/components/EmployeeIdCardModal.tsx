@@ -25,6 +25,7 @@ import {
     Check,
     RotateCcw,
     Sparkles,
+    X,
 } from "lucide-react";
 
 interface EmployeeIdCardModalProps {
@@ -92,7 +93,12 @@ export function EmployeeIdCardModal({
             const empDob = rawEmployee?.date_of_birth ? formatDate(rawEmployee.date_of_birth) : "14/01/1990";
             const empAddr = (rawEmployee?.address || "108, SHIV NAGAR, MP NAGAR, BHOPAL, MADHYA PRADESH").toUpperCase();
             const empBlood = (rawEmployee?.blood_group || "B+VE").toUpperCase().replace("POSITIVE", "+VE").replace("POS", "+VE");
-            const empLocation = (employee.location && employee.location !== "Unknown" ? employee.location : rawEmployee?.office?.name || "MADHYA PRADESH").toUpperCase();
+            
+            // Clean stateUnit: Default to MADHYA PRADESH (matches the card design and reference)
+            let empLocation = "MADHYA PRADESH";
+            if (employee.location && employee.location !== "Unknown" && !employee.location.toLowerCase().includes("apaar")) {
+                empLocation = employee.location.toUpperCase();
+            }
             const org = (rawEmployee?.company?.name || rawEmployee?.company_name || "AKHIL BHARAT HINDU MAHASABHA").toUpperCase();
 
             setCardData({
@@ -288,12 +294,12 @@ export function EmployeeIdCardModal({
                                     type="button"
                                     onClick={() => fileInputRef.current?.click()}
                                     title="Upload / Change Photo"
-                                    className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-[#EA580C] hover:bg-[#C2410C] text-white flex items-center justify-center shadow-md border-2 border-white transition-transform hover:scale-110 cursor-pointer"
+                                    className="absolute bottom-0 right-0 h-6 w-6 rounded-full bg-[#EA580C] hover:bg-[#C2410C] text-white flex items-center justify-center shadow-md border-2 border-white transition-transform hover:scale-110 cursor-pointer"
                                 >
                                     {uploadingPhoto ? (
-                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        <Loader2 className="h-3 w-3 animate-spin" />
                                     ) : (
-                                        <Camera className="h-3.5 w-3.5 stroke-[2.5]" />
+                                        <Camera className="h-3 w-3 stroke-[2.5]" />
                                     )}
                                 </button>
                             )}
@@ -400,20 +406,20 @@ export function EmployeeIdCardModal({
                 )}
             >
                 {/* Center Faint Watermark Logo */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.07]">
-                    <svg viewBox="0 0 200 200" className="w-56 h-56 text-[#E65100]">
-                        <circle cx="100" cy="100" r="90" fill="none" stroke="currentColor" strokeWidth="4" />
-                        <circle cx="100" cy="100" r="76" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="4 3" />
-                        <circle cx="100" cy="100" r="54" fill="none" stroke="currentColor" strokeWidth="2" />
-                        <path id="watermarkPath" d="M 100,100 m -64,0 a 64,64 0 1,1 128,0 a 64,64 0 1,1 -128,0" fill="none" />
-                        <text fill="currentColor" fontSize="10" fontWeight="900" letterSpacing="1.5">
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.04] overflow-hidden">
+                    <svg viewBox="0 0 200 200" className="w-44 h-44 text-[#E65100]">
+                        <circle cx="100" cy="100" r="88" fill="none" stroke="currentColor" strokeWidth="3" />
+                        <circle cx="100" cy="100" r="74" fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 2" />
+                        <circle cx="100" cy="100" r="52" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                        <path id="watermarkPath" d="M 100,100 m -62,0 a 62,62 0 1,1 124,0 a 62,62 0 1,1 -124,0" fill="none" />
+                        <text fill="currentColor" fontSize="9.5" fontWeight="900" letterSpacing="1">
                             <textPath href="#watermarkPath" startOffset="50%" textAnchor="middle">
                                 अखिल भारत हिन्दू महासभा
                             </textPath>
                         </text>
-                        <polygon points="90,75 125,92 90,110" fill="currentColor" />
-                        <line x1="90" y1="70" x2="90" y2="135" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
-                        <text x="100" y="94" fill="#FFFFFF" fontSize="12" fontWeight="900" textAnchor="middle" dominantBaseline="middle">卐</text>
+                        <polygon points="90,78 122,94 90,110" fill="currentColor" />
+                        <line x1="90" y1="74" x2="90" y2="132" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" />
+                        <text x="100" y="96" fill="#FFFFFF" fontSize="11" fontWeight="900" textAnchor="middle" dominantBaseline="middle">卐</text>
                     </svg>
                 </div>
 
@@ -487,56 +493,71 @@ export function EmployeeIdCardModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-w-[1060px] p-0 rounded-3xl bg-slate-900 border border-slate-800 shadow-2xl text-white overflow-hidden">
-                {/* ── MODAL TOP BAR ── */}
-                <div className="p-5 pb-3.5 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-950/70">
+            <DialogContent
+                showCloseButton={false}
+                className="w-[96vw] max-w-[1080px]! sm:max-w-[1080px]! max-h-[92vh] flex flex-col p-0 gap-0 rounded-2xl sm:rounded-3xl bg-slate-900 border border-slate-800 shadow-2xl text-white overflow-hidden my-auto"
+            >
+                {/* ── MODAL TOP BAR (Sticky) ── */}
+                <div className="shrink-0 p-4 sm:p-5 pb-3.5 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950/80">
                     <div>
-                        <DialogTitle className="text-base font-black uppercase tracking-wider text-white flex items-center gap-2">
+                        <DialogTitle className="text-sm sm:text-base font-black uppercase tracking-wider text-white flex items-center gap-2">
                             <Sparkles className="h-4 w-4 text-[#EA580C]" />
-                            Official Membership & Identity Card Preview
+                            Official Identity Badge Preview
                         </DialogTitle>
                         <DialogDescription className="text-xs text-slate-400 mt-0.5">
-                            Exact CR80 design replica matching physical PVC badge specifications (Front & Back)
+                            CR80 PVC badge format (Front & Back) — ready for physical printing
                         </DialogDescription>
                     </div>
 
-                    {/* View mode switcher */}
-                    <div className="flex items-center gap-1.5 bg-slate-800/90 p-1 rounded-xl border border-slate-700">
+                    <div className="flex items-center gap-3 ml-auto sm:ml-0">
+                        {/* View mode switcher */}
+                        <div className="flex items-center gap-1 bg-slate-800/90 p-1 rounded-xl border border-slate-700">
+                            <button
+                                type="button"
+                                onClick={() => setViewMode("both")}
+                                className={cn(
+                                    "px-2.5 sm:px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer",
+                                    viewMode === "both" ? "bg-[#EA580C] text-white shadow-md" : "text-slate-400 hover:text-white"
+                                )}
+                            >
+                                Both Sides
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setViewMode("front")}
+                                className={cn(
+                                    "px-2.5 sm:px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer",
+                                    viewMode === "front" ? "bg-[#EA580C] text-white shadow-md" : "text-slate-400 hover:text-white"
+                                )}
+                            >
+                                Front
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setViewMode("back")}
+                                className={cn(
+                                    "px-2.5 sm:px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer",
+                                    viewMode === "back" ? "bg-[#EA580C] text-white shadow-md" : "text-slate-400 hover:text-white"
+                                )}
+                            >
+                                Back
+                            </button>
+                        </div>
+
+                        {/* Prominent Close Button */}
                         <button
                             type="button"
-                            onClick={() => setViewMode("both")}
-                            className={cn(
-                                "px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
-                                viewMode === "both" ? "bg-[#EA580C] text-white shadow-md" : "text-slate-400 hover:text-white"
-                            )}
+                            onClick={onClose}
+                            className="h-8 w-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center border border-slate-700 transition-colors cursor-pointer shrink-0"
+                            title="Close Modal"
                         >
-                            Both Sides
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setViewMode("front")}
-                            className={cn(
-                                "px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
-                                viewMode === "front" ? "bg-[#EA580C] text-white shadow-md" : "text-slate-400 hover:text-white"
-                            )}
-                        >
-                            Front
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setViewMode("back")}
-                            className={cn(
-                                "px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
-                                viewMode === "back" ? "bg-[#EA580C] text-white shadow-md" : "text-slate-400 hover:text-white"
-                            )}
-                        >
-                            Back
+                            <X className="h-4 w-4 stroke-[2.5]" />
                         </button>
                     </div>
                 </div>
 
                 {/* ── TOOLBAR: PHOTO UPLOAD & QUICK EDIT ── */}
-                <div className="px-6 py-2.5 bg-slate-950/40 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="shrink-0 px-4 sm:px-6 py-2.5 bg-slate-950/40 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
                     <div className="flex items-center gap-2">
                         <Button
                             type="button"
@@ -544,7 +565,7 @@ export function EmployeeIdCardModal({
                             size="sm"
                             onClick={() => setIsEditing(!isEditing)}
                             className={cn(
-                                "h-8 px-3 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all",
+                                "h-8 px-3 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer",
                                 isEditing
                                     ? "bg-amber-400 text-slate-950 border-amber-400 hover:bg-amber-300"
                                     : "border-slate-700 bg-slate-800/80 hover:bg-slate-800 text-slate-200"
@@ -570,7 +591,7 @@ export function EmployeeIdCardModal({
                             size="sm"
                             disabled={uploadingPhoto}
                             onClick={() => fileInputRef.current?.click()}
-                            className="h-8 px-3.5 rounded-xl border-slate-700 bg-slate-800/80 hover:bg-slate-800 text-slate-200 text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5"
+                            className="h-8 px-3.5 rounded-xl border-slate-700 bg-slate-800/80 hover:bg-slate-800 text-slate-200 text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer"
                         >
                             {uploadingPhoto ? (
                                 <Loader2 className="h-3 w-3 animate-spin mr-1" />
@@ -582,9 +603,9 @@ export function EmployeeIdCardModal({
                     </div>
                 </div>
 
-                {/* ── OPTIONAL INLINE FIELD EDITOR (Lets user tweak any field before printing) ── */}
+                {/* ── OPTIONAL INLINE FIELD EDITOR ── */}
                 {isEditing && (
-                    <div className="p-4 bg-slate-950/90 border-b border-slate-800 text-xs">
+                    <div className="shrink-0 max-h-[190px] overflow-y-auto p-4 bg-slate-950/95 border-b border-slate-800 text-xs">
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
                             <div>
                                 <label className="text-[9px] font-black text-slate-400 uppercase">Employee Name</label>
@@ -678,11 +699,11 @@ export function EmployeeIdCardModal({
                     </div>
                 )}
 
-                {/* ── CARD PREVIEW CANVAS ── */}
-                <div className="p-6 md:p-8 flex items-center justify-center bg-slate-950/80 overflow-x-auto min-h-[380px]">
-                    <div className="flex flex-wrap items-center justify-center gap-8">
+                {/* ── CARD PREVIEW CANVAS (Flex-1, Scrollable, Never overflows viewport) ── */}
+                <div className="flex-1 overflow-y-auto overflow-x-auto p-4 sm:p-6 md:p-8 flex items-center justify-center bg-slate-950/90 min-h-0">
+                    <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-8 my-auto">
                         {(viewMode === "front" || viewMode === "both") && (
-                            <div className="flex flex-col items-center gap-2">
+                            <div className="flex flex-col items-center gap-2 shrink-0">
                                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-800/60 px-3 py-1 rounded-full border border-slate-700/60">
                                     Front Side (CR80)
                                 </span>
@@ -691,7 +712,7 @@ export function EmployeeIdCardModal({
                         )}
 
                         {(viewMode === "back" || viewMode === "both") && (
-                            <div className="flex flex-col items-center gap-2">
+                            <div className="flex flex-col items-center gap-2 shrink-0">
                                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-800/60 px-3 py-1 rounded-full border border-slate-700/60">
                                     Back Side (CR80)
                                 </span>
@@ -716,10 +737,10 @@ export function EmployeeIdCardModal({
                     </div>
                 </div>
 
-                {/* ── MODAL FOOTER ── */}
-                <div className="p-5 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between">
+                {/* ── MODAL FOOTER (Sticky) ── */}
+                <div className="shrink-0 p-4 sm:p-5 border-t border-slate-800 bg-slate-950/90 flex items-center justify-between">
                     <p className="text-[10px] text-slate-400 hidden sm:block">
-                        Ready for instant physical ID printing or A4 card laminating.
+                        Ready for dual-sided PVC identity card or A4 lamination sheet.
                     </p>
 
                     <div className="flex items-center gap-2.5 ml-auto">
@@ -727,14 +748,14 @@ export function EmployeeIdCardModal({
                             type="button"
                             variant="outline"
                             onClick={onClose}
-                            className="h-10 px-5 rounded-xl border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs"
+                            className="h-9 sm:h-10 px-4 sm:px-5 rounded-xl border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs cursor-pointer"
                         >
                             Close
                         </Button>
                         <Button
                             type="button"
                             onClick={() => window.print()}
-                            className="h-10 px-6 rounded-xl font-black text-xs uppercase tracking-wider bg-[#EA580C] hover:bg-[#C2410C] text-white shadow-lg shadow-orange-600/30 flex items-center gap-2 cursor-pointer"
+                            className="h-9 sm:h-10 px-5 sm:px-6 rounded-xl font-black text-xs uppercase tracking-wider bg-[#EA580C] hover:bg-[#C2410C] text-white shadow-lg shadow-orange-600/30 flex items-center gap-2 cursor-pointer"
                         >
                             <Printer className="h-4 w-4 stroke-[2.5]" />
                             Print Card
