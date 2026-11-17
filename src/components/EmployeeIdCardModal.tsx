@@ -1175,14 +1175,14 @@ export function EmployeeIdCardModal({
                             disabled={generatingPdf}
                             onClick={handleDownloadPdf}
                             className="h-9 sm:h-10 px-4 sm:px-5 rounded-xl border-slate-700 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-md"
-                            title="Download print-ready PDF at 300 DPI"
+                            title="Download print-ready PDF at Ultra HD 700+ DPI (CR80 Plastic Card + A4 Foldable Sheet)"
                         >
                             {generatingPdf ? (
                                 <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
                             ) : (
                                 <Download className="h-3.5 w-3.5 text-amber-400" />
                             )}
-                            Download PDF
+                            Download PDF (Ultra HD)
                         </Button>
 
                         <Button

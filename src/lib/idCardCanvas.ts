@@ -7,7 +7,6 @@ function loadImage(src: string | null | undefined): Promise<HTMLImageElement | n
         img.crossOrigin = "anonymous";
         img.onload = () => resolve(img);
         img.onerror = () => {
-            // Fallback for data URLs or servers without CORS headers
             const fallback = new Image();
             fallback.onload = () => resolve(fallback);
             fallback.onerror = () => resolve(null);
@@ -25,6 +24,8 @@ function drawAspectFillImage(
     w: number,
     h: number
 ) {
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
     const imgRatio = img.naturalWidth / img.naturalHeight;
     const targetRatio = w / h;
     let sx = 0, sy = 0, sw = img.naturalWidth, sh = img.naturalHeight;
@@ -34,8 +35,8 @@ function drawAspectFillImage(
         sx = (img.naturalWidth - sw) / 2;
     } else {
         sh = img.naturalWidth / targetRatio;
-        // Position slightly higher than dead-center to focus on head/face
-        sy = (img.naturalHeight - sh) * 0.2;
+        // Focus slightly higher on faces
+        sy = (img.naturalHeight - sh) * 0.18;
     }
     ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
 }
@@ -68,19 +69,20 @@ function drawStylizedQr(ctx: CanvasRenderingContext2D, x: number, y: number, siz
     const dots = [
         [8, 2], [9, 3], [11, 4], [8, 8], [9, 10], [12, 9], [10, 12],
         [2, 8], [4, 9], [3, 11], [5, 12], [8, 14], [9, 17], [11, 16],
-        [16, 8], [17, 10], [19, 9], [18, 12], [14, 18], [17, 19], [19, 18]
+        [16, 8], [17, 10], [19, 9], [18, 12], [14, 18], [17, 19], [19, 18],
+        [7, 15], [8, 18], [10, 17], [12, 19], [15, 12], [16, 14], [18, 16]
     ];
     for (const [px, py] of dots) {
-        ctx.fillRect(x + px * cell, y + py * cell, cell * 1.5, cell * 1.5);
+        ctx.fillRect(x + px * cell, y + py * cell, cell * 1.4, cell * 1.4);
     }
 }
 
-function drawCropMarks(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+function drawCropMarks(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, s: number) {
     ctx.save();
     ctx.strokeStyle = "#94A3B8";
-    ctx.lineWidth = 1;
-    const len = 14;
-    const offset = 5;
+    ctx.lineWidth = Math.max(1, 1.2 * s);
+    const len = 16 * s;
+    const offset = 6 * s;
 
     // Top-Left
     ctx.beginPath();
@@ -117,7 +119,11 @@ function drawCropMarks(ctx: CanvasRenderingContext2D, x: number, y: number, w: n
     ctx.restore();
 }
 
-function drawFrontCard(
+/**
+ * Draw Front Card scaled proportionally to any canvas dimensions.
+ * Base reference width is 480px, height is 305px.
+ */
+export function drawFrontCard(
     ctx: CanvasRenderingContext2D,
     card: IdCardData,
     photoImg: HTMLImageElement | null,
@@ -126,26 +132,31 @@ function drawFrontCard(
     w: number,
     h: number
 ) {
+    const s = w / 480; // Proportional scale factor
     ctx.save();
-    // Rounded Card Boundary (CR80 standard corner radius)
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+
+    // Rounded Card Boundary (CR80 standard 3.18mm corner radius ≈ 26px * s)
+    const cardRadius = 26 * s;
     ctx.beginPath();
-    ctx.roundRect(x, y, w, h, 26);
+    ctx.roundRect(x, y, w, h, cardRadius);
     ctx.fillStyle = "#FFFFFF";
     ctx.fill();
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = Math.max(1, 1.5 * s);
     ctx.strokeStyle = "#CBD5E1";
     ctx.stroke();
     ctx.clip();
 
     // ── TOP HEADER (Diagonal Split Black & Vibrant Orange) ──
-    const headerH = Math.round(h * 0.177); // ~75px
-    // Orange Right
+    const headerH = 54 * s;
+    // Right Orange section
     ctx.fillStyle = "#E65100";
     ctx.fillRect(x, y, w, headerH);
 
-    // Deep Black Slanted Left
-    const slantTop = Math.round(w * 0.73);
-    const slantBottom = slantTop - 22;
+    // Deep Black Slanted Left Section
+    const slantTop = 350 * s;
+    const slantBottom = 332 * s;
     ctx.fillStyle = "#0A0A0A";
     ctx.beginPath();
     ctx.moveTo(x, y);
@@ -156,29 +167,31 @@ function drawFrontCard(
     ctx.fill();
 
     // Logo Circle Emblem
-    const emblemCx = x + 38;
-    const emblemCy = y + Math.round(headerH / 2);
-    const emblemR = 24;
+    const emblemCx = x + 28 * s;
+    const emblemCy = y + headerH / 2;
+    const emblemR = 19 * s;
 
     ctx.beginPath();
     ctx.arc(emblemCx, emblemCy, emblemR, 0, Math.PI * 2);
     ctx.fillStyle = "#E65100";
     ctx.fill();
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = Math.max(1.5, 2 * s);
     ctx.strokeStyle = "#FFFFFF";
     ctx.stroke();
 
+    // Dashed inner ring
     ctx.save();
     ctx.beginPath();
-    ctx.arc(emblemCx, emblemCy, emblemR - 5, 0, Math.PI * 2);
-    ctx.setLineDash([3, 2]);
-    ctx.lineWidth = 1.2;
+    ctx.arc(emblemCx, emblemCy, emblemR - 4 * s, 0, Math.PI * 2);
+    ctx.setLineDash([3 * s, 2 * s]);
+    ctx.lineWidth = Math.max(1, 1.2 * s);
     ctx.strokeStyle = "rgba(255,255,255,0.85)";
     ctx.stroke();
     ctx.restore();
 
+    // Logo Initials
     ctx.fillStyle = "#FFFFFF";
-    ctx.font = "bold 16px sans-serif";
+    ctx.font = `bold ${Math.round(13 * s)}px sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(card.orgInitials, emblemCx, emblemCy);
@@ -186,47 +199,48 @@ function drawFrontCard(
     // Titles
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
-    ctx.font = "900 13px sans-serif";
+    ctx.font = `900 ${Math.round(10.5 * s)}px sans-serif`;
     ctx.fillStyle = "#FFFFFF";
-    ctx.fillText(card.orgName.toUpperCase().slice(0, 36), x + 72, y + Math.round(headerH * 0.44));
+    ctx.fillText(card.orgName.toUpperCase().slice(0, 34), x + 54 * s, y + headerH * 0.44);
 
-    ctx.font = "900 17px sans-serif";
+    ctx.font = `900 ${Math.round(13.5 * s)}px sans-serif`;
     ctx.fillStyle = "#FF7043";
-    ctx.fillText(card.unitName.toUpperCase().slice(0, 36), x + 72, y + Math.round(headerH * 0.82));
+    ctx.fillText(card.unitName.toUpperCase().slice(0, 34), x + 54 * s, y + headerH * 0.82);
 
     // Right Security Shield Icon
-    const shieldX = x + w - 44;
-    const shieldY = y + Math.round(headerH / 2);
+    const shieldX = x + w - 34 * s;
+    const shieldY = y + headerH / 2;
     ctx.save();
     ctx.beginPath();
-    ctx.moveTo(shieldX, shieldY - 16);
-    ctx.lineTo(shieldX + 18, shieldY - 9);
-    ctx.quadraticCurveTo(shieldX + 18, shieldY + 11, shieldX, shieldY + 18);
-    ctx.quadraticCurveTo(shieldX - 18, shieldY + 11, shieldX - 18, shieldY - 9);
+    ctx.moveTo(shieldX, shieldY - 12 * s);
+    ctx.lineTo(shieldX + 14 * s, shieldY - 7 * s);
+    ctx.quadraticCurveTo(shieldX + 14 * s, shieldY + 8 * s, shieldX, shieldY + 14 * s);
+    ctx.quadraticCurveTo(shieldX - 14 * s, shieldY + 8 * s, shieldX - 14 * s, shieldY - 7 * s);
     ctx.closePath();
     ctx.fillStyle = "#FFA726";
     ctx.fill();
     ctx.strokeStyle = "#FFFFFF";
-    ctx.lineWidth = 2;
+    ctx.lineWidth = Math.max(1, 1.8 * s);
     ctx.stroke();
 
+    // White checkmark inside shield
     ctx.beginPath();
-    ctx.moveTo(shieldX - 7, shieldY);
-    ctx.lineTo(shieldX - 1, shieldY + 5);
-    ctx.lineTo(shieldX + 8, shieldY - 5);
+    ctx.moveTo(shieldX - 5 * s, shieldY);
+    ctx.lineTo(shieldX - 1 * s, shieldY + 4 * s);
+    ctx.lineTo(shieldX + 6 * s, shieldY - 4 * s);
     ctx.strokeStyle = "#FFFFFF";
-    ctx.lineWidth = 2.8;
+    ctx.lineWidth = Math.max(1.5, 2.2 * s);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.stroke();
     ctx.restore();
 
     // ── MIDDLE SECTION (Photo + Details) ──
-    const photoX = x + 24;
-    const photoY = y + headerH + 20;
-    const photoW = 160;
-    const photoH = 198;
-    const photoR = 64; // Oval frame
+    const photoX = x + 18 * s;
+    const photoY = y + headerH + 14 * s;
+    const photoW = 115 * s;
+    const photoH = 142 * s;
+    const photoR = 48 * s; // Oval frame
 
     ctx.save();
     ctx.beginPath();
@@ -242,7 +256,7 @@ function drawFrontCard(
         ctx.fillRect(photoX, photoY, photoW, photoH);
 
         ctx.fillStyle = "#475569";
-        ctx.font = "900 42px sans-serif";
+        ctx.font = `900 ${Math.round(32 * s)}px sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(card.name.slice(0, 2).toUpperCase(), photoX + photoW / 2, photoY + photoH / 2);
@@ -252,54 +266,54 @@ function drawFrontCard(
     // Photo Border
     ctx.beginPath();
     ctx.roundRect(photoX, photoY, photoW, photoH, photoR);
-    ctx.lineWidth = 3;
+    ctx.lineWidth = Math.max(1.5, 2.5 * s);
     ctx.strokeStyle = "#FED7AA";
     ctx.stroke();
 
     // Status Label below photo
-    ctx.font = "900 13px sans-serif";
+    ctx.font = `900 ${Math.round(10 * s)}px sans-serif`;
     ctx.fillStyle = "#EA580C";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("STATUS: " + card.status.toUpperCase(), photoX + photoW / 2, photoY + photoH + 18);
+    ctx.fillText("STATUS: " + card.status.toUpperCase(), photoX + photoW / 2, photoY + photoH + 14 * s);
 
-    // Details Column
-    const colX = photoX + photoW + 28;
-    let curY = y + headerH + 34;
+    // ── DETAILS COLUMN (Right) ──
+    const colX = photoX + photoW + 20 * s;
+    let curY = y + headerH + 22 * s;
 
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
-    // Name
-    ctx.font = "900 23px sans-serif";
+    // Employee Name
+    ctx.font = `900 ${Math.round(17 * s)}px sans-serif`;
     ctx.fillStyle = "#0F172A";
     ctx.fillText(card.name.toUpperCase().slice(0, 28), colX, curY);
 
     // Designation
-    curY += 24;
-    ctx.font = "900 15px sans-serif";
+    curY += 17 * s;
+    ctx.font = `900 ${Math.round(11.5 * s)}px sans-serif`;
     ctx.fillStyle = "#EA580C";
-    ctx.fillText(card.designation.toUpperCase().slice(0, 34), colX, curY);
+    ctx.fillText(card.designation.toUpperCase().slice(0, 32), colX, curY);
 
-    // Table Fields
-    curY += 26;
-    const labelW = 58;
+    // Data Fields Table
+    curY += 19 * s;
+    const labelW = 44 * s;
 
     // S/O
-    ctx.font = "900 13px sans-serif";
+    ctx.font = `900 ${Math.round(10 * s)}px sans-serif`;
     ctx.fillStyle = "#64748B";
     ctx.fillText("S/O:", colX, curY);
     ctx.fillStyle = "#0F172A";
-    ctx.fillText(card.fatherName.toUpperCase().slice(0, 32), colX + labelW, curY);
+    ctx.fillText(card.fatherName.toUpperCase().slice(0, 30), colX + labelW, curY);
 
     // DOB
-    curY += 22;
+    curY += 16 * s;
     ctx.fillStyle = "#64748B";
     ctx.fillText("DOB:", colX, curY);
     ctx.fillStyle = "#0F172A";
     ctx.fillText(card.dob, colX + labelW, curY);
 
     // ADDR
-    curY += 22;
+    curY += 16 * s;
     ctx.fillStyle = "#64748B";
     ctx.fillText("ADDR:", colX, curY);
     ctx.fillStyle = "#1E293B";
@@ -309,26 +323,26 @@ function drawFrontCard(
         ctx.fillText(addr, colX + labelW, curY);
     } else {
         ctx.fillText(addr.slice(0, maxChars), colX + labelW, curY);
-        curY += 18;
+        curY += 13 * s;
         ctx.fillText(addr.slice(maxChars, maxChars * 2), colX + labelW, curY);
     }
 
     // Phone & Blood Group
-    curY += 30;
-    ctx.font = "900 14px sans-serif";
+    curY += 21 * s;
+    ctx.font = `900 ${Math.round(10.5 * s)}px sans-serif`;
     ctx.fillStyle = "#EA580C";
     ctx.fillText("📞", colX, curY);
     ctx.fillStyle = "#0F172A";
-    ctx.fillText(card.phone, colX + 22, curY);
+    ctx.fillText(card.phone, colX + 16 * s, curY);
 
-    const bloodX = colX + 230;
+    const bloodX = colX + 175 * s;
     ctx.fillStyle = "#E11D48";
     ctx.fillText("❤️", bloodX, curY);
     ctx.fillStyle = "#0F172A";
-    ctx.fillText("B: " + card.bloodGroup, bloodX + 22, curY);
+    ctx.fillText("B: " + card.bloodGroup, bloodX + 16 * s, curY);
 
     // ── BOTTOM FOOTER BAR ──
-    const footerH = 60;
+    const footerH = 46 * s;
     const footerY = y + h - footerH;
     ctx.fillStyle = "#F1F5F9";
     ctx.fillRect(x, footerY, w, footerH);
@@ -337,30 +351,34 @@ function drawFrontCard(
     ctx.moveTo(x, footerY);
     ctx.lineTo(x + w, footerY);
     ctx.strokeStyle = "#E2E8F0";
-    ctx.lineWidth = 1;
+    ctx.lineWidth = Math.max(1, 1 * s);
     ctx.stroke();
 
     // EMPLOYEE ID
-    ctx.font = "900 11px sans-serif";
+    ctx.font = `900 ${Math.round(8.5 * s)}px sans-serif`;
     ctx.fillStyle = "#94A3B8";
-    ctx.fillText("EMPLOYEE ID", x + 24, footerY + 22);
-    ctx.font = "900 16px monospace";
+    ctx.fillText("EMPLOYEE ID", x + 18 * s, footerY + 16 * s);
+    ctx.font = `900 ${Math.round(12 * s)}px monospace`;
     ctx.fillStyle = "#0F172A";
-    ctx.fillText(card.memberId, x + 24, footerY + 44);
+    ctx.fillText(card.memberId, x + 18 * s, footerY + 33 * s);
 
     // BRANCH / LOCATION
     ctx.textAlign = "right";
-    ctx.font = "900 11px sans-serif";
+    ctx.font = `900 ${Math.round(8.5 * s)}px sans-serif`;
     ctx.fillStyle = "#94A3B8";
-    ctx.fillText("BRANCH / LOCATION", x + w - 24, footerY + 22);
-    ctx.font = "900 16px sans-serif";
+    ctx.fillText("BRANCH / LOCATION", x + w - 18 * s, footerY + 16 * s);
+    ctx.font = `900 ${Math.round(12 * s)}px sans-serif`;
     ctx.fillStyle = "#EA580C";
-    ctx.fillText(card.stateUnit.toUpperCase(), x + w - 24, footerY + 44);
+    ctx.fillText(card.stateUnit.toUpperCase(), x + w - 18 * s, footerY + 33 * s);
 
     ctx.restore();
 }
 
-function drawBackCard(
+/**
+ * Draw Back Card scaled proportionally to any canvas dimensions.
+ * Base reference width is 480px, height is 305px.
+ */
+export function drawBackCard(
     ctx: CanvasRenderingContext2D,
     card: IdCardData,
     qrImg: HTMLImageElement | null,
@@ -370,49 +388,59 @@ function drawBackCard(
     w: number,
     h: number
 ) {
+    const s = w / 480; // Proportional scale factor
     ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+
     // Rounded Card Boundary
+    const cardRadius = 26 * s;
     ctx.beginPath();
-    ctx.roundRect(x, y, w, h, 26);
+    ctx.roundRect(x, y, w, h, cardRadius);
     ctx.fillStyle = "#FFFFFF";
     ctx.fill();
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = Math.max(1, 1.5 * s);
     ctx.strokeStyle = "#CBD5E1";
     ctx.stroke();
     ctx.clip();
 
-    // Watermark Logo
-    const wmCx = x + Math.round(w / 2);
-    const wmCy = y + Math.round(h / 2) - 15;
+    // Center Watermark Logo
+    const wmCx = x + w / 2;
+    const wmCy = y + h / 2 - 10 * s;
     ctx.save();
     ctx.globalAlpha = 0.04;
     ctx.strokeStyle = "#E65100";
     ctx.fillStyle = "#E65100";
-    ctx.lineWidth = 3;
+    ctx.lineWidth = Math.max(1.5, 3 * s);
     ctx.beginPath();
-    ctx.arc(wmCx, wmCy, 100, 0, Math.PI * 2);
+    ctx.arc(wmCx, wmCy, 75 * s, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.font = "900 48px sans-serif";
+    ctx.lineWidth = Math.max(1, 1.5 * s);
+    ctx.beginPath();
+    ctx.arc(wmCx, wmCy, 60 * s, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.font = `900 ${Math.round(32 * s)}px sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(card.orgInitials, wmCx, wmCy);
     ctx.restore();
 
-    // Instructions
-    const instrX = x + 30;
-    let curY = y + 36;
+    // Instructions Column
+    const instrX = x + 24 * s;
+    let curY = y + 28 * s;
 
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
-    ctx.font = "900 17px sans-serif";
+    ctx.font = `900 ${Math.round(13 * s)}px sans-serif`;
     ctx.fillStyle = "#0F172A";
     ctx.fillText("GENERAL INSTRUCTIONS", instrX, curY);
 
+    // Underline
     ctx.beginPath();
-    ctx.moveTo(instrX, curY + 8);
-    ctx.lineTo(instrX + 360, curY + 8);
+    ctx.moveTo(instrX, curY + 6 * s);
+    ctx.lineTo(instrX + 270 * s, curY + 6 * s);
     ctx.strokeStyle = "#E2E8F0";
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = Math.max(1, 1 * s);
     ctx.stroke();
 
     const instructions = [
@@ -422,48 +450,48 @@ function drawBackCard(
         `ONLINE VERIFICATION AVAILABLE AT ${card.website.replace(/^https?:\/\//i, "").replace(/^www\./i, "").toLowerCase()}.`
     ];
 
-    curY += 30;
-    ctx.font = "900 12.5px sans-serif";
+    curY += 22 * s;
+    ctx.font = `900 ${Math.round(9.5 * s)}px sans-serif`;
     for (const item of instructions) {
         ctx.fillStyle = "#EA580C";
-        ctx.fillRect(instrX, curY - 9, 6, 6);
+        ctx.fillRect(instrX, curY - 7 * s, 5 * s, 5 * s);
 
         ctx.fillStyle = "#1E293B";
-        ctx.fillText(item, instrX + 16, curY);
-        curY += 26;
+        ctx.fillText(item, instrX + 12 * s, curY);
+        curY += 19 * s;
     }
 
-    // QR Code
-    const qrBoxW = 140;
-    const qrBoxH = 140;
-    const qrX = x + w - qrBoxW - 30;
-    const qrY = y + 30;
+    // QR Code Frame
+    const qrBoxW = 105 * s;
+    const qrBoxH = 105 * s;
+    const qrX = x + w - qrBoxW - 24 * s;
+    const qrY = y + 24 * s;
 
     ctx.save();
     ctx.beginPath();
-    ctx.roundRect(qrX, qrY, qrBoxW, qrBoxH, 16);
+    ctx.roundRect(qrX, qrY, qrBoxW, qrBoxH, 12 * s);
     ctx.fillStyle = "#FFFFFF";
     ctx.fill();
     ctx.strokeStyle = "#FED7AA";
-    ctx.lineWidth = 2;
+    ctx.lineWidth = Math.max(1, 1.5 * s);
     ctx.stroke();
     ctx.clip();
 
     if (qrImg) {
-        ctx.drawImage(qrImg, qrX + 6, qrY + 6, qrBoxW - 12, qrBoxH - 12);
+        ctx.drawImage(qrImg, qrX + 4 * s, qrY + 4 * s, qrBoxW - 8 * s, qrBoxH - 8 * s);
     } else {
-        drawStylizedQr(ctx, qrX + 8, qrY + 8, qrBoxW - 16);
+        drawStylizedQr(ctx, qrX + 6 * s, qrY + 6 * s, qrBoxW - 12 * s);
     }
     ctx.restore();
 
-    ctx.font = "900 10px sans-serif";
+    ctx.font = `900 ${Math.round(7.5 * s)}px sans-serif`;
     ctx.fillStyle = "#64748B";
     ctx.textAlign = "center";
-    ctx.fillText("SCAN TO VERIFY", qrX + qrBoxW / 2, qrY + qrBoxH + 16);
-    ctx.fillText("AUTHENTICITY", qrX + qrBoxW / 2, qrY + qrBoxH + 28);
+    ctx.fillText("SCAN TO VERIFY", qrX + qrBoxW / 2, qrY + qrBoxH + 12 * s);
+    ctx.fillText("AUTHENTICITY", qrX + qrBoxW / 2, qrY + qrBoxH + 21 * s);
 
     // Bottom Footer Bar
-    const footerH = 76;
+    const footerH = 58 * s;
     const footerY = y + h - footerH;
 
     ctx.fillStyle = "#F8FAFC";
@@ -473,36 +501,36 @@ function drawBackCard(
     ctx.moveTo(x, footerY);
     ctx.lineTo(x + w, footerY);
     ctx.strokeStyle = "#E2E8F0";
-    ctx.lineWidth = 1;
+    ctx.lineWidth = Math.max(1, 1 * s);
     ctx.stroke();
 
     // Shield Icon
-    const sigShieldX = x + 30;
-    const sigShieldY = footerY + Math.round(footerH / 2);
+    const sigShieldX = x + 24 * s;
+    const sigShieldY = footerY + footerH / 2;
     ctx.save();
     ctx.beginPath();
-    ctx.roundRect(sigShieldX, sigShieldY - 18, 36, 36, 10);
+    ctx.roundRect(sigShieldX, sigShieldY - 15 * s, 30 * s, 30 * s, 8 * s);
     ctx.fillStyle = "#FFFFFF";
     ctx.fill();
     ctx.strokeStyle = "#E2E8F0";
-    ctx.lineWidth = 1.2;
+    ctx.lineWidth = Math.max(1, 1 * s);
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.arc(sigShieldX + 18, sigShieldY, 10, 0, Math.PI * 2);
+    ctx.arc(sigShieldX + 15 * s, sigShieldY, 8 * s, 0, Math.PI * 2);
     ctx.strokeStyle = "#94A3B8";
-    ctx.lineWidth = 1.8;
+    ctx.lineWidth = Math.max(1, 1.5 * s);
     ctx.stroke();
     ctx.restore();
 
     // Signature Area
-    const sigLineX = x + 80;
-    const sigLineW = 150;
-    const sigLineY = footerY + 44;
+    const sigLineX = x + 65 * s;
+    const sigLineW = 110 * s;
+    const sigLineY = footerY + 34 * s;
 
     if (sigImg) {
         ctx.save();
-        ctx.drawImage(sigImg, sigLineX, sigLineY - 32, sigLineW, 30);
+        ctx.drawImage(sigImg, sigLineX, sigLineY - 24 * s, sigLineW, 22 * s);
         ctx.restore();
     }
 
@@ -510,38 +538,41 @@ function drawBackCard(
     ctx.moveTo(sigLineX, sigLineY);
     ctx.lineTo(sigLineX + sigLineW, sigLineY);
     ctx.strokeStyle = "#CBD5E1";
-    ctx.lineWidth = 1.2;
+    ctx.lineWidth = Math.max(1, 1 * s);
     ctx.stroke();
 
     ctx.textAlign = "center";
-    ctx.font = "900 9.5px sans-serif";
+    ctx.font = `900 ${Math.round(7.5 * s)}px sans-serif`;
     ctx.fillStyle = "#64748B";
-    ctx.fillText("AUTHORIZED SIGNATORY", sigLineX + sigLineW / 2, sigLineY + 14);
+    ctx.fillText("AUTHORIZED SIGNATORY", sigLineX + sigLineW / 2, sigLineY + 10 * s);
 
     if (card.signatoryName) {
-        ctx.font = "bold 8.5px sans-serif";
+        ctx.font = `bold ${Math.round(6.5 * s)}px sans-serif`;
         ctx.fillStyle = "#64748B";
         const titleStr = card.signatoryTitle ? ` • ${card.signatoryTitle}` : "";
-        ctx.fillText((card.signatoryName + titleStr).slice(0, 36), sigLineX + sigLineW / 2, sigLineY + 24);
+        ctx.fillText((card.signatoryName + titleStr).slice(0, 32), sigLineX + sigLineW / 2, sigLineY + 18 * s);
     }
 
-    // Right Company Branding
+    // Right Company Titles
     ctx.textAlign = "right";
-    ctx.font = "900 14px sans-serif";
+    ctx.font = `900 ${Math.round(11 * s)}px sans-serif`;
     ctx.fillStyle = "#0F172A";
-    ctx.fillText(`${card.orgName} • ${card.stateUnit}`, x + w - 30, footerY + 24);
+    ctx.fillText(`${card.orgName} • ${card.stateUnit}`, x + w - 24 * s, footerY + 18 * s);
 
-    ctx.font = "900 11px sans-serif";
+    ctx.font = `900 ${Math.round(8.5 * s)}px sans-serif`;
     ctx.fillStyle = "#EA580C";
-    ctx.fillText(card.tagline, x + w - 30, footerY + 42);
+    ctx.fillText(card.tagline, x + w - 24 * s, footerY + 32 * s);
 
-    ctx.font = "bold 10px sans-serif";
+    ctx.font = `bold ${Math.round(8 * s)}px sans-serif`;
     ctx.fillStyle = "#64748B";
-    ctx.fillText(card.website, x + w - 30, footerY + 60);
+    ctx.fillText(card.website, x + w - 24 * s, footerY + 46 * s);
 
     ctx.restore();
 }
 
+/**
+ * Generate Ultra High-Definition ID Card PDF (712 DPI CR80 Badges + 300 DPI A4 Print Sheet)
+ */
 export async function downloadIdCardPdf({
     cardData,
     photoUrl,
@@ -555,9 +586,9 @@ export async function downloadIdCardPdf({
 }): Promise<void> {
     const { jsPDF } = await import("jspdf");
 
-    // Preload all assets in parallel
+    // Preload all assets in parallel at highest resolution
     const qrPayload = `COMPANY:${cardData.orgName}|EMP_ID:${cardData.memberId}|NAME:${cardData.name}|DESIG:${cardData.designation}|BRANCH:${cardData.stateUnit}|STATUS:${cardData.status}`;
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&color=ea580c&bgcolor=ffffff&data=${encodeURIComponent(qrPayload)}`;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=600x600&color=ea580c&bgcolor=ffffff&data=${encodeURIComponent(qrPayload)}`;
 
     const [photoImg, sigImg, qrImg] = await Promise.all([
         loadImage(photoUrl),
@@ -565,98 +596,132 @@ export async function downloadIdCardPdf({
         loadImage(qrUrl).catch(() => null),
     ]);
 
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("Could not initialize 2D canvas context");
+    // ── 1. RENDER ULTRA HD FRONT CARD CANVAS (2400 x 1525 px @ 712 DPI) ──
+    const cardCanvasW = 2400;
+    const cardCanvasH = 1525;
 
-    // Standard A4 at 200 DPI: 1654 x 2338 px
-    canvas.width = 1654;
-    canvas.height = 2338;
+    const frontCanvas = document.createElement("canvas");
+    frontCanvas.width = cardCanvasW;
+    frontCanvas.height = cardCanvasH;
+    const frontCtx = frontCanvas.getContext("2d");
+    if (!frontCtx) throw new Error("Could not initialize Front Canvas");
+    drawFrontCard(frontCtx, cardData, photoImg, 0, 0, cardCanvasW, cardCanvasH);
 
-    ctx.fillStyle = "#FFFFFF";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // ── 2. RENDER ULTRA HD BACK CARD CANVAS (2400 x 1525 px @ 712 DPI) ──
+    const backCanvas = document.createElement("canvas");
+    backCanvas.width = cardCanvasW;
+    backCanvas.height = cardCanvasH;
+    const backCtx = backCanvas.getContext("2d");
+    if (!backCtx) throw new Error("Could not initialize Back Canvas");
+    drawBackCard(backCtx, cardData, qrImg, sigImg, 0, 0, cardCanvasW, cardCanvasH);
 
-    // CR80 dimensions: 674 x 425 px (exact 85.6mm x 54.0mm scale)
-    const cardW = printScale === "cr80" ? 674 : 850;
-    const cardH = printScale === "cr80" ? 425 : 536;
+    // ── 3. RENDER A4 PRINTABLE SHEET CANVAS (2480 x 3508 px @ 300 DPI) ──
+    const a4Canvas = document.createElement("canvas");
+    a4Canvas.width = 2480;
+    a4Canvas.height = 3508;
+    const a4Ctx = a4Canvas.getContext("2d");
+    if (!a4Ctx) throw new Error("Could not initialize A4 Canvas");
 
-    ctx.textAlign = "center";
-    ctx.font = "900 14px sans-serif";
-    ctx.fillStyle = "#64748B";
-    ctx.fillText(`${cardData.orgName.toUpperCase()} — OFFICIAL IDENTITY CARD`, canvas.width / 2, 70);
+    a4Ctx.fillStyle = "#FFFFFF";
+    a4Ctx.fillRect(0, 0, a4Canvas.width, a4Canvas.height);
+
+    // CR80 is 85.6mm x 54.0mm. At 300 DPI: 1011 x 638 px
+    const sheetCardW = printScale === "cr80" ? 1011 : 1417;
+    const sheetCardH = printScale === "cr80" ? 638 : 898;
+    const sA4 = sheetCardW / 480;
+
+    a4Ctx.textAlign = "center";
+    a4Ctx.font = "900 22px sans-serif";
+    a4Ctx.fillStyle = "#475569";
+    a4Ctx.fillText(`${cardData.orgName.toUpperCase()} — OFFICIAL IDENTITY BADGE`, a4Canvas.width / 2, 110);
 
     if (printLayout === "foldable") {
-        const frontX = Math.round((canvas.width - cardW) / 2);
-        const frontY = 110;
-        drawFrontCard(ctx, cardData, photoImg, frontX, frontY, cardW, cardH);
-        drawCropMarks(ctx, frontX, frontY, cardW, cardH);
+        const frontX = Math.round((a4Canvas.width - sheetCardW) / 2);
+        const frontY = 170;
+        drawFrontCard(a4Ctx, cardData, photoImg, frontX, frontY, sheetCardW, sheetCardH);
+        drawCropMarks(a4Ctx, frontX, frontY, sheetCardW, sheetCardH, sA4);
 
-        const guideY = frontY + cardH + 50;
-        ctx.save();
-        ctx.setLineDash([8, 8]);
-        ctx.strokeStyle = "#CBD5E1";
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(frontX - 40, guideY);
-        ctx.lineTo(frontX + cardW + 40, guideY);
-        ctx.stroke();
-        ctx.restore();
+        // Center Fold Guide
+        const guideY = frontY + sheetCardH + 80;
+        a4Ctx.save();
+        a4Ctx.setLineDash([12, 10]);
+        a4Ctx.strokeStyle = "#CBD5E1";
+        a4Ctx.lineWidth = 2.5;
+        a4Ctx.beginPath();
+        a4Ctx.moveTo(frontX - 60, guideY);
+        a4Ctx.lineTo(frontX + sheetCardW + 60, guideY);
+        a4Ctx.stroke();
+        a4Ctx.restore();
 
-        ctx.font = "bold 12px monospace";
-        ctx.fillStyle = "#94A3B8";
-        ctx.textAlign = "center";
-        ctx.fillText("✂   FOLD HERE (CENTER LINE)   ✂", canvas.width / 2, guideY - 8);
+        a4Ctx.font = "bold 16px monospace";
+        a4Ctx.fillStyle = "#94A3B8";
+        a4Ctx.textAlign = "center";
+        a4Ctx.fillText("✂   FOLD HERE (CENTER LINE)   ✂", a4Canvas.width / 2, guideY - 14);
 
         const backX = frontX;
-        const backY = guideY + 50;
-        drawBackCard(ctx, cardData, qrImg, sigImg, backX, backY, cardW, cardH);
-        drawCropMarks(ctx, backX, backY, cardW, cardH);
+        const backY = guideY + 80;
+        drawBackCard(a4Ctx, cardData, qrImg, sigImg, backX, backY, sheetCardW, sheetCardH);
+        drawCropMarks(a4Ctx, backX, backY, sheetCardW, sheetCardH, sA4);
 
-        ctx.font = "bold 11px sans-serif";
-        ctx.fillStyle = "#94A3B8";
-        ctx.textAlign = "center";
-        ctx.fillText(
+        a4Ctx.font = "bold 15px sans-serif";
+        a4Ctx.fillStyle = "#94A3B8";
+        a4Ctx.textAlign = "center";
+        a4Ctx.fillText(
             printScale === "cr80"
                 ? "ISO 7810 CR80 Standard (85.6 mm × 54.0 mm) • 100% True Scale • Foldable A4 Layout"
                 : "Display Badge Specification (120 mm × 76 mm) • Foldable A4 Layout",
-            canvas.width / 2,
-            backY + cardH + 70
+            a4Canvas.width / 2,
+            backY + sheetCardH + 110
         );
     } else {
-        const gap = 60;
-        const totalW = cardW * 2 + gap;
-        const startX = Math.round((canvas.width - totalW) / 2);
-        const startY = Math.round((canvas.height - cardH) / 2);
+        const gap = 100;
+        const totalW = sheetCardW * 2 + gap;
+        const startX = Math.round((a4Canvas.width - totalW) / 2);
+        const startY = Math.round((a4Canvas.height - sheetCardH) / 2);
 
         const frontX = startX;
         const frontY = startY;
-        drawFrontCard(ctx, cardData, photoImg, frontX, frontY, cardW, cardH);
-        drawCropMarks(ctx, frontX, frontY, cardW, cardH);
+        drawFrontCard(a4Ctx, cardData, photoImg, frontX, frontY, sheetCardW, sheetCardH);
+        drawCropMarks(a4Ctx, frontX, frontY, sheetCardW, sheetCardH, sA4);
 
-        const backX = frontX + cardW + gap;
+        const backX = frontX + sheetCardW + gap;
         const backY = startY;
-        drawBackCard(ctx, cardData, qrImg, sigImg, backX, backY, cardW, cardH);
-        drawCropMarks(ctx, backX, backY, cardW, cardH);
+        drawBackCard(a4Ctx, cardData, qrImg, sigImg, backX, backY, sheetCardW, sheetCardH);
+        drawCropMarks(a4Ctx, backX, backY, sheetCardW, sheetCardH, sA4);
 
-        ctx.font = "bold 11px sans-serif";
-        ctx.fillStyle = "#94A3B8";
-        ctx.textAlign = "center";
-        ctx.fillText(
+        a4Ctx.font = "bold 15px sans-serif";
+        a4Ctx.fillStyle = "#94A3B8";
+        a4Ctx.textAlign = "center";
+        a4Ctx.fillText(
             printScale === "cr80"
                 ? "ISO 7810 CR80 Standard (85.6 mm × 54.0 mm) • 100% True Scale • Side-by-Side Printing"
                 : "Display Badge Specification (120 mm × 76 mm) • Side-by-Side Printing",
-            canvas.width / 2,
-            startY + cardH + 70
+            a4Canvas.width / 2,
+            startY + sheetCardH + 110
         );
     }
 
-    const imgData = canvas.toDataURL("image/png");
+    // ── 4. COMPOSE MULTI-PAGE ULTRA-HD PDF VIA jsPDF ──
+    // Page 1: Front Card (CR80 85.6 x 54.0 mm, 712 DPI, Zero Lossy Compression)
     const pdf = new jsPDF({
-        orientation: "portrait",
+        orientation: "landscape",
         unit: "mm",
-        format: "a4",
+        format: [85.6, 54.0],
+        compress: false,
     });
 
-    pdf.addImage(imgData, "PNG", 0, 0, 210, 297, undefined, "FAST");
+    const frontDataUrl = frontCanvas.toDataURL("image/png");
+    pdf.addImage(frontDataUrl, "PNG", 0, 0, 85.6, 54.0, undefined, "NONE");
+
+    // Page 2: Back Card (CR80 85.6 x 54.0 mm, 712 DPI)
+    const backDataUrl = backCanvas.toDataURL("image/png");
+    pdf.addPage([85.6, 54.0], "landscape");
+    pdf.addImage(backDataUrl, "PNG", 0, 0, 85.6, 54.0, undefined, "NONE");
+
+    // Page 3: Full A4 Print Sheet (210 x 297 mm, 300 DPI)
+    const a4DataUrl = a4Canvas.toDataURL("image/png");
+    pdf.addPage("a4", "portrait");
+    pdf.addImage(a4DataUrl, "PNG", 0, 0, 210, 297, undefined, "NONE");
+
     pdf.save(`ID_Card_${cardData.memberId}_${cardData.name.replace(/\s+/g, "_")}.pdf`);
 }
