@@ -135,7 +135,6 @@ function CandidateOnboardingContent() {
         // Section A: Personal Information
         name: "", // Full Name, as per Aadhaar (*)
         dob: "", // Date of Birth (*)
-        doj: "", // Date of Joining (*)
         marital_status: "unmarried", // Married / Unmarried (*)
         father_or_husband_name: "", // Father's Name / Husband's Name, as applicable (*)
         phone: "", // Mobile Number (*)
@@ -197,7 +196,6 @@ function CandidateOnboardingContent() {
                     phone: inv.phone || prev.phone,
                     working_location: inv.office?.name || (inv.office?.address ? `${inv.office.name} - ${inv.office.address}` : "Indore Logistics Hub"),
                     designation: inv.designation || "Executive",
-                    doj: inv.date_of_joining || new Date().toISOString().split("T")[0],
                 }));
             } catch (err: any) {
                 setTokenError(err.message || "Invalid or expired onboarding invitation.");
@@ -281,7 +279,6 @@ function CandidateOnboardingContent() {
             ...prev,
             name: prev.name || "Rahul Sharma",
             dob: "1998-05-20",
-            doj: prev.doj || "2026-12-01",
             gender: "male",
             marital_status: "unmarried",
             father_or_husband_name: "Omprakash Sharma",
@@ -737,8 +734,8 @@ function CandidateOnboardingContent() {
                                     {fieldErrors.name && <p className="text-xs text-rose-500 mt-1">{fieldErrors.name}</p>}
                                 </div>
 
-                                {/* 2. DOB, DOJ, Gender */}
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                {/* 2. DOB & Gender */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <div>
                                         <Label className="text-xs font-bold text-slate-700">
                                             Date of Birth <span className="text-rose-500">*</span>
@@ -750,19 +747,6 @@ function CandidateOnboardingContent() {
                                             className="h-11 rounded-xl bg-slate-50 mt-1 font-bold text-xs"
                                         />
                                         {fieldErrors.dob && <p className="text-xs text-rose-500 mt-1">{fieldErrors.dob}</p>}
-                                    </div>
-
-                                    <div>
-                                        <Label className="text-xs font-bold text-slate-700">
-                                            Date of Joining <span className="text-rose-500">*</span>
-                                        </Label>
-                                        <Input
-                                            type="date"
-                                            value={formData.doj}
-                                            onChange={(e) => updateField("doj", e.target.value)}
-                                            className="h-11 rounded-xl bg-slate-50 mt-1 font-bold text-xs"
-                                        />
-                                        {fieldErrors.doj && <p className="text-xs text-rose-500 mt-1">{fieldErrors.doj}</p>}
                                     </div>
 
                                     <div>

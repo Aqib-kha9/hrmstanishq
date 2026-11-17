@@ -766,6 +766,10 @@ function OnboardingForm() {
 
     const approveCandidateSubmission = async (invitationId: number) => {
         if (approveLoading) return;
+        if (!approvalOverrides.date_of_joining) {
+            alert("Please select the Date of Joining for the employee before approving.");
+            return;
+        }
         if (!approvalOverrides.uan || !/^\d{12}$/.test(approvalOverrides.uan.trim())) {
             alert("Universal Account Number (UAN) is required and must be exactly 12 digits (e.g. 101234567890).");
             return;
@@ -3858,8 +3862,8 @@ function OnboardingForm() {
                                         <span className="font-bold text-slate-800">{approvalOverrides.email} • {approvalOverrides.phone || "N/A"}</span>
                                     </div>
                                     <div>
-                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">Date of Birth & Joining</span>
-                                        <span className="font-bold text-slate-800">DOB: {approvalOverrides.dob || "N/A"} • DOJ: {approvalOverrides.date_of_joining || "N/A"}</span>
+                                        <span className="text-slate-400 font-bold uppercase text-[9px] block">Date of Birth</span>
+                                        <span className="font-bold text-slate-800">DOB: {approvalOverrides.dob || "N/A"}</span>
                                     </div>
                                     <div>
                                         <span className="text-slate-400 font-bold uppercase text-[9px] block">PAN & Aadhaar</span>
@@ -4021,12 +4025,15 @@ function OnboardingForm() {
                                         </select>
                                     </div>
                                     <div>
-                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Date of Joining *</Label>
+                                        <Label className="text-[10px] font-bold text-indigo-700 mb-1 flex items-center justify-between">
+                                            <span>Date of Joining (HR Input) *</span>
+                                            <span className="text-[9px] font-normal text-slate-400">Set by HR</span>
+                                        </Label>
                                         <Input
                                             type="date"
                                             value={approvalOverrides.date_of_joining}
                                             onChange={(e) => setApprovalOverrides(a => ({ ...a, date_of_joining: e.target.value }))}
-                                            className="h-10 rounded-xl bg-slate-50 font-bold text-xs"
+                                            className="h-10 rounded-xl bg-slate-50 font-bold text-xs border-indigo-200 focus:border-indigo-500"
                                         />
                                     </div>
                                 </div>
