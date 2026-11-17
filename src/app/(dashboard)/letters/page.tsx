@@ -476,6 +476,9 @@ export default function LettersPage() {
   const ackCount = letters.filter(l => l.status === "acknowledged").length;
   const candidateLetterCount = letters.filter(l => !l.employee_id).length;
   const compliancePct = issuedCount > 0 ? Math.round((ackCount / issuedCount) * 100) : 100;
+  const pendingAcceptedOffers = letters.filter(
+    (l) => l.type === "offer" && (l.metadata?.acceptance_status === "accepted" || l.status === "acknowledged") && !l.metadata?.onboarding_invited
+  );
 
   const accentColor = (selectedTemplate)
     ? (typeAccentMap[selectedTemplate.type] || "#1e293b")
@@ -872,23 +875,74 @@ export default function LettersPage() {
               <History className="h-3.5 w-3.5" />
               Issued Letters
               {letters.length > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full text-[8px] bg-slate-900 text-white font-mono">
+                <span className={cn(
+                  "px-2 py-0.5 rounded-full text-[8px] font-mono font-bold",
+                  pendingAcceptedOffers.length > 0
+                    ? "bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-300 ring-offset-1 animate-pulse"
+                    : "bg-slate-900 text-white"
+                )}>
                   {letters.length}
+                  {pendingAcceptedOffers.length > 0 && ` • ${pendingAcceptedOffers.length} Ready`}
                 </span>
               )}
             </button>
           </div>
         </div>
 
+        {/* ── ACTION REQUIRED BANNER: DIGITALLY ACCEPTED OFFERS WAITING FOR ONBOARDING ── */}
+        {pendingAcceptedOffers.length > 0 && (
+          <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white rounded-2xl p-5 shadow-lg shadow-emerald-600/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border border-emerald-400/30">
+            <div className="flex items-center gap-3.5">
+              <div className="h-11 w-11 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0 border border-white/20 shadow-inner">
+                <CheckCircle2 className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-black text-sm uppercase tracking-wide">
+                    🎉 {pendingAcceptedOffers.length} Candidate Offer{pendingAcceptedOffers.length > 1 ? "s" : ""} Digitally Signed &amp; Accepted!
+                  </span>
+                  <span className="bg-white/25 text-white text-[8px] font-black uppercase px-2 py-0.5 rounded-full border border-white/30">
+                    Ready for Onboarding
+                  </span>
+                </div>
+                <p className="text-xs text-emerald-100 mt-1 leading-relaxed">
+                  Candidate <strong>{pendingAcceptedOffers[0]?.candidate_name || "Candidate"}</strong> ({pendingAcceptedOffers[0]?.candidate_email || ""}) has reviewed and digitally accepted the offer. Click below to view their signature and send the Self-Onboarding Portal link with 1-click!
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+              <Button
+                size="sm"
+                onClick={() => {
+                  setActiveTab("history");
+                  setViewingLetter(pendingAcceptedOffers[0]);
+                }}
+                className="bg-white text-emerald-900 hover:bg-emerald-50 font-black text-xs h-9 px-4 rounded-xl shadow-md transition-all flex items-center gap-1.5"
+              >
+                <span>View Signature &amp; Send Onboarding</span>
+                <ArrowUpRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* ── Stats Overview ── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: "Active Templates", value: `${templates.filter(t => t.is_active).length} Templates`, icon: FileSignature, bg: "bg-white" },
-            { label: "Letters Issued", value: `${issuedCount} Letters`, icon: Send, bg: "bg-white" },
-            { label: "Candidate Letters", value: `${candidateLetterCount} Issued`, icon: Briefcase, bg: "bg-white" },
-            { label: "Compliance Rate", value: `${compliancePct}% Acknowledged`, icon: CheckCircle2, bg: "bg-[#D9F99D]" },
+            { label: "Active Templates", value: `${templates.filter(t => t.is_active).length} Templates`, icon: FileSignature, bg: "bg-white", clickable: false },
+            { label: "Letters Issued", value: `${issuedCount} Letters`, icon: Send, bg: "bg-white", clickable: true },
+            { label: "Candidate Letters", value: `${candidateLetterCount} Issued`, icon: Briefcase, bg: "bg-white", clickable: true },
+            { label: "Compliance Rate", value: `${compliancePct}% Acknowledged`, icon: CheckCircle2, bg: "bg-[#D9F99D]", clickable: true },
           ].map((stat, i) => (
-            <Card key={i} className={`${stat.bg} border-none rounded-2xl p-5 shadow-sm flex flex-col justify-between h-32 group hover:shadow-md transition-all`}>
+            <Card
+              key={i}
+              onClick={() => {
+                if (stat.clickable) setActiveTab("history");
+              }}
+              className={`${stat.bg} border-none rounded-2xl p-5 shadow-sm flex flex-col justify-between h-32 group hover:shadow-md transition-all ${
+                stat.clickable ? "cursor-pointer hover:ring-2 hover:ring-slate-300" : ""
+              }`}
+            >
               <div className="h-8 w-8 bg-slate-50 rounded-xl flex items-center justify-center group-hover:bg-[#D9F99D]/30 transition-colors">
                 <stat.icon className="h-4 w-4 text-slate-500 group-hover:text-slate-900 transition-colors" />
               </div>
