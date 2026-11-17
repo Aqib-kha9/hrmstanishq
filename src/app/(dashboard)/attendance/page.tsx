@@ -318,7 +318,7 @@ export default function AttendancePage() {
                 ? `${row.remaining_leave_balance}d`
                 : (row.leave_balance != null ? `${row.leave_balance}d` : "24d");
             const offDay = Array.isArray(row.weekly_off_days)
-                ? row.weekly_off_days.join('/')
+                ? (row.weekly_off_days.length > 0 ? row.weekly_off_days.join('/') : 'None (7d)')
                 : (row.off_day || 'Sun');
             const offDayStr = `${offDay}${row.rotational_weekly_off ? ' (Rot)' : ''}`;
 
@@ -497,7 +497,7 @@ export default function AttendancePage() {
         };
     };
 
-    const applyRosterTemplate = (templateType: "corp_6day" | "5day" | "6day_full" | "copy_mon") => {
+    const applyRosterTemplate = (templateType: "corp_6day" | "5day" | "6day_full" | "copy_mon" | "7day_no_off") => {
         if (templateType === "corp_6day") {
             setEditWeeklyRoster({
                 Monday: { is_off: false, shift_name: "General", start: "09:30", end: "18:30" },
@@ -531,6 +531,17 @@ export default function AttendancePage() {
                 Sunday: { is_off: true, shift_name: "Weekly Off", start: "", end: "" },
             });
             setEditOffDays(["Sunday"]);
+        } else if (templateType === "7day_no_off") {
+            setEditWeeklyRoster({
+                Monday: { is_off: false, shift_name: "General", start: "09:30", end: "18:30" },
+                Tuesday: { is_off: false, shift_name: "General", start: "09:30", end: "18:30" },
+                Wednesday: { is_off: false, shift_name: "General", start: "09:30", end: "18:30" },
+                Thursday: { is_off: false, shift_name: "General", start: "09:30", end: "18:30" },
+                Friday: { is_off: false, shift_name: "General", start: "09:30", end: "18:30" },
+                Saturday: { is_off: false, shift_name: "General", start: "09:30", end: "18:30" },
+                Sunday: { is_off: false, shift_name: "General", start: "09:30", end: "18:30" },
+            });
+            setEditOffDays([]);
         } else if (templateType === "copy_mon") {
             const mon = editWeeklyRoster.Monday;
             setEditWeeklyRoster((prev) => {
@@ -1056,7 +1067,7 @@ export default function AttendancePage() {
         if (typeof offs === "string") {
             try { offs = JSON.parse(offs); } catch (e) { offs = [offs]; }
         }
-        const effectiveOffs = Array.isArray(offs) && offs.length > 0 ? offs : ["Sunday"];
+        const effectiveOffs = Array.isArray(offs) ? offs : (offs ? [offs] : ["Sunday"]);
         setEditOffDays(effectiveOffs);
         setEditRotationalOff(Boolean(emp.rotational_weekly_off));
 
@@ -1133,10 +1144,7 @@ export default function AttendancePage() {
 
     const toggleEditOffDay = (dayName: string) => {
         if (editOffDays.includes(dayName)) {
-            if (editOffDays.length === 1) {
-                alert("At least one weekly off day must be selected.");
-                return;
-            }
+            // Allow deselecting all off days to support 7-day continuous work (0 weekly offs)
             setEditOffDays(editOffDays.filter(d => d !== dayName));
         } else {
             setEditOffDays([...editOffDays, dayName]);
@@ -1150,7 +1158,7 @@ export default function AttendancePage() {
             let finalOffDays = editOffDays;
             if (editRosterTab === "by_day") {
                 const dayOffs = DAYS_OF_WEEK.filter(d => editWeeklyRoster[d]?.is_off);
-                finalOffDays = dayOffs.length > 0 ? dayOffs : ["Sunday"];
+                finalOffDays = dayOffs; // Allowed to be [] for 0 off days (7 days working)!
             }
 
             const payload: any = {
@@ -2457,7 +2465,7 @@ export default function AttendancePage() {
                                                             title={`Click to configure weekly off schedule for ${emp.name}`}
                                                         >
                                                             <Badge className={cn("text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md transition-transform group-hover/off:scale-105", emp.rotational_weekly_off ? "bg-purple-100 text-purple-900 border border-purple-200" : "bg-slate-100 text-slate-700")}>
-                                                                {Array.isArray(emp.weekly_off_days) ? emp.weekly_off_days.map((d: string) => d.slice(0, 3)).join(",") : "Sun"}
+                                                                {Array.isArray(emp.weekly_off_days) ? (emp.weekly_off_days.length > 0 ? emp.weekly_off_days.map((d: string) => d.slice(0, 3)).join(",") : "None (7d)") : "Sun"}
                                                                 {emp.rotational_weekly_off ? " (Rot)" : ""}
                                                             </Badge>
                                                         </div>
@@ -3464,7 +3472,7 @@ export default function AttendancePage() {
                                                 </span>
                                                 <span className="text-[10px] text-slate-400">Click any preset to auto-fill the 7-day schedule</span>
                                             </div>
-                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                                                 <button
                                                     type="button"
                                                     onClick={() => applyRosterTemplate("corp_6day")}
@@ -3491,11 +3499,19 @@ export default function AttendancePage() {
                                                 </button>
                                                 <button
                                                     type="button"
+                                                    onClick={() => applyRosterTemplate("7day_no_off")}
+                                                    className="p-2 rounded-lg border border-amber-200 bg-amber-50/50 hover:bg-amber-100/60 hover:border-amber-300 text-left transition-all cursor-pointer"
+                                                >
+                                                    <span className="text-[11px] font-bold text-amber-900 block leading-tight">🔥 7-Day (0 Offs)</span>
+                                                    <span className="text-[10px] text-amber-700 block mt-0.5">Works 7 Days / 0 Weekly Off</span>
+                                                </button>
+                                                <button
+                                                    type="button"
                                                     onClick={() => applyRosterTemplate("copy_mon")}
                                                     className="p-2 rounded-lg border border-slate-200 bg-slate-50 hover:bg-indigo-50/50 hover:border-indigo-300 text-left transition-all cursor-pointer"
                                                 >
-                                                    <span className="text-[11px] font-bold text-slate-900 block leading-tight">🔄 Copy Monday</span>
-                                                    <span className="text-[10px] text-slate-500 block mt-0.5">Replicate Mon to all working days</span>
+                                                    <span className="text-[11px] font-bold text-slate-900 block leading-tight">🔄 Copy Mon</span>
+                                                    <span className="text-[10px] text-slate-500 block mt-0.5">Replicate Mon to working days</span>
                                                 </button>
                                             </div>
                                         </div>
@@ -3815,6 +3831,34 @@ export default function AttendancePage() {
                                                     );
                                                 })}
                                             </div>
+
+                                            <div className="flex items-center justify-between text-[11px] pt-1">
+                                                <span className={cn(
+                                                    "font-medium",
+                                                    editOffDays.length === 0 ? "text-amber-700 font-bold" : "text-slate-500"
+                                                )}>
+                                                    {editOffDays.length === 0 
+                                                        ? "🔥 0 Weekly Offs (Continuous 7-day working schedule — no off days)" 
+                                                        : `Off Days: ${editOffDays.join(", ")} (${editOffDays.length} off/week)`}
+                                                </span>
+                                                {editOffDays.length > 0 ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setEditOffDays([])}
+                                                        className="text-[10px] font-semibold text-rose-600 hover:text-rose-700 hover:underline cursor-pointer"
+                                                    >
+                                                        Clear All (0 Offs)
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setEditOffDays(["Sunday"])}
+                                                        className="text-[10px] font-semibold text-purple-600 hover:text-purple-700 hover:underline cursor-pointer"
+                                                    >
+                                                        Set Sunday Off
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 )}
@@ -3946,7 +3990,9 @@ export default function AttendancePage() {
                                         .map((emp) => {
                                             const empId = emp.employee_id || emp.id;
                                             const isSelected = selectedEmpIdsForRoster.includes(empId);
-                                            const currentOffs = Array.isArray(emp.weekly_off_days) ? emp.weekly_off_days.join(", ") : "Sunday";
+                                            const currentOffs = Array.isArray(emp.weekly_off_days) 
+                                                ? (emp.weekly_off_days.length > 0 ? emp.weekly_off_days.join(", ") : "None (7d Continuous)") 
+                                                : "Sunday";
                                             const shiftStart = emp.shift_start_time ? emp.shift_start_time.slice(0, 5) : "09:30";
                                             const shiftEnd = emp.shift_end_time ? emp.shift_end_time.slice(0, 5) : "18:30";
 
