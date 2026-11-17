@@ -5,7 +5,8 @@ import {
   FileType, FileText, Download, Eye,
   CheckCircle2, Search, Clock, FileSignature, ArrowUpRight, Mail,
   Loader2, AlertCircle, Send, Pencil, X, Save, RefreshCw,
-  Plus, Trash2, History, UserCheck, Briefcase, Building2, Sparkles, Phone, ExternalLink
+  Plus, Trash2, History, UserCheck, Briefcase, Building2, Sparkles, Phone, ExternalLink,
+  Rocket, Copy
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -106,6 +107,11 @@ type IssuedLetter = {
     id: number;
     emp_code: string;
     name: string;
+  } | null;
+  metadata?: {
+    candidate_details?: any;
+    onboarding_link?: string | null;
+    onboarding_invitation_id?: number | null;
   } | null;
 };
 
@@ -213,6 +219,8 @@ export default function LettersPage() {
     department: "",
     office: "",
     company: "",
+    company_id: undefined as number | undefined,
+    office_id: undefined as number | undefined,
     date_of_joining: "",
     fixed_gross: "",
     pf_applicable: true,
@@ -226,6 +234,11 @@ export default function LettersPage() {
     esic_employee_rate: 0.0075,
     pt_applicable: true,
   });
+
+  // Self-Onboarding Integration State
+  const [includeOnboarding, setIncludeOnboarding] = useState(true);
+  const [lastOnboardingLink, setLastOnboardingLink] = useState<string | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   // Action state
   const [issuing, setIssuing] = useState(false);
@@ -498,6 +511,7 @@ export default function LettersPage() {
         body: JSON.stringify({
           employee_id: employeeId,
           candidateData: candidateMode ? candidateData : undefined,
+          includeOnboarding: candidateMode ? includeOnboarding : false,
           template_id: selectedTemplate.id,
           title: TYPE_LABEL_MAP[selectedTemplate?.type || ""] || previewData?.template?.name || selectedTemplate.name,
           type: selectedTemplate.type,
@@ -513,6 +527,12 @@ export default function LettersPage() {
         throw new Error(errorData.message || "Failed to generate PDF");
       }
 
+      const rawOnboardingLink = response.headers.get("X-Onboarding-Link");
+      if (rawOnboardingLink) {
+        const decoded = decodeURIComponent(rawOnboardingLink);
+        setLastOnboardingLink(decoded);
+      }
+
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -525,7 +545,11 @@ export default function LettersPage() {
       window.URL.revokeObjectURL(url);
 
       if (record) {
-        setIssueSuccess("Letter issued, recorded in history, and PDF downloaded!");
+        if (rawOnboardingLink) {
+          setIssueSuccess("Letter issued, recorded, and Self-Onboarding invitation link generated!");
+        } else {
+          setIssueSuccess("Letter issued, recorded in history, and PDF downloaded!");
+        }
         await fetchLetters();
       } else {
         setIssueSuccess("PDF generated and downloaded successfully!");
@@ -565,9 +589,10 @@ export default function LettersPage() {
         fullHtml = fullHtml.replace(/src="\/(?!\/)/g, `src="${window.location.origin}/`);
       }
 
-      await apiPost("/letters/send-email", {
+      const res: any = await apiPost("/letters/send-email", {
         employee_id: employeeId,
         candidateData: candidateMode ? candidateData : undefined,
+        includeOnboarding: candidateMode ? includeOnboarding : false,
         template_id: selectedTemplate.id,
         title: TYPE_LABEL_MAP[selectedTemplate?.type || ""] || previewData?.template?.name || selectedTemplate.name,
         type: selectedTemplate.type,
@@ -576,8 +601,16 @@ export default function LettersPage() {
         signatory_id: selectedSignatory ? parseInt(selectedSignatory, 10) : undefined,
       });
 
-      const recipientName = candidateMode ? candidateData.name : (previewData?.employee?.name || "Employee");
-      setIssueSuccess(`Letter successfully issued, recorded, and sent to ${recipientName} via email!`);
+      const recipientName = candidateMode ? (candidateData.name || "Candidate") : (previewData?.employee?.name || "Employee");
+      const onboardingLink = res?.data?.onboarding_link;
+
+      if (onboardingLink) {
+        setLastOnboardingLink(onboardingLink);
+        setIssueSuccess(`Offer Letter & Self-Onboarding invitation sent successfully to ${recipientName} (${candidateData.email})!`);
+      } else {
+        setLastOnboardingLink(null);
+        setIssueSuccess(`Letter successfully issued, recorded, and sent to ${recipientName} via email!`);
+      }
       await fetchLetters();
     } catch (err: any) {
       setIssueError(err?.message || "Failed to send email.");
@@ -1153,6 +1186,22 @@ export default function LettersPage() {
                               <p className="text-[9px] text-slate-400">
                                 Signatory: <span className="font-semibold text-slate-600">{item.signatory?.name || "Default Signatory"}</span>
                               </p>
+                              {item.metadata?.onboarding_link && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigator.clipboard.writeText(item.metadata?.onboarding_link || "");
+                                    alert("Self-onboarding link copied to clipboard!");
+                                  }}
+                                  title="Click to copy self-onboarding link"
+                                  className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded text-[8px] font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors"
+                                >
+                                  <Rocket className="h-2.5 w-2.5 text-blue-600" />
+                                  <span>Onboarding Portal</span>
+                                  <Copy className="h-2.5 w-2.5 text-blue-500 ml-0.5" />
+                                </button>
+                              )}
                             </td>
 
                             <td className="py-3.5 px-4 font-mono text-[10px] text-slate-600">
@@ -1262,6 +1311,42 @@ export default function LettersPage() {
                     </div>
                   </div>
                 </DialogHeader>
+
+                {/* Onboarding Invitation Link Banner if present */}
+                {viewingLetter.metadata?.onboarding_link && (
+                  <div className="mt-4 p-3.5 rounded-xl bg-blue-50/80 border border-blue-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center text-white flex-shrink-0 shadow-sm">
+                        <Rocket className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-wider text-blue-900">Online Self-Onboarding Portal Link</p>
+                        <p className="text-[9px] text-blue-700 font-mono break-all line-clamp-1">{viewingLetter.metadata.onboarding_link}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-[8.5px] font-bold border-blue-300 text-blue-800 hover:bg-blue-100"
+                        onClick={() => {
+                          navigator.clipboard.writeText(viewingLetter.metadata?.onboarding_link || "");
+                          alert("Self-onboarding link copied to clipboard!");
+                        }}
+                      >
+                        <Copy className="h-3 w-3 mr-1" /> Copy Link
+                      </Button>
+                      <a
+                        href={viewingLetter.metadata.onboarding_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="h-7 px-2.5 rounded-lg text-[8.5px] font-bold bg-blue-600 hover:bg-blue-700 text-white inline-flex items-center gap-1 shadow-sm"
+                      >
+                        <ExternalLink className="h-3 w-3" /> Open
+                      </a>
+                    </div>
+                  </div>
+                )}
 
                 {/* Letter Content Preview */}
                 <div className="my-5 p-6 bg-slate-50 rounded-xl border border-slate-200 max-h-[55vh] overflow-y-auto text-xs leading-relaxed text-slate-800">
@@ -1506,7 +1591,15 @@ export default function LettersPage() {
                         <div style={{ display: "flex", gap: 6 }}>
                           <select
                             value={candidateData.company}
-                            onChange={(e) => setCandidateData({...candidateData, company: e.target.value})}
+                            onChange={(e) => {
+                              const compName = e.target.value;
+                              const compObj = companies.find(c => c.name === compName);
+                              setCandidateData({
+                                ...candidateData,
+                                company: compName,
+                                company_id: compObj ? compObj.id : undefined,
+                              });
+                            }}
                             style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "7px 10px", fontSize: 10, color: "#fff", outline: "none" }}
                           >
                             <option value="" style={{ background: "#1e293b", color: "#64748b" }}>Select Company…</option>
@@ -1514,7 +1607,15 @@ export default function LettersPage() {
                           </select>
                           <select
                             value={candidateData.office}
-                            onChange={(e) => setCandidateData({...candidateData, office: e.target.value})}
+                            onChange={(e) => {
+                              const offName = e.target.value;
+                              const offObj = offices.find(o => o.name === offName);
+                              setCandidateData({
+                                ...candidateData,
+                                office: offName,
+                                office_id: offObj ? offObj.id : undefined,
+                              });
+                            }}
                             style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "7px 10px", fontSize: 10, color: "#fff", outline: "none" }}
                           >
                             <option value="" style={{ background: "#1e293b", color: "#64748b" }}>Select Office…</option>
@@ -1553,6 +1654,54 @@ export default function LettersPage() {
                           </label>
                           <label style={{ fontSize: 8.5, color: "#94a3b8", display: "flex", alignItems: "center", gap: 4 }}>
                             <input type="checkbox" checked={candidateData.pt_applicable} onChange={e => setCandidateData({...candidateData, pt_applicable: e.target.checked})} /> PT
+                          </label>
+                        </div>
+
+                        {/* Self-Onboarding Integration Card */}
+                        <div style={{
+                          marginTop: 6,
+                          padding: "10px 12px",
+                          borderRadius: 10,
+                          background: includeOnboarding ? "rgba(37, 99, 235, 0.12)" : "rgba(255, 255, 255, 0.03)",
+                          border: includeOnboarding ? "1px solid rgba(59, 130, 246, 0.35)" : "1px solid rgba(255, 255, 255, 0.08)",
+                          transition: "all 0.2s ease",
+                        }}>
+                          <label style={{ display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer" }}>
+                            <input
+                              type="checkbox"
+                              checked={includeOnboarding}
+                              onChange={(e) => setIncludeOnboarding(e.target.checked)}
+                              style={{ width: 14, height: 14, marginTop: 2, accentColor: "#3b82f6", cursor: "pointer" }}
+                            />
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
+                                <span style={{ fontSize: 9.5, fontWeight: 800, color: includeOnboarding ? "#93c5fd" : "#cbd5e1", display: "flex", alignItems: "center", gap: 5 }}>
+                                  <Rocket style={{ width: 12, height: 12, color: includeOnboarding ? "#60a5fa" : "#94a3b8" }} />
+                                  Include Self-Onboarding Link
+                                </span>
+                                <span style={{
+                                  fontSize: 7.5,
+                                  fontWeight: 800,
+                                  padding: "2px 6px",
+                                  borderRadius: 4,
+                                  background: includeOnboarding ? "rgba(59, 130, 246, 0.25)" : "rgba(255, 255, 255, 0.05)",
+                                  color: includeOnboarding ? "#93c5fd" : "#64748b",
+                                  border: includeOnboarding ? "1px solid rgba(59, 130, 246, 0.4)" : "1px solid rgba(255, 255, 255, 0.1)",
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.5px"
+                                }}>
+                                  {includeOnboarding ? "2-in-1 Combined" : "Letter Only"}
+                                </span>
+                              </div>
+                              <p style={{ margin: "3px 0 0", fontSize: 8, color: "#94a3b8", lineHeight: 1.35 }}>
+                                Automatically adds candidate to the Onboarding pipeline and includes a secure 7-day joining portal link in the Offer Letter email.
+                              </p>
+                              {includeOnboarding && (
+                                <p style={{ margin: "4px 0 0", fontSize: 7.5, color: "#86efac", fontWeight: 700 }}>
+                                  ✓ Candidate receives Offer Letter PDF + One-Click KYC &amp; Bank submission link
+                                </p>
+                              )}
+                            </div>
                           </label>
                         </div>
                       </div>
@@ -1607,6 +1756,89 @@ export default function LettersPage() {
                       <span style={{ fontSize: 8.5, fontWeight: 700, color: "#86efac" }}>{issueSuccess}</span>
                     </div>
                   )}
+
+                  {/* Generated Self-Onboarding Link Quick-Action Box */}
+                  {lastOnboardingLink && (
+                    <div style={{
+                      background: "rgba(37, 99, 235, 0.15)",
+                      border: "1px solid rgba(59, 130, 246, 0.35)",
+                      borderRadius: 10,
+                      padding: "10px 12px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 6
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <span style={{ fontSize: 8.5, fontWeight: 800, color: "#93c5fd", textTransform: "uppercase", letterSpacing: "1px", display: "flex", alignItems: "center", gap: 5 }}>
+                          <Rocket style={{ width: 12, height: 12, color: "#60a5fa" }} />
+                          Self-Onboarding Link Ready
+                        </span>
+                        <span style={{ fontSize: 7.5, color: "#93c5fd" }}>Valid 7 Days</span>
+                      </div>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <input
+                          readOnly
+                          value={lastOnboardingLink}
+                          style={{
+                            flex: 1,
+                            background: "rgba(0,0,0,0.35)",
+                            border: "1px solid rgba(255,255,255,0.12)",
+                            borderRadius: 6,
+                            padding: "5px 8px",
+                            fontSize: 8.5,
+                            color: "#e2e8f0",
+                            fontFamily: "monospace",
+                            outline: "none"
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(lastOnboardingLink);
+                            setCopiedLink(true);
+                            setTimeout(() => setCopiedLink(false), 2500);
+                          }}
+                          style={{
+                            background: copiedLink ? "#10b981" : "#2563eb",
+                            color: "#fff",
+                            border: "none",
+                            borderRadius: 6,
+                            padding: "5px 10px",
+                            fontSize: 8.5,
+                            fontWeight: 800,
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4,
+                            whiteSpace: "nowrap"
+                          }}
+                        >
+                          {copiedLink ? <CheckCircle2 style={{ width: 11, height: 11 }} /> : <Copy style={{ width: 11, height: 11 }} />}
+                          {copiedLink ? "Copied!" : "Copy Link"}
+                        </button>
+                        <a
+                          href={lastOnboardingLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Open onboarding page"
+                          style={{
+                            background: "rgba(255,255,255,0.08)",
+                            color: "#cbd5e1",
+                            borderRadius: 6,
+                            padding: "5px 8px",
+                            fontSize: 8.5,
+                            fontWeight: 700,
+                            textDecoration: "none",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4
+                          }}
+                        >
+                          <ExternalLink style={{ width: 11, height: 11 }} />
+                        </a>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Action Buttons Panel */}
@@ -1616,16 +1848,33 @@ export default function LettersPage() {
                     disabled={sending || (candidateMode ? !candidateData.name : !selectedEmployee) || !previewData}
                     onClick={handleSendEmail}
                     style={{
-                      width: "100%", background: "#d9f99d", color: "#0f172a", fontWeight: 900, fontSize: 9, height: 40,
-                      borderRadius: 10, border: "none", cursor: sending || (candidateMode ? !candidateData.name : !selectedEmployee) || !previewData ? "not-allowed" : "pointer",
-                      textTransform: "uppercase", letterSpacing: "1.5px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                      width: "100%",
+                      background: candidateMode && includeOnboarding ? "linear-gradient(135deg, #d9f99d 0%, #86efac 100%)" : "#d9f99d",
+                      color: "#0f172a",
+                      fontWeight: 900,
+                      fontSize: 9,
+                      height: 42,
+                      borderRadius: 10,
+                      border: "none",
+                      cursor: sending || (candidateMode ? !candidateData.name : !selectedEmployee) || !previewData ? "not-allowed" : "pointer",
+                      textTransform: "uppercase",
+                      letterSpacing: "1.2px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 8,
                       opacity: sending || (candidateMode ? !candidateData.name : !selectedEmployee) || !previewData ? 0.5 : 1,
+                      boxShadow: candidateMode && includeOnboarding ? "0 4px 14px rgba(217, 249, 157, 0.25)" : "none",
                     }}
                   >
                     {sending ? (
                       <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Sending Email…</>
+                    ) : candidateMode && includeOnboarding ? (
+                      <><Rocket style={{ width: 14, height: 14, color: "#0f172a" }} /> Email Offer &amp; Onboarding Invite</>
+                    ) : candidateMode ? (
+                      <><Mail style={{ width: 13, height: 13 }} /> Email Offer Letter Only</>
                     ) : (
-                      <><Mail style={{ width: 13, height: 13 }} /> Email & Issue to History</>
+                      <><Mail style={{ width: 13, height: 13 }} /> Email &amp; Issue to History</>
                     )}
                   </button>
 
@@ -1642,7 +1891,7 @@ export default function LettersPage() {
                       }}
                     >
                       {issuing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
-                      Issue & Download
+                      Issue &amp; Download
                     </button>
 
                     {/* Preview PDF Only */}
