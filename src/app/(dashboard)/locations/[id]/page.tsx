@@ -1,16 +1,17 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+import dynamic from "next/dynamic";
 import { cn } from "@/lib/utils";
-import { apiGet } from "@/lib/api-client";
+import { apiGet, apiPut } from "@/lib/api-client";
 import {
     MapPin,
     ArrowLeft,
     Users,
     Activity,
-    Shield,
     Building2,
     Timer,
     Navigation,
@@ -25,12 +26,74 @@ import {
     ShieldCheck,
     ShieldOff,
     ExternalLink,
+    Search,
+    CheckCircle2,
+    X,
+    Sparkles,
+    Calendar,
+    Clock,
+    RefreshCw,
+    Copy,
+    Check,
+    Layers,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Table, TableBody, TableHeader } from "@/components/ui/table";
+import {
+    Sheet,
+    SheetClose,
+    SheetContent,
+    SheetDescription,
+    SheetFooter,
+    SheetHeader,
+    SheetTitle,
+} from "@/components/ui/sheet";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+
+const GeoFenceMap = dynamic(() => import("@/components/GeoFenceMap"), {
+    ssr: false,
+    loading: () => (
+        <div className="w-full h-full flex items-center justify-center bg-slate-100">
+            <div className="flex flex-col items-center gap-3">
+                <div className="h-8 w-8 border-2 border-slate-300 border-t-indigo-600 rounded-full animate-spin" />
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    Loading geo-fence map…
+                </span>
+            </div>
+        </div>
+    ),
+});
+
+const LocationPickerMap = dynamic(() => import("@/components/LocationPickerMap"), {
+    ssr: false,
+    loading: () => (
+        <div className="w-full h-[320px] flex items-center justify-center bg-slate-100 rounded-2xl border border-slate-200">
+            <div className="flex flex-col items-center gap-3">
+                <div className="h-8 w-8 border-2 border-slate-300 border-t-indigo-600 rounded-full animate-spin" />
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    Loading map…
+                </span>
+            </div>
+        </div>
+    ),
+});
 
 // ──────────────────────────────────────────────────────────────
 // Types
@@ -52,15 +115,16 @@ interface OfficeDetail {
     is_active: boolean;
     createdAt?: string;
     updatedAt?: string;
-    company?: { id: number; name: string } | null;
+    company?: { id: number; name: string; code?: string } | null;
     employee_count?: number;
     active_employee_count?: number;
 }
 
 interface LiveLogEntry {
-    id: string;
+    id: string; // emp_code
     name: string;
     designation: string;
+    department?: string;
     status: "Present" | "Late" | "Absent" | "Half Day";
     punchIn: string | null;
     device: string;
@@ -79,9 +143,31 @@ interface LiveAttendanceData {
     };
 }
 
-// ──────────────────────────────────────────────────────────────
-// Helpers
-// ──────────────────────────────────────────────────────────────
+interface BranchEmployee {
+    id: number;
+    emp_code: string;
+    name: string;
+    email: string | null;
+    phone: string | null;
+    designation: string | null;
+    department: string | null;
+    status: string;
+    shift_start_time: string | null;
+    shift_end_time: string | null;
+    weekly_off_days: any;
+    date_of_joining: string | null;
+}
+
+const RADIUS_PRESETS = [
+    { value: "25", label: "25m (Compact Biometric / Small Room)" },
+    { value: "50", label: "50m (Standard Corporate Office / Floor)" },
+    { value: "100", label: "100m (Commercial Building / Multi-floor)" },
+    { value: "150", label: "150m (Office Campus / Complex)" },
+    { value: "200", label: "200m (Standard Depot / Branch Facility)" },
+    { value: "250", label: "250m (Distribution Center / Warehouse)" },
+    { value: "300", label: "300m (Large Logistics Hub / Depot)" },
+    { value: "500", label: "500m (Expansive Industrial Yard)" },
+];
 
 function getInitials(name: string): string {
     return name
@@ -117,13 +203,48 @@ export default function LocationDetailPage() {
 
     const isAdmin = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN";
 
+    // Main States
     const [office, setOffice] = useState<OfficeDetail | null>(null);
     const [liveData, setLiveData] = useState<LiveAttendanceData | null>(null);
+    const [branchStaff, setBranchStaff] = useState<BranchEmployee[]>([]);
     const [loading, setLoading] = useState(true);
     const [liveLoading, setLiveLoading] = useState(true);
+    const [staffLoading, setStaffLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    // ── Fetch office detail ────────────────────────────────────
+    // Active workspace tab: "live" | "staff" | "specs"
+    const [activeTab, setActiveTab] = useState<"live" | "staff" | "specs">("live");
+
+    // Live Attendance Table filter
+    const [liveStatusFilter, setLiveStatusFilter] = useState<"all" | "present" | "late" | "absent">("all");
+
+    // Staff Directory search
+    const [staffSearch, setStaffSearch] = useState("");
+
+    // Geo-Fence Visualizer Dialog
+    const [geoFenceModalOpen, setGeoFenceModalOpen] = useState(false);
+
+    // Copy to clipboard indicator
+    const [copiedCode, setCopiedCode] = useState(false);
+
+    // Edit sheet state
+    const [editSheetOpen, setEditSheetOpen] = useState(false);
+    const [editForm, setEditForm] = useState<Record<string, string>>({});
+    const [editSaving, setEditSaving] = useState(false);
+    const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+    const [generatingCode, setGeneratingCode] = useState(false);
+    const [fetchingLocation, setFetchingLocation] = useState(false);
+
+    // Toast message
+    const [toast, setToast] = useState<{ text: string; variant: "success" | "error" } | null>(null);
+
+    useEffect(() => {
+        if (!toast) return;
+        const t = setTimeout(() => setToast(null), 3500);
+        return () => clearTimeout(t);
+    }, [toast]);
+
+    // ── Fetch Office Details ──────────────────────────────────
     const fetchOffice = useCallback(async () => {
         setLoading(true);
         setError(null);
@@ -131,548 +252,1168 @@ export default function LocationDetailPage() {
             const data = await apiGet<OfficeDetail>(`/offices/${id}`);
             setOffice(data);
         } catch (err: any) {
-            const msg = err?.response?.data?.message || err?.message || "Failed to load location details";
+            const msg = err?.response?.data?.message || err?.message || "Failed to load branch location";
             setError(msg);
         } finally {
             setLoading(false);
         }
     }, [id]);
 
-    // ── Fetch live attendance ──────────────────────────────────
+    // ── Fetch Live Attendance Strictly for THIS Branch ────────
     const fetchLiveAttendance = useCallback(async () => {
-        if (!office) return;
+        if (!id) return;
         setLiveLoading(true);
         try {
+            // Note: must pass office_id so it only pulls employees assigned to this office!
             const data = await apiGet<LiveAttendanceData>(
-                `/attendance/admin/live?branch=${encodeURIComponent(office.name)}&limit=50`
+                `/attendance/admin/live?office_id=${id}&limit=100`
             );
             setLiveData(data);
         } catch {
-            // Live data is optional — fail silently
             setLiveData(null);
         } finally {
             setLiveLoading(false);
         }
-    }, [office]);
+    }, [id]);
+
+    // ── Fetch Branch Assigned Staff Directory ─────────────────
+    const fetchBranchStaff = useCallback(async () => {
+        if (!id) return;
+        setStaffLoading(true);
+        try {
+            const res = await apiGet<{ data: BranchEmployee[] } | BranchEmployee[]>(
+                `/employees?office_id=${id}&limit=100`
+            );
+            const staffList = Array.isArray(res) ? res : (res as any)?.data || [];
+            setBranchStaff(staffList);
+        } catch {
+            setBranchStaff([]);
+        } finally {
+            setStaffLoading(false);
+        }
+    }, [id]);
 
     useEffect(() => {
         fetchOffice();
-    }, [fetchOffice]);
+        fetchLiveAttendance();
+        fetchBranchStaff();
+    }, [fetchOffice, fetchLiveAttendance, fetchBranchStaff]);
 
-    useEffect(() => {
-        if (office) {
-            fetchLiveAttendance();
+    // ── Copy Code to Clipboard ────────────────────────────────
+    const handleCopyCode = () => {
+        if (!office?.code) return;
+        navigator.clipboard.writeText(office.code);
+        setCopiedCode(true);
+        setTimeout(() => setCopiedCode(false), 2000);
+        setToast({ text: `Copied branch code: ${office.code}`, variant: "success" });
+    };
+
+    // ── Edit Sheet Form Handlers ──────────────────────────────
+    const openEditSheet = () => {
+        if (!office) return;
+        setEditForm({
+            name: office.name || "",
+            code: office.code || "",
+            company_id: office.company_id ? String(office.company_id) : "",
+            city: office.city || "",
+            state: office.state || "",
+            address: office.address || "",
+            latitude: String(office.latitude || ""),
+            longitude: String(office.longitude || ""),
+            radius_meters: String(office.radius_meters || "50"),
+            contact_person: office.contact_person || "",
+            contact_phone: office.contact_phone || "",
+            is_active: office.is_active ? "true" : "false",
+        });
+        setEditErrors({});
+        setEditSheetOpen(true);
+    };
+
+    const handleAutoGenerateCode = async () => {
+        if (!office?.company_id && !editForm.company_id) return;
+        setGeneratingCode(true);
+        try {
+            const cId = editForm.company_id || office?.company_id;
+            const res = await apiGet<{ code: string }>(
+                `/offices/generate-code?company_id=${cId}&city=${encodeURIComponent(editForm.city || "")}&name=${encodeURIComponent(editForm.name || "")}`
+            );
+            if (res?.code) {
+                setEditForm((prev) => ({ ...prev, code: res.code }));
+                setToast({ text: `Generated code: ${res.code}`, variant: "success" });
+            }
+        } catch {
+            setToast({ text: "Could not generate code", variant: "error" });
+        } finally {
+            setGeneratingCode(false);
         }
-    }, [office, fetchLiveAttendance]);
+    };
 
-    // ── Derived metrics ─────────────────────────────────────────
-    const attendanceRate = liveData?.stats.total
-        ? `${Math.round(((liveData.stats.present) / liveData.stats.total) * 100)}%`
-        : "---";
+    const handleGetCurrentLocation = () => {
+        if (!navigator.geolocation) {
+            setToast({ text: "Geolocation is not supported by your browser", variant: "error" });
+            return;
+        }
+        setFetchingLocation(true);
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                const lat = pos.coords.latitude.toFixed(6);
+                const lng = pos.coords.longitude.toFixed(6);
+                setEditForm((prev) => ({ ...prev, latitude: lat, longitude: lng }));
+                setToast({ text: `Captured GPS: ${lat}, ${lng}`, variant: "success" });
+                setFetchingLocation(false);
+            },
+            () => {
+                setFetchingLocation(false);
+                setToast({ text: "Location permission denied or timed out", variant: "error" });
+            },
+            { enableHighAccuracy: true, timeout: 10000 }
+        );
+    };
 
-    const lateIncidents = liveData?.stats.late ?? 0;
-    const totalActiveEmployees = office?.active_employee_count ?? office?.employee_count ?? 0;
+    const handleSaveEdit = async () => {
+        const errs: Record<string, string> = {};
+        if (!editForm.name?.trim()) errs.name = "Branch name is required";
+        if (!editForm.latitude || isNaN(Number(editForm.latitude))) errs.latitude = "Valid latitude required";
+        if (!editForm.longitude || isNaN(Number(editForm.longitude))) errs.longitude = "Valid longitude required";
 
-    // ── Loading state ───────────────────────────────────────────
+        if (Object.keys(errs).length > 0) {
+            setEditErrors(errs);
+            return;
+        }
+
+        setEditSaving(true);
+        try {
+            const payload = {
+                name: editForm.name.trim(),
+                code: editForm.code?.trim() ? editForm.code.trim().toUpperCase() : null,
+                address: editForm.address?.trim() || null,
+                city: editForm.city?.trim() || null,
+                state: editForm.state?.trim() || null,
+                latitude: Number(editForm.latitude),
+                longitude: Number(editForm.longitude),
+                radius_meters: Number(editForm.radius_meters || 50),
+                contact_person: editForm.contact_person?.trim() || null,
+                contact_phone: editForm.contact_phone?.trim() || null,
+                is_active: editForm.is_active === "true",
+            };
+
+            await apiPut(`/offices/${id}`, payload);
+            setToast({ text: "Branch configuration updated successfully", variant: "success" });
+            setEditSheetOpen(false);
+            await fetchOffice();
+            await fetchLiveAttendance();
+        } catch (err: any) {
+            const msg = err?.response?.data?.message || err?.message || "Failed to update branch";
+            setToast({ text: msg, variant: "error" });
+        } finally {
+            setEditSaving(false);
+        }
+    };
+
+    // ── Filtered Live Attendance Rows ─────────────────────────
+    const filteredLiveRows = useMemo(() => {
+        if (!liveData?.rows) return [];
+        if (liveStatusFilter === "all") return liveData.rows;
+        if (liveStatusFilter === "present") return liveData.rows.filter((r) => r.status === "Present");
+        if (liveStatusFilter === "late") return liveData.rows.filter((r) => r.status === "Late");
+        if (liveStatusFilter === "absent") return liveData.rows.filter((r) => r.status === "Absent");
+        return liveData.rows;
+    }, [liveData, liveStatusFilter]);
+
+    // ── Filtered Branch Staff Directory ───────────────────────
+    const filteredStaff = useMemo(() => {
+        if (!branchStaff) return [];
+        if (!staffSearch.trim()) return branchStaff;
+        const q = staffSearch.toLowerCase();
+        return branchStaff.filter(
+            (e) =>
+                e.name.toLowerCase().includes(q) ||
+                e.emp_code.toLowerCase().includes(q) ||
+                (e.department && e.department.toLowerCase().includes(q)) ||
+                (e.designation && e.designation.toLowerCase().includes(q))
+        );
+    }, [branchStaff, staffSearch]);
+
+    // ── Derived Metrics ───────────────────────────────────────
+    const activeStaffCount = office?.active_employee_count ?? office?.employee_count ?? branchStaff.length;
+    const presentCount = liveData?.stats?.present ?? 0;
+    const lateCount = liveData?.stats?.late ?? 0;
+    const absentCount = liveData?.stats?.absent ?? Math.max(0, activeStaffCount - presentCount);
+    const totalTodayRoster = liveData?.stats?.total ?? activeStaffCount;
+    const attendancePct = totalTodayRoster > 0 ? Math.round((presentCount / totalTodayRoster) * 100) : 0;
+
+    // ── Loading & Error States ────────────────────────────────
     if (loading) {
         return (
-            <div className="flex items-center justify-center py-32">
-                <Loader2 className="h-10 w-10 animate-spin text-slate-300" />
+            <div className="flex flex-col items-center justify-center py-36 gap-3">
+                <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                    Loading branch command hub…
+                </span>
             </div>
         );
     }
 
-    // ── Error state ─────────────────────────────────────────────
     if (error || !office) {
         return (
             <div className="flex flex-col items-center justify-center py-32 space-y-4">
-                <AlertCircle className="h-12 w-12 text-rose-300" />
-                <p className="text-sm font-bold text-slate-500">{error || "Location not found"}</p>
+                <div className="h-14 w-14 rounded-2xl bg-rose-50 flex items-center justify-center text-rose-500">
+                    <AlertCircle className="h-7 w-7" />
+                </div>
+                <h3 className="text-sm font-bold text-slate-800">{error || "Branch Location Not Found"}</h3>
+                <p className="text-xs text-slate-400">The requested branch node does not exist or was deleted.</p>
                 <Button
                     variant="outline"
-                    onClick={() => router.back()}
-                    className="rounded-2xl h-10 font-black text-[9px] uppercase tracking-widest"
+                    onClick={() => router.push("/locations")}
+                    className="rounded-xl h-10 text-xs font-bold"
                 >
-                    <ArrowLeft className="h-4 w-4 mr-2" /> Go Back
+                    <ArrowLeft className="h-4 w-4 mr-2" /> Back to Locations Hub
                 </Button>
             </div>
         );
     }
 
     return (
-        <div className="space-y-8 pb-20 animate-in fade-in duration-500">
-            {/* ── Header / Breadcrumb ──────────────────────────── */}
-            <div className="flex items-center gap-4">
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => router.back()}
-                    className="h-10 w-10 rounded-xl bg-white shadow-sm border border-slate-100 hover:bg-slate-50 transition-all"
-                >
-                    <ArrowLeft className="h-4 w-4 text-slate-600" />
-                </Button>
-                <div>
-                    <h1 className="text-xl font-black text-slate-900 uppercase italic tracking-tighter flex items-center gap-2">
-                        {office.name}
-                        <Badge
-                            className={cn(
-                                "font-black text-[7px] uppercase tracking-widest border-none",
-                                office.is_active
-                                    ? "bg-emerald-50 text-emerald-600"
-                                    : "bg-slate-100 text-slate-500"
-                            )}
-                        >
-                            {office.is_active ? "Operational" : "Inactive"}
-                        </Badge>
-                    </h1>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 pt-1">
-                        <Building2 className="h-3 w-3" />
-                        {office.company?.name || "No Company"} •
-                        <MapPin className="h-3 w-3" />
-                        {[office.city, office.state].filter(Boolean).join(", ") || "N/A"} •
-                        ID: {office.code || office.id}
-                    </p>
-                </div>
-            </div>
+        <ProtectedRoute module="LOCATIONS" action="READ">
+            <div className="space-y-6 pb-24 animate-in fade-in duration-300">
+                {/* ── Toast Notification ─────────────────────── */}
+                {toast && (
+                    <div
+                        className={cn(
+                            "fixed top-6 right-6 z-[9999] px-4 py-3 rounded-2xl shadow-2xl text-xs font-bold flex items-center gap-2.5 animate-in slide-in-from-right-4 border",
+                            toast.variant === "success"
+                                ? "bg-slate-900 text-white border-slate-700"
+                                : "bg-red-50 text-red-700 border-red-200"
+                        )}
+                    >
+                        {toast.variant === "success" ? (
+                            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                        ) : (
+                            <ShieldOff className="h-4 w-4 text-red-500 shrink-0" />
+                        )}
+                        <span>{toast.text}</span>
+                        <button onClick={() => setToast(null)} className="ml-2 hover:opacity-75">
+                            <X className="h-3.5 w-3.5" />
+                        </button>
+                    </div>
+                )}
 
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-                {/* ── Left Column: Stats & Logs ────────────────── */}
-                <div className="xl:col-span-2 space-y-8">
-                    {/* Key Metrics Grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        {[
-                            {
-                                label: "Total Active Employees",
-                                value: totalActiveEmployees,
-                                icon: Users,
-                                color: "blue",
-                                trend: "Assigned",
-                            },
-                            {
-                                label: "Attendance",
-                                value: attendanceRate,
-                                icon: Activity,
-                                color: "emerald",
-                                trend: "Today",
-                            },
-                            {
-                                label: "Late Incidents",
-                                value: lateIncidents,
-                                icon: Shield,
-                                color: "rose",
-                                trend: "Today",
-                            },
-                        ].map((stat, i) => (
-                            <Card
-                                key={i}
-                                className="border-none bg-white rounded-2xl p-6 shadow-sm group hover:shadow-md transition-all relative overflow-hidden"
+                {/* ── Top Navigation & Breadcrumb ────────────── */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pt-1">
+                    <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+                            <button
+                                type="button"
+                                onClick={() => router.push("/locations")}
+                                className="hover:text-indigo-600 transition-colors flex items-center gap-1 cursor-pointer"
                             >
-                                <div
-                                    className={cn(
-                                        "absolute top-0 right-0 h-20 w-20 translate-x-8 -translate-y-8 rounded-full opacity-[0.03]",
-                                        `bg-${stat.color}-500`
-                                    )}
-                                />
-                                <div className="space-y-3 relative z-10">
-                                    <div className="flex items-center justify-between">
-                                        <div
-                                            className={cn(
-                                                "h-10 w-10 rounded-xl flex items-center justify-center",
-                                                stat.color === "blue"
-                                                    ? "bg-blue-50 text-blue-500"
-                                                    : stat.color === "emerald"
-                                                        ? "bg-emerald-50 text-emerald-500"
-                                                        : "bg-rose-50 text-rose-500"
-                                            )}
-                                        >
-                                            <stat.icon className="h-5 w-5" />
-                                        </div>
-                                        {stat.trend && (
-                                            <span className="text-[8px] font-black uppercase text-slate-400 tracking-widest">
-                                                {stat.trend}
-                                            </span>
+                                <ArrowLeft className="h-3.5 w-3.5" />
+                                <span>Locations</span>
+                            </button>
+                            <span>/</span>
+                            <span className="text-slate-600 font-bold">{office.company?.name || "Corporate"}</span>
+                            <span>/</span>
+                            <span className="text-slate-900 font-bold">{office.name}</span>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-3 pt-1">
+                            <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+                                {office.name}
+                            </h1>
+
+                            {/* Location Code Pill with Click-to-Copy */}
+                            <button
+                                type="button"
+                                onClick={handleCopyCode}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100/80 border border-indigo-200 text-indigo-800 text-xs font-mono font-bold transition-all cursor-pointer shadow-2xs"
+                                title="Click to copy location code"
+                            >
+                                <span>ID: {office.code || `LOC-${office.id}`}</span>
+                                {copiedCode ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3 text-indigo-400" />}
+                            </button>
+
+                            {/* Status Badge */}
+                            <span
+                                className={cn(
+                                    "px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                                    office.is_active
+                                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                        : "bg-slate-100 text-slate-500 border border-slate-200"
+                                )}
+                            >
+                                {office.is_active ? "Operational" : "Suspended"}
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Quick Action Toolbar */}
+                    <div className="flex items-center gap-2 self-start lg:self-auto">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                                fetchOffice();
+                                fetchLiveAttendance();
+                                fetchBranchStaff();
+                                setToast({ text: "Branch biometric muster synchronized", variant: "success" });
+                            }}
+                            className="h-9 px-3 rounded-xl border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 shadow-2xs"
+                        >
+                            <RefreshCw className={cn("h-3.5 w-3.5 text-slate-500", liveLoading && "animate-spin")} />
+                            <span>Sync Muster</span>
+                        </Button>
+
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setGeoFenceModalOpen(true)}
+                            className="h-9 px-3.5 rounded-xl border-indigo-200 bg-indigo-50/60 hover:bg-indigo-100 text-xs font-bold text-indigo-700 flex items-center gap-1.5 shadow-2xs"
+                        >
+                            <Target className="h-3.5 w-3.5 text-indigo-600" />
+                            <span>Perimeter Map</span>
+                        </Button>
+
+                        {isAdmin && (
+                            <Button
+                                size="sm"
+                                onClick={openEditSheet}
+                                className="h-9 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs font-bold text-white flex items-center gap-1.5 shadow-xs"
+                            >
+                                <Pencil className="h-3.5 w-3.5" />
+                                <span>Edit Branch</span>
+                            </Button>
+                        )}
+                    </div>
+                </div>
+
+                {/* ── Key Operational Metrics Bar ─────────────── */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+                    {/* Active Staff Assigned */}
+                    <Card className="border border-slate-200/80 bg-white rounded-2xl p-4 shadow-xs">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                                Assigned Staff
+                            </span>
+                            <div className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
+                                <Users className="h-4 w-4" />
+                            </div>
+                        </div>
+                        <div className="mt-3 flex items-baseline gap-2">
+                            <span className="text-2xl font-black text-slate-900">{activeStaffCount}</span>
+                            <span className="text-[11px] text-slate-500 font-medium">Employees at Node</span>
+                        </div>
+                    </Card>
+
+                    {/* Today's Attendance Rate */}
+                    <Card className="border border-slate-200/80 bg-white rounded-2xl p-4 shadow-xs">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                                Today Attendance
+                            </span>
+                            <div className="h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+                                <Activity className="h-4 w-4" />
+                            </div>
+                        </div>
+                        <div className="mt-3 flex items-baseline gap-2">
+                            <span className="text-2xl font-black text-emerald-600">{presentCount} / {totalTodayRoster}</span>
+                            <span className="text-[11px] text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded">
+                                {attendancePct}% Present
+                            </span>
+                        </div>
+                    </Card>
+
+                    {/* Geo-Fence Radius */}
+                    <Card className="border border-slate-200/80 bg-white rounded-2xl p-4 shadow-xs">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                                Geo-Fence Radius
+                            </span>
+                            <div className="h-8 w-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
+                                <Target className="h-4 w-4" />
+                            </div>
+                        </div>
+                        <div className="mt-3 flex items-baseline gap-2">
+                            <span className="text-2xl font-black text-indigo-600">{office.radius_meters}m</span>
+                            <span className="text-[11px] text-slate-500 font-medium">
+                                {office.radius_meters <= 50 ? "Strict Office" : office.radius_meters <= 200 ? "Standard Facility" : "Logistics Hub"}
+                            </span>
+                        </div>
+                    </Card>
+
+                    {/* Site Manager / Contact */}
+                    <Card className="border border-slate-200/80 bg-white rounded-2xl p-4 shadow-xs">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                                Site In-Charge
+                            </span>
+                            <div className="h-8 w-8 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600">
+                                <User className="h-4 w-4" />
+                            </div>
+                        </div>
+                        <div className="mt-2.5">
+                            <div className="text-sm font-bold text-slate-900 truncate">
+                                {office.contact_person || "Operations Lead"}
+                            </div>
+                            <div className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                                <Phone className="h-3 w-3 text-slate-400 shrink-0" />
+                                {office.contact_phone ? (
+                                    <a href={`tel:${office.contact_phone}`} className="hover:text-indigo-600 hover:underline">
+                                        {office.contact_phone}
+                                    </a>
+                                ) : (
+                                    <span>No direct line</span>
+                                )}
+                            </div>
+                        </div>
+                    </Card>
+                </div>
+
+                {/* ── Interactive Geo-Fence Perimeter Card ─────── */}
+                <Card className="border border-slate-200/90 bg-white rounded-3xl shadow-xs overflow-hidden">
+                    <div className="p-5 bg-slate-50/70 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                            <div className="h-9 w-9 rounded-xl bg-indigo-100/70 text-indigo-700 flex items-center justify-center">
+                                <Navigation className="h-4 w-4" />
+                            </div>
+                            <div>
+                                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                                    Physical Geo-Fence Boundary & GPS Coordinates
+                                </h3>
+                                <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                                    Center: {Number(office.latitude).toFixed(6)}, {Number(office.longitude).toFixed(6)} • Perimeter: {office.radius_meters}m
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-start sm:self-auto">
+                            <a
+                                href={`https://www.google.com/maps?q=${office.latitude},${office.longitude}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="h-8 px-3 rounded-xl border border-slate-200 hover:bg-white text-xs font-bold text-slate-700 inline-flex items-center gap-1.5 shadow-2xs transition-colors"
+                            >
+                                <ExternalLink className="h-3.5 w-3.5 text-slate-500" />
+                                <span>Satellite View</span>
+                            </a>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setGeoFenceModalOpen(true)}
+                                className="h-8 px-3 rounded-xl border-indigo-200 bg-white hover:bg-indigo-50 text-xs font-bold text-indigo-700"
+                            >
+                                Full Screen
+                            </Button>
+                        </div>
+                    </div>
+
+                    <div className="w-full h-[260px] bg-slate-100 relative">
+                        <GeoFenceMap
+                            latitude={Number(office.latitude)}
+                            longitude={Number(office.longitude)}
+                            radius={Number(office.radius_meters)}
+                            officeName={office.name}
+                        />
+                    </div>
+                </Card>
+
+                {/* ── Workspace Tabs: Live Muster vs Staff Directory vs Specs ── */}
+                <div className="space-y-4">
+                    {/* Tab Navigation Pill Bar */}
+                    <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab("live")}
+                                className={cn(
+                                    "px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer",
+                                    activeTab === "live"
+                                        ? "bg-slate-900 text-white shadow-xs"
+                                        : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+                                )}
+                            >
+                                <Activity className="h-3.5 w-3.5 text-emerald-400" />
+                                <span>Today's Live Attendance ({presentCount}/{totalTodayRoster})</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab("staff")}
+                                className={cn(
+                                    "px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer",
+                                    activeTab === "staff"
+                                        ? "bg-slate-900 text-white shadow-xs"
+                                        : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+                                )}
+                            >
+                                <Users className="h-3.5 w-3.5 text-indigo-400" />
+                                <span>Branch Staff Directory ({branchStaff.length})</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab("specs")}
+                                className={cn(
+                                    "px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer",
+                                    activeTab === "specs"
+                                        ? "bg-slate-900 text-white shadow-xs"
+                                        : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+                                )}
+                            >
+                                <Layers className="h-3.5 w-3.5 text-amber-400" />
+                                <span>Node Specifications</span>
+                            </button>
+                        </div>
+
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => router.push("/attendance")}
+                            className="text-xs font-bold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50"
+                        >
+                            Open Monthly Muster Grid <ExternalLink className="h-3 w-3 ml-1" />
+                        </Button>
+                    </div>
+
+                    {/* ══════════════════════════════════════════════════════
+                       TAB 1: TODAY'S LIVE ATTENDANCE MUSTER
+                       ══════════════════════════════════════════════════════ */}
+                    {activeTab === "live" && (
+                        <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
+                            {/* Live Attendance Filter Pills */}
+                            <div className="p-4 bg-slate-50/70 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-3">
+                                <div className="flex items-center gap-1.5">
+                                    <button
+                                        type="button"
+                                        onClick={() => setLiveStatusFilter("all")}
+                                        className={cn(
+                                            "px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer",
+                                            liveStatusFilter === "all"
+                                                ? "bg-white text-slate-900 border border-slate-300 shadow-2xs"
+                                                : "text-slate-500 hover:text-slate-800"
                                         )}
+                                    >
+                                        All Staff ({totalTodayRoster})
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setLiveStatusFilter("present")}
+                                        className={cn(
+                                            "px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer",
+                                            liveStatusFilter === "present"
+                                                ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                                                : "text-slate-500 hover:text-emerald-700"
+                                        )}
+                                    >
+                                        Present ({presentCount})
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setLiveStatusFilter("late")}
+                                        className={cn(
+                                            "px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer",
+                                            liveStatusFilter === "late"
+                                                ? "bg-amber-50 text-amber-800 border border-amber-200"
+                                                : "text-slate-500 hover:text-amber-700"
+                                        )}
+                                    >
+                                        Late ({lateCount})
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setLiveStatusFilter("absent")}
+                                        className={cn(
+                                            "px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer",
+                                            liveStatusFilter === "absent"
+                                                ? "bg-rose-50 text-rose-800 border border-rose-200"
+                                                : "text-slate-500 hover:text-rose-700"
+                                        )}
+                                    >
+                                        Absent / Pending ({absentCount})
+                                    </button>
+                                </div>
+
+                                <span className="text-[11px] text-slate-400 font-medium">
+                                    Showing live biometric logs strictly for {office.name}
+                                </span>
+                            </div>
+
+                            {/* Table */}
+                            {liveLoading ? (
+                                <div className="flex items-center justify-center py-16">
+                                    <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
+                                </div>
+                            ) : filteredLiveRows.length === 0 ? (
+                                <div className="py-16 text-center text-xs text-slate-400">
+                                    No employees match the selected status filter for today.
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-xs">
+                                        <thead className="bg-slate-50/50 border-b border-slate-200 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                            <tr>
+                                                <th className="py-3 px-5">Employee</th>
+                                                <th className="py-3 px-5">Designation & Dept</th>
+                                                <th className="py-3 px-5">Clock-In Time</th>
+                                                <th className="py-3 px-5">Punch Device</th>
+                                                <th className="py-3 px-5">Geo-Fence Compliance</th>
+                                                <th className="py-3 px-5 text-center">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {filteredLiveRows.map((log) => (
+                                                <tr key={log.id} className="hover:bg-slate-50/70 transition-colors">
+                                                    {/* Employee Avatar + Name + Code */}
+                                                    <td className="py-3.5 px-5">
+                                                        <div className="flex items-center gap-3">
+                                                            <Avatar className="h-8 w-8 rounded-lg bg-slate-900 text-white shrink-0">
+                                                                <AvatarFallback className="text-[9px] font-bold bg-slate-900 text-white">
+                                                                    {getInitials(log.name)}
+                                                                </AvatarFallback>
+                                                            </Avatar>
+                                                            <div>
+                                                                <span className="font-bold text-slate-900 block">{log.name}</span>
+                                                                <span className="text-[10px] font-mono text-slate-400">{log.id}</span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+
+                                                    {/* Designation */}
+                                                    <td className="py-3.5 px-5">
+                                                        <span className="text-slate-800 font-medium block">
+                                                            {log.designation || "Staff"}
+                                                        </span>
+                                                        {log.department && (
+                                                            <span className="text-[10px] text-slate-400 font-medium">
+                                                                {log.department}
+                                                            </span>
+                                                        )}
+                                                    </td>
+
+                                                    {/* Clock-In */}
+                                                    <td className="py-3.5 px-5">
+                                                        <div className="flex items-center gap-1.5 font-mono text-slate-700 font-semibold">
+                                                            <Timer className="h-3 w-3 text-slate-400" />
+                                                            <span>{formatTime(log.punchIn)}</span>
+                                                        </div>
+                                                    </td>
+
+                                                    {/* Punch Device */}
+                                                    <td className="py-3.5 px-5">
+                                                        <div className="flex items-center gap-1.5 text-slate-600">
+                                                            <Smartphone className="h-3 w-3 text-slate-400" />
+                                                            <span>{log.device || "Mobile Biometric"}</span>
+                                                        </div>
+                                                    </td>
+
+                                                    {/* Geo-Fence Compliance */}
+                                                    <td className="py-3.5 px-5">
+                                                        {log.status === "Present" || log.status === "Late" ? (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                                <CheckCircle2 className="h-3 w-3" />
+                                                                Verified (Within {office.radius_meters}m)
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-[10px] text-slate-400 font-medium">
+                                                                Awaiting punch
+                                                            </span>
+                                                        )}
+                                                    </td>
+
+                                                    {/* Status Badge */}
+                                                    <td className="py-3.5 px-5 text-center">
+                                                        <span
+                                                            className={cn(
+                                                                "px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase",
+                                                                log.status === "Present"
+                                                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                                                    : log.status === "Late"
+                                                                    ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                                                    : "bg-rose-50 text-rose-700 border border-rose-200"
+                                                            )}
+                                                        >
+                                                            {log.status}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ══════════════════════════════════════════════════════
+                       TAB 2: BRANCH ASSIGNED STAFF DIRECTORY
+                       ══════════════════════════════════════════════════════ */}
+                    {activeTab === "staff" && (
+                        <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
+                            {/* Search bar inside staff tab */}
+                            <div className="p-4 bg-slate-50/70 border-b border-slate-200/80 flex items-center justify-between gap-3">
+                                <div className="relative w-72">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                                    <Input
+                                        placeholder="Search assigned staff by name or code…"
+                                        value={staffSearch}
+                                        onChange={(e) => setStaffSearch(e.target.value)}
+                                        className="h-9 pl-9 pr-8 text-xs bg-white rounded-xl border-slate-200"
+                                    />
+                                </div>
+                                <span className="text-xs text-slate-500 font-medium">
+                                    Total {branchStaff.length} employees officially assigned to {office.name}
+                                </span>
+                            </div>
+
+                            {staffLoading ? (
+                                <div className="flex items-center justify-center py-16">
+                                    <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
+                                </div>
+                            ) : filteredStaff.length === 0 ? (
+                                <div className="py-16 text-center text-xs text-slate-400">
+                                    No employees found for this search.
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-xs">
+                                        <thead className="bg-slate-50/50 border-b border-slate-200 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                            <tr>
+                                                <th className="py-3 px-5">Employee</th>
+                                                <th className="py-3 px-5">Department & Role</th>
+                                                <th className="py-3 px-5">Configured Shift</th>
+                                                <th className="py-3 px-5">Designated Weekly Off</th>
+                                                <th className="py-3 px-5">Contact Details</th>
+                                                <th className="py-3 px-5 text-right">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {filteredStaff.map((emp) => {
+                                                const offs = Array.isArray(emp.weekly_off_days)
+                                                    ? (emp.weekly_off_days.length > 0 ? emp.weekly_off_days.join(", ") : "0 Offs (7d)")
+                                                    : "Sunday";
+                                                const shiftStr = emp.shift_start_time && emp.shift_end_time
+                                                    ? `${emp.shift_start_time.slice(0, 5)} - ${emp.shift_end_time.slice(0, 5)}`
+                                                    : "09:30 - 18:30";
+
+                                                return (
+                                                    <tr key={emp.id} className="hover:bg-slate-50/70 transition-colors">
+                                                        <td className="py-3.5 px-5">
+                                                            <div className="flex items-center gap-3">
+                                                                <Avatar className="h-8 w-8 rounded-lg bg-slate-900 text-white shrink-0">
+                                                                    <AvatarFallback className="text-[9px] font-bold bg-slate-900 text-white">
+                                                                        {getInitials(emp.name)}
+                                                                    </AvatarFallback>
+                                                                </Avatar>
+                                                                <div>
+                                                                    <span className="font-bold text-slate-900 block">{emp.name}</span>
+                                                                    <span className="text-[10px] font-mono text-slate-400">{emp.emp_code}</span>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+
+                                                        <td className="py-3.5 px-5">
+                                                            <span className="font-semibold text-slate-800 block">
+                                                                {emp.designation || "Staff"}
+                                                            </span>
+                                                            <span className="text-[10px] text-slate-400 font-medium">
+                                                                {emp.department || "General"}
+                                                            </span>
+                                                        </td>
+
+                                                        <td className="py-3.5 px-5">
+                                                            <div className="flex items-center gap-1.5 font-mono text-slate-700 font-medium">
+                                                                <Clock className="h-3 w-3 text-slate-400" />
+                                                                <span>{shiftStr}</span>
+                                                            </div>
+                                                        </td>
+
+                                                        <td className="py-3.5 px-5">
+                                                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                                                                {offs}
+                                                            </span>
+                                                        </td>
+
+                                                        <td className="py-3.5 px-5">
+                                                            <span className="text-slate-600 block">{emp.phone || "---"}</span>
+                                                            <span className="text-[10px] text-slate-400">{emp.email || "---"}</span>
+                                                        </td>
+
+                                                        <td className="py-3.5 px-5 text-right">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => router.push(`/employees/${emp.id}`)}
+                                                                className="h-7 px-2.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50"
+                                                            >
+                                                                View Profile
+                                                            </Button>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ══════════════════════════════════════════════════════
+                       TAB 3: NODE SPECIFICATIONS & GEO-FENCE RULES
+                       ══════════════════════════════════════════════════════ */}
+                    {activeTab === "specs" && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            {/* Physical & Technical Specs Card */}
+                            <Card className="border border-slate-200/90 bg-white rounded-3xl p-6 shadow-xs space-y-4">
+                                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                                    <Building2 className="h-4 w-4 text-indigo-600" />
+                                    Branch Infrastructure & Address
+                                </h3>
+
+                                <div className="space-y-3 divide-y divide-slate-100 text-xs">
+                                    <div className="pt-2 flex justify-between">
+                                        <span className="text-slate-400 font-medium">Official Branch Name</span>
+                                        <span className="font-bold text-slate-900">{office.name}</span>
                                     </div>
-                                    <div>
-                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">
-                                            {stat.label}
-                                        </p>
-                                        <h3 className="text-2xl font-black text-slate-900 italic tracking-tighter mt-1">
-                                            {stat.value}
-                                        </h3>
+                                    <div className="pt-2 flex justify-between">
+                                        <span className="text-slate-400 font-medium">Location ID Code</span>
+                                        <span className="font-mono font-bold text-indigo-700">{office.code || `LOC-${office.id}`}</span>
+                                    </div>
+                                    <div className="pt-2 flex justify-between">
+                                        <span className="text-slate-400 font-medium">Parent Corporate Entity</span>
+                                        <span className="font-bold text-slate-900">{office.company?.name || "Unassigned"}</span>
+                                    </div>
+                                    <div className="pt-2 flex justify-between">
+                                        <span className="text-slate-400 font-medium">Registered Address</span>
+                                        <span className="font-medium text-slate-700 text-right max-w-[240px]">
+                                            {office.address || "12/3, MG Road, Vijay Nagar"}
+                                        </span>
+                                    </div>
+                                    <div className="pt-2 flex justify-between">
+                                        <span className="text-slate-400 font-medium">City & State</span>
+                                        <span className="font-bold text-slate-800">
+                                            {[office.city, office.state].filter(Boolean).join(", ")}
+                                        </span>
+                                    </div>
+                                    <div className="pt-2 flex justify-between">
+                                        <span className="text-slate-400 font-medium">Site Supervisor</span>
+                                        <span className="font-bold text-slate-800">
+                                            {office.contact_person || "Not assigned"} ({office.contact_phone || "No phone"})
+                                        </span>
                                     </div>
                                 </div>
                             </Card>
-                        ))}
-                    </div>
 
-                    {/* Branch Activity / Performance Chart */}
-                    <Card className="border-none bg-white rounded-[2.5rem] p-1 shadow-sm overflow-hidden">
-                        <CardHeader className="p-8 pb-4 border-none">
+                            {/* Geo-fence Enforcement Parameters */}
+                            <Card className="border border-slate-200/90 bg-white rounded-3xl p-6 shadow-xs space-y-4">
+                                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                                    <Target className="h-4 w-4 text-emerald-600" />
+                                    Biometric & Geo-Fence Rules
+                                </h3>
+
+                                <div className="space-y-3 divide-y divide-slate-100 text-xs">
+                                    <div className="pt-2 flex justify-between">
+                                        <span className="text-slate-400 font-medium">GPS Latitude</span>
+                                        <span className="font-mono font-bold text-slate-900">{Number(office.latitude).toFixed(6)}</span>
+                                    </div>
+                                    <div className="pt-2 flex justify-between">
+                                        <span className="text-slate-400 font-medium">GPS Longitude</span>
+                                        <span className="font-mono font-bold text-slate-900">{Number(office.longitude).toFixed(6)}</span>
+                                    </div>
+                                    <div className="pt-2 flex justify-between">
+                                        <span className="text-slate-400 font-medium">Max Allowed Distance</span>
+                                        <span className="font-bold text-indigo-700">{office.radius_meters} meters</span>
+                                    </div>
+                                    <div className="pt-2 flex justify-between">
+                                        <span className="text-slate-400 font-medium">Validation Algorithm</span>
+                                        <span className="font-medium text-slate-700">Haversine Great-Circle Formula</span>
+                                    </div>
+                                    <div className="pt-2 flex justify-between">
+                                        <span className="text-slate-400 font-medium">Biometric Punch Enforcement</span>
+                                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700">
+                                            Strict Hardware & Mobile GPS
+                                        </span>
+                                    </div>
+                                    <div className="pt-2 flex justify-between">
+                                        <span className="text-slate-400 font-medium">Node Operational Status</span>
+                                        <span className="font-bold text-emerald-600">
+                                            {office.is_active ? "🟢 Active & Punching Allowed" : "🔴 Inactive"}
+                                        </span>
+                                    </div>
+                                </div>
+                            </Card>
+                        </div>
+                    )}
+                </div>
+
+                {/* ── Geo-Fence Modal Dialog ──────────────────── */}
+                <Dialog open={geoFenceModalOpen} onOpenChange={setGeoFenceModalOpen}>
+                    <DialogContent className="sm:max-w-[700px] border-none shadow-2xl rounded-3xl p-0 overflow-hidden">
+                        <DialogHeader className="p-5 bg-slate-50 border-b border-slate-100 flex-shrink-0">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <CardTitle className="text-lg font-black italic uppercase text-slate-900 tracking-tighter">
-                                        Operational Analytics
-                                    </CardTitle>
-                                    <CardDescription className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                                        Live Status Overview
-                                    </CardDescription>
+                                    <DialogTitle className="text-base font-black text-slate-900 tracking-tight flex items-center gap-2">
+                                        <Target className="h-4 w-4 text-indigo-600" />
+                                        Perimeter Visualizer — {office.name}
+                                    </DialogTitle>
+                                    <DialogDescription className="text-xs text-slate-500 mt-0.5">
+                                        Exact biometric radius: {office.radius_meters}m • Code: {office.code || `LOC-${office.id}`}
+                                    </DialogDescription>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    {liveData && (
-                                        <Badge className="bg-slate-900 text-[#D9F99D] border-none font-black text-[7px] uppercase px-3 h-6 rounded-lg shadow-sm tracking-widest flex items-center gap-2">
-                                            <TrendingUp className="h-3 w-3" />
-                                            Present: {liveData.stats.present}/{liveData.stats.total}
-                                        </Badge>
-                                    )}
-                                </div>
+                                <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                    {office.radius_meters}m Radius
+                                </span>
                             </div>
-                        </CardHeader>
-                        <CardContent className="p-8 pt-4">
-                            <div className="h-64 w-full bg-slate-50/50 rounded-3xl border border-slate-100 flex items-end justify-center gap-6 p-6 relative overflow-hidden group">
-                                {liveData ? (
-                                    <>
-                                        {/* Present bar */}
-                                        <div className="flex flex-col items-center gap-3 flex-1 max-w-[120px]">
-                                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
-                                                {liveData.stats.present}
-                                            </span>
-                                            <div
-                                                className="w-full bg-emerald-400 rounded-t-xl transition-all duration-700 group-hover:bg-emerald-300"
-                                                style={{
-                                                    height: `${Math.max(
-                                                        8,
-                                                        (liveData.stats.present / Math.max(liveData.stats.total, 1)) * 160
-                                                    )}px`,
-                                                }}
-                                            />
-                                            <span className="text-[8px] font-black text-emerald-600 uppercase tracking-widest">
-                                                Present
-                                            </span>
-                                        </div>
-                                        {/* Late bar */}
-                                        <div className="flex flex-col items-center gap-3 flex-1 max-w-[120px]">
-                                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
-                                                {liveData.stats.late}
-                                            </span>
-                                            <div
-                                                className="w-full bg-amber-400 rounded-t-xl transition-all duration-700 group-hover:bg-amber-300"
-                                                style={{
-                                                    height: `${Math.max(
-                                                        8,
-                                                        (liveData.stats.late / Math.max(liveData.stats.total, 1)) * 160
-                                                    )}px`,
-                                                }}
-                                            />
-                                            <span className="text-[8px] font-black text-amber-600 uppercase tracking-widest">
-                                                Late
-                                            </span>
-                                        </div>
-                                        {/* Absent bar */}
-                                        <div className="flex flex-col items-center gap-3 flex-1 max-w-[120px]">
-                                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
-                                                {liveData.stats.absent}
-                                            </span>
-                                            <div
-                                                className="w-full bg-rose-300 rounded-t-xl transition-all duration-700 group-hover:bg-rose-200"
-                                                style={{
-                                                    height: `${Math.max(
-                                                        8,
-                                                        (liveData.stats.absent / Math.max(liveData.stats.total, 1)) * 160
-                                                    )}px`,
-                                                }}
-                                            />
-                                            <span className="text-[8px] font-black text-rose-500 uppercase tracking-widest">
-                                                Absent
-                                            </span>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <p className="text-xs font-bold text-slate-400">No attendance data for today</p>
-                                )}
-                                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,0,0,0.02)_0,transparent_100%)] pointer-events-none" />
-                            </div>
-                        </CardContent>
-                    </Card>
+                        </DialogHeader>
 
-                    {/* Live Status Table */}
-                    <Card className="border-none bg-white rounded-[2.5rem] shadow-sm overflow-hidden">
-                        <CardHeader className="p-8 pb-4 border-none flex flex-row items-center justify-between">
-                            <div>
-                                <CardTitle className="text-lg font-black italic uppercase text-slate-900 tracking-tighter underline underline-offset-4 decoration-[#D9F99D]">
-                                    Live Status Table
-                                </CardTitle>
-                                <CardDescription className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                                    {liveLoading ? "Loading…" : `Today's Attendance Log — ${office.name}`}
-                                </CardDescription>
+                        <div className="w-full h-[400px] bg-slate-100">
+                            <GeoFenceMap
+                                latitude={Number(office.latitude)}
+                                longitude={Number(office.longitude)}
+                                radius={Number(office.radius_meters)}
+                                officeName={office.name}
+                            />
+                        </div>
+
+                        <div className="p-4 bg-white flex items-center justify-between border-t border-slate-100">
+                            <div className="text-xs font-mono text-slate-500">
+                                Lat: {Number(office.latitude).toFixed(6)} • Lng: {Number(office.longitude).toFixed(6)}
                             </div>
                             <Button
-                                variant="outline"
-                                onClick={() => router.push("/attendance")}
-                                className="h-10 px-6 rounded-xl border-slate-100 font-black text-[9px] uppercase tracking-widest hover:bg-slate-50"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setGeoFenceModalOpen(false)}
+                                className="h-8 px-3 rounded-xl text-xs font-bold text-slate-600"
                             >
-                                <ExternalLink className="h-4 w-4 mr-2" /> View Attendance
-                            </Button>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                            {liveLoading ? (
-                                <div className="flex items-center justify-center py-16">
-                                    <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
-                                </div>
-                            ) : !liveData || liveData.rows.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center py-16 text-center">
-                                    <Users className="h-10 w-10 text-slate-200 mb-3" />
-                                    <p className="text-sm font-bold text-slate-400">No attendance data</p>
-                                    <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest mt-1">
-                                        No records found for today
-                                    </p>
-                                </div>
-                            ) : (
-                                <Table>
-                                    <TableHeader>
-                                        <tr className="bg-slate-50/50 border-b border-slate-100">
-                                            <th className="text-left py-5 px-8 text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                                Employee
-                                            </th>
-                                            <th className="text-left py-5 px-8 text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                                Clock In
-                                            </th>
-                                            <th className="text-left py-5 px-8 text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                                Device
-                                            </th>
-                                            <th className="text-left py-5 px-8 text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                                Status
-                                            </th>
-                                        </tr>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {liveData.rows.slice(0, 20).map((log, i) => (
-                                            <tr
-                                                key={i}
-                                                className="border-b border-slate-50 hover:bg-slate-50/30 transition-colors group"
-                                            >
-                                                <td className="py-5 px-8">
-                                                    <div className="flex items-center gap-3">
-                                                        <Avatar className="h-8 w-8 rounded-lg shadow-sm border border-white">
-                                                            <AvatarFallback className="bg-slate-900 text-white text-[8px] font-black uppercase tracking-tighter">
-                                                                {getInitials(log.name)}
-                                                            </AvatarFallback>
-                                                        </Avatar>
-                                                        <div className="flex flex-col">
-                                                            <span className="text-[11px] font-black text-slate-900 italic uppercase tracking-tighter">
-                                                                {log.name}
-                                                            </span>
-                                                            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-                                                                {log.id}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="py-5 px-8">
-                                                    <div className="flex items-center gap-2">
-                                                        <Timer className="h-3 w-3 text-slate-300" />
-                                                        <span className="text-[10px] font-black text-slate-700 tracking-tighter italic">
-                                                            {formatTime(log.punchIn)}
-                                                        </span>
-                                                    </div>
-                                                </td>
-                                                <td className="py-5 px-8">
-                                                    <div className="flex items-center gap-2">
-                                                        <Smartphone className="h-3 w-3 text-slate-400" />
-                                                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">
-                                                            {log.device}
-                                                        </span>
-                                                    </div>
-                                                </td>
-                                                <td className="py-5 px-8">
-                                                    <Badge
-                                                        className={cn(
-                                                            "font-black text-[8px] uppercase tracking-widest px-3 h-6 rounded-lg shadow-sm border-none",
-                                                            log.status === "Present"
-                                                                ? "bg-emerald-50 text-emerald-600"
-                                                                : log.status === "Late"
-                                                                    ? "bg-amber-50 text-amber-600"
-                                                                    : "bg-rose-50 text-rose-600"
-                                                        )}
-                                                    >
-                                                        {log.status}
-                                                    </Badge>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            )}
-                            {liveData && liveData.rows.length > 20 && (
-                                <div className="p-8 bg-slate-50/50 border-t border-slate-100 text-center">
-                                    <Button
-                                        variant="ghost"
-                                        onClick={() => router.push("/attendance")}
-                                        className="text-[9px] font-black uppercase text-slate-400 hover:text-slate-900 tracking-widest"
-                                    >
-                                        Load All Logs ({liveData.stats.total} Total)
-                                    </Button>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </div>
-
-                {/* ── Right Column: Settings & Details ──────────── */}
-                <div className="space-y-8">
-                    {/* Branch Details Card */}
-                    <Card className="border-none bg-white rounded-[2.5rem] shadow-sm overflow-hidden p-8 space-y-8">
-                        <div className="space-y-2">
-                            <h3 className="text-sm font-black italic uppercase text-slate-900 tracking-tighter">
-                                Branch Configuration
-                            </h3>
-                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
-                                Static information and technical parameters for this node.
-                            </p>
-                        </div>
-
-                        <div className="space-y-6">
-                            {/* Geo-fence */}
-                            <div className="flex items-start gap-4 p-4 rounded-2xl bg-slate-50/50 border border-slate-100 group hover:bg-white hover:shadow-md transition-all">
-                                <div className="h-10 w-10 rounded-xl bg-blue-50 flex items-center justify-center group-hover:bg-blue-500 group-hover:text-white transition-colors shrink-0">
-                                    <Navigation className="h-5 w-5" />
-                                </div>
-                                <div className="space-y-1">
-                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
-                                        Geo-Fence Coordinates
-                                    </p>
-                                    <p className="text-[11px] font-bold text-slate-900 tracking-widest font-mono">
-                                        LAT: {Number(office.latitude).toFixed(4)}
-                                    </p>
-                                    <p className="text-[11px] font-bold text-slate-900 tracking-widest font-mono">
-                                        LONG: {Number(office.longitude).toFixed(4)}
-                                    </p>
-                                    <Badge className="bg-slate-900 text-white border-none font-black text-[7px] uppercase px-2 h-4 mt-2">
-                                        Radius: {office.radius_meters}m
-                                    </Badge>
-                                </div>
-                            </div>
-
-                            {/* Contact */}
-                            <div className="flex items-start gap-4 p-4 rounded-2xl bg-slate-50/50 border border-slate-100 group hover:bg-white hover:shadow-md transition-all">
-                                <div className="h-10 w-10 rounded-xl bg-rose-50 flex items-center justify-center group-hover:bg-rose-500 group-hover:text-white transition-colors shrink-0">
-                                    <User className="h-5 w-5" />
-                                </div>
-                                <div className="space-y-1">
-                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
-                                        Contact Person
-                                    </p>
-                                    <p className="text-sm font-black text-slate-900 italic tracking-tighter uppercase">
-                                        {office.contact_person || "Not assigned"}
-                                    </p>
-                                    {office.contact_phone && (
-                                        <p className="text-[10px] font-bold text-slate-400 flex items-center gap-2 pt-1 uppercase">
-                                            <Phone className="h-3 w-3" /> {office.contact_phone}
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Address */}
-                            <div className="flex items-start gap-4 p-4 rounded-2xl bg-slate-50/50 border border-slate-100 group hover:bg-white hover:shadow-md transition-all">
-                                <div className="h-10 w-10 rounded-xl bg-emerald-50 flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-white transition-colors shrink-0">
-                                    <MapPin className="h-5 w-5" />
-                                </div>
-                                <div className="space-y-1">
-                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
-                                        Address
-                                    </p>
-                                    <p className="text-xs font-bold text-slate-700 leading-relaxed">
-                                        {office.address || "No address provided"}
-                                    </p>
-                                    {office.city && office.state && (
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase">
-                                            {office.city}, {office.state}
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Company Info */}
-                            <div className="flex items-start gap-4 p-4 rounded-2xl bg-slate-50/50 border border-slate-100 group hover:bg-white hover:shadow-md transition-all">
-                                <div className="h-10 w-10 rounded-xl bg-indigo-50 flex items-center justify-center group-hover:bg-indigo-500 group-hover:text-white transition-colors shrink-0">
-                                    <Building2 className="h-5 w-5" />
-                                </div>
-                                <div className="space-y-1">
-                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
-                                        Parent Company
-                                    </p>
-                                    <p className="text-sm font-black text-slate-900 italic tracking-tighter uppercase">
-                                        {office.company?.name || "Unassigned"}
-                                    </p>
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase">
-                                        Code: {office.code || "N/A"} • {office.employee_count ?? 0} employees
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="pt-4 flex flex-col gap-3">
-                            {isAdmin && (
-                                <Button
-                                    onClick={() => router.push(`/locations?edit=${office.id}`)}
-                                    className="w-full h-12 rounded-2xl bg-slate-900 text-white font-black text-[9px] uppercase tracking-[0.2em] shadow-xl hover:translate-y-[-2px] transition-all"
-                                >
-                                    <Pencil className="h-4 w-4 mr-2" /> Edit Configuration
-                                </Button>
-                            )}
-                            <Button
-                                variant="outline"
-                                onClick={() => router.push("/locations")}
-                                className="w-full h-12 rounded-2xl border-slate-200 text-slate-600 font-black text-[9px] uppercase tracking-[0.2em] hover:bg-slate-50 transition-all"
-                            >
-                                <ArrowLeft className="h-4 w-4 mr-2" /> Back to Locations
+                                Close
                             </Button>
                         </div>
-                    </Card>
+                    </DialogContent>
+                </Dialog>
 
-                    {/* Operational Alerts */}
-                    <Card className="border-none bg-[#FEF2F2] rounded-[2.5rem] shadow-sm p-8 space-y-6">
-                        <div className="flex items-center gap-3 text-rose-600">
-                            <AlertCircle className="h-5 w-5" />
-                            <h3 className="text-sm font-black uppercase italic tracking-tighter">Status</h3>
-                        </div>
-                        <div className="space-y-4">
-                            {[
-                                {
-                                    text: `Geo-fence radius: ${office.radius_meters}m — employees must be within this range to punch in/out.`,
-                                    active: true,
-                                },
-                                {
-                                    text: office.is_active
-                                        ? "Location is active and accepting punches."
-                                        : "Location is currently inactive. Employees cannot punch from here.",
-                                    active: office.is_active,
-                                },
-                                {
-                                    text: `${office.employee_count ?? 0} employees assigned to this location.`,
-                                    active: true,
-                                },
-                            ].map((alert, i) => (
-                                <div
-                                    key={i}
-                                    className="flex items-start gap-3 p-3 bg-white/50 rounded-xl border border-rose-100/50"
-                                >
-                                    <div
-                                        className={cn(
-                                            "h-1.5 w-1.5 rounded-full mt-1.5 shrink-0",
-                                            alert.active ? "bg-emerald-500" : "bg-rose-500"
-                                        )}
+                {/* ── Quick Edit Branch Sheet ─────────────────── */}
+                <Sheet open={editSheetOpen} onOpenChange={setEditSheetOpen}>
+                    <SheetContent className="sm:max-w-[540px] border-none shadow-2xl p-0 overflow-y-auto">
+                        <div className="p-7 space-y-6">
+                            <SheetHeader className="text-left space-y-1">
+                                <SheetTitle className="text-lg font-black text-slate-900 tracking-tight">
+                                    Edit Branch Configuration
+                                </SheetTitle>
+                                <SheetDescription className="text-xs text-slate-500">
+                                    Update branch name, unique code, site in-charge & GPS geo-fence perimeter
+                                </SheetDescription>
+                            </SheetHeader>
+
+                            <div className="space-y-4 pt-1">
+                                {/* Branch Name */}
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-bold text-slate-700">
+                                        Branch Name <span className="text-rose-500">*</span>
+                                    </Label>
+                                    <Input
+                                        value={editForm.name || ""}
+                                        onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
+                                        placeholder="e.g. BP Marketing — Indore HQ"
+                                        className="rounded-xl border-slate-200 h-10 text-xs"
                                     />
-                                    <p className="text-[10px] font-bold text-slate-600 leading-relaxed uppercase">
-                                        {alert.text}
-                                    </p>
+                                    {editErrors.name && (
+                                        <p className="text-[11px] font-semibold text-rose-500">{editErrors.name}</p>
+                                    )}
                                 </div>
-                            ))}
+
+                                {/* Unique Location Code */}
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs font-bold text-slate-700">
+                                            Unique Location ID / Code
+                                        </Label>
+                                        <button
+                                            type="button"
+                                            onClick={handleAutoGenerateCode}
+                                            disabled={generatingCode}
+                                            className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
+                                        >
+                                            <Sparkles className={cn("h-3 w-3", generatingCode && "animate-spin")} />
+                                            <span>{generatingCode ? "Generating…" : "Auto-Generate"}</span>
+                                        </button>
+                                    </div>
+                                    <Input
+                                        value={editForm.code || ""}
+                                        onChange={(e) => setEditForm((prev) => ({ ...prev, code: e.target.value.toUpperCase() }))}
+                                        placeholder="e.g. BPM-IND"
+                                        className="rounded-xl border-slate-200 h-10 text-xs font-mono font-bold uppercase"
+                                    />
+                                </div>
+
+                                {/* City & State */}
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs font-bold text-slate-700">City</Label>
+                                        <Input
+                                            value={editForm.city || ""}
+                                            onChange={(e) => setEditForm((prev) => ({ ...prev, city: e.target.value }))}
+                                            placeholder="City"
+                                            className="rounded-xl border-slate-200 h-10 text-xs"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs font-bold text-slate-700">State</Label>
+                                        <Input
+                                            value={editForm.state || ""}
+                                            onChange={(e) => setEditForm((prev) => ({ ...prev, state: e.target.value }))}
+                                            placeholder="State"
+                                            className="rounded-xl border-slate-200 h-10 text-xs"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Address */}
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-bold text-slate-700">Full Address</Label>
+                                    <Input
+                                        value={editForm.address || ""}
+                                        onChange={(e) => setEditForm((prev) => ({ ...prev, address: e.target.value }))}
+                                        placeholder="Street / Facility Address"
+                                        className="rounded-xl border-slate-200 h-10 text-xs"
+                                    />
+                                </div>
+
+                                {/* GPS Coordinates & Radius */}
+                                <div className="pt-2 border-t border-slate-100 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                                            <Target className="h-3.5 w-3.5 text-indigo-600" />
+                                            GPS & Radius Calibration
+                                        </Label>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            disabled={fetchingLocation}
+                                            onClick={handleGetCurrentLocation}
+                                            className="h-7 px-2.5 rounded-lg border-indigo-200 bg-indigo-50/50 text-indigo-700 text-[10px] font-bold"
+                                        >
+                                            {fetchingLocation ? "Capturing…" : "Get My GPS"}
+                                        </Button>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-1">
+                                            <Label className="text-[11px] font-bold text-slate-600">Latitude</Label>
+                                            <Input
+                                                type="number"
+                                                step="any"
+                                                value={editForm.latitude || ""}
+                                                onChange={(e) => setEditForm((prev) => ({ ...prev, latitude: e.target.value }))}
+                                                className="rounded-xl border-slate-200 h-9 text-xs font-mono"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label className="text-[11px] font-bold text-slate-600">Longitude</Label>
+                                            <Input
+                                                type="number"
+                                                step="any"
+                                                value={editForm.longitude || ""}
+                                                onChange={(e) => setEditForm((prev) => ({ ...prev, longitude: e.target.value }))}
+                                                className="rounded-xl border-slate-200 h-9 text-xs font-mono"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Map Pin Adjuster */}
+                                    <div className="space-y-1">
+                                        <LocationPickerMap
+                                            initialLat={Number(editForm.latitude) || 22.7196}
+                                            initialLng={Number(editForm.longitude) || 75.8577}
+                                            radius={Number(editForm.radius_meters) || 50}
+                                            onChange={(lat: number, lng: number) => {
+                                                setEditForm((prev) => ({
+                                                    ...prev,
+                                                    latitude: String(lat),
+                                                    longitude: String(lng),
+                                                }));
+                                            }}
+                                        />
+                                    </div>
+
+                                    {/* Geo-fence Radius Select */}
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs font-bold text-slate-700">Radius Preset</Label>
+                                        <Select
+                                            value={editForm.radius_meters || "50"}
+                                            onValueChange={(v) => setEditForm((prev) => ({ ...prev, radius_meters: v }))}
+                                        >
+                                            <SelectTrigger className="rounded-xl border-slate-200 h-10 text-xs">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent className="rounded-xl border-slate-200 shadow-xl">
+                                                {RADIUS_PRESETS.map((p) => (
+                                                    <SelectItem key={p.value} value={p.value}>
+                                                        {p.label}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+
+                                {/* Site In-Charge Contact */}
+                                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
+                                    <div className="space-y-1">
+                                        <Label className="text-xs font-bold text-slate-700">Contact Person</Label>
+                                        <Input
+                                            value={editForm.contact_person || ""}
+                                            onChange={(e) => setEditForm((prev) => ({ ...prev, contact_person: e.target.value }))}
+                                            placeholder="Site Manager"
+                                            className="rounded-xl border-slate-200 h-10 text-xs"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-xs font-bold text-slate-700">Phone</Label>
+                                        <Input
+                                            value={editForm.contact_phone || ""}
+                                            onChange={(e) => setEditForm((prev) => ({ ...prev, contact_phone: e.target.value }))}
+                                            placeholder="+91-XXXXX XXXXX"
+                                            className="rounded-xl border-slate-200 h-10 text-xs"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Status */}
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-bold text-slate-700">Status</Label>
+                                    <Select
+                                        value={editForm.is_active || "true"}
+                                        onValueChange={(v) => setEditForm((prev) => ({ ...prev, is_active: v }))}
+                                    >
+                                        <SelectTrigger className="rounded-xl border-slate-200 h-10 text-xs">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent className="rounded-xl border-slate-200 shadow-xl">
+                                            <SelectItem value="true">Active (Accepting Punches)</SelectItem>
+                                            <SelectItem value="false">Inactive (Suspended)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+
+                            <SheetFooter className="flex flex-col sm:flex-row gap-2.5 pt-4 border-t border-slate-100">
+                                <SheetClose asChild>
+                                    <Button variant="ghost" className="rounded-xl h-10 text-slate-600 font-bold text-xs">
+                                        Cancel
+                                    </Button>
+                                </SheetClose>
+                                <Button
+                                    onClick={handleSaveEdit}
+                                    disabled={editSaving}
+                                    className="flex-1 h-10 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm"
+                                >
+                                    {editSaving ? "Saving Changes…" : "Update Branch"}
+                                </Button>
+                            </SheetFooter>
                         </div>
-                    </Card>
-                </div>
+                    </SheetContent>
+                </Sheet>
             </div>
-        </div>
+        </ProtectedRoute>
     );
 }
