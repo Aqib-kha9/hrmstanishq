@@ -48,6 +48,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { cn } from "@/lib/utils";
 import { apiGet, apiDelete, apiPatch } from "@/lib/api-client";
 import { toFrontendEmployee, type BackendEmployee, type FrontendEmployee } from "@/lib/transform";
+import { EmployeeIdCardModal } from "@/components/EmployeeIdCardModal";
 
 // ── Types ──
 
@@ -741,16 +742,24 @@ export default function EmployeeProfilePage() {
                 {/* ── Profile Header Banner ── */}
                 <Card className="border border-slate-200/80 shadow-sm rounded-3xl bg-white overflow-hidden">
                     <div className="h-28 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 w-full relative">
-                        <div className="absolute -bottom-12 left-8 h-24 w-24 rounded-2xl bg-white p-1.5 shadow-xl border border-slate-100">
-                            <div className={cn(
-                                "h-full w-full rounded-xl flex items-center justify-center text-2xl font-black italic uppercase",
-                                employee.color === 'blue' ? "bg-blue-50 text-blue-600" :
-                                employee.color === 'amber' ? "bg-amber-50 text-amber-600" :
-                                employee.color === 'indigo' ? "bg-indigo-50 text-indigo-600" :
-                                "bg-emerald-50 text-emerald-600"
-                            )}>
-                                {employee.name?.slice(0, 2).toUpperCase()}
-                            </div>
+                        <div className="absolute -bottom-12 left-8 h-24 w-24 rounded-2xl bg-white p-1.5 shadow-xl border border-slate-100 overflow-hidden">
+                            {rawEmployee?.profile_image ? (
+                                <img
+                                    src={rawEmployee.profile_image}
+                                    alt={employee.name}
+                                    className="h-full w-full object-cover rounded-xl"
+                                />
+                            ) : (
+                                <div className={cn(
+                                    "h-full w-full rounded-xl flex items-center justify-center text-2xl font-black italic uppercase",
+                                    employee.color === 'blue' ? "bg-blue-50 text-blue-600" :
+                                    employee.color === 'amber' ? "bg-amber-50 text-amber-600" :
+                                    employee.color === 'indigo' ? "bg-indigo-50 text-indigo-600" :
+                                    "bg-emerald-50 text-emerald-600"
+                                )}>
+                                    {employee.name?.slice(0, 2).toUpperCase()}
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -1379,82 +1388,18 @@ export default function EmployeeProfilePage() {
                 </div>
             </div>
 
-            {/* ── ID Card Modal ── */}
-            <Dialog open={idCardOpen} onOpenChange={setIdCardOpen}>
-                <DialogContent className="sm:max-w-[420px] p-6 rounded-3xl bg-white border-none shadow-2xl">
-                    <DialogHeader className="pb-3 border-b border-slate-100 text-left">
-                        <DialogTitle className="text-sm font-black uppercase tracking-wider text-slate-800">
-                            Employee ID Card Preview
-                        </DialogTitle>
-                        <DialogDescription className="text-xs text-slate-500">
-                            Official company identity badge
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="py-4">
-                        <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-900 to-indigo-950 text-white p-6 shadow-xl space-y-4">
-                            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                                <div>
-                                    <p className="text-xs font-black uppercase tracking-wider text-indigo-300">
-                                        {rawEmployee?.company?.name || rawEmployee?.company_name || "Company HRMS"}
-                                    </p>
-                                    <p className="text-[9px] text-slate-400">Identity Verification Card</p>
-                                </div>
-                                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                            </div>
-
-                            <div className="flex items-center gap-4 py-2">
-                                <div className="h-16 w-16 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center text-xl font-black text-[#D9F99D]">
-                                    {employee.name?.slice(0, 2).toUpperCase()}
-                                </div>
-                                <div>
-                                    <h4 className="font-black text-base text-white tracking-tight">{employee.name}</h4>
-                                    <p className="text-xs font-semibold text-indigo-200">{designationDisplay}</p>
-                                    <p className="text-[10px] font-mono text-slate-400 mt-0.5">{employee.id}</p>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-2 text-[10px] pt-3 border-t border-white/10 text-slate-300">
-                                <div>
-                                    <span className="text-slate-400 block text-[8px] uppercase">Department</span>
-                                    <span className="font-bold text-white">{rawEmployee?.department || "General"}</span>
-                                </div>
-                                <div>
-                                    <span className="text-slate-400 block text-[8px] uppercase">Office</span>
-                                    <span className="font-bold text-white">{officeDisplay}</span>
-                                </div>
-                                <div>
-                                    <span className="text-slate-400 block text-[8px] uppercase">Phone</span>
-                                    <span className="font-bold text-white">{employee.phone || "—"}</span>
-                                </div>
-                                <div>
-                                    <span className="text-slate-400 block text-[8px] uppercase">Joined</span>
-                                    <span className="font-bold text-white">{joiningDateDisplay}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => setIdCardOpen(false)}
-                            className="h-9 px-4 rounded-xl text-xs font-bold"
-                        >
-                            Close
-                        </Button>
-                        <Button
-                            type="button"
-                            onClick={() => window.print()}
-                            className="h-9 px-4 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5"
-                        >
-                            <Download className="h-3.5 w-3.5" />
-                            <span>Print Card</span>
-                        </Button>
-                    </div>
-                </DialogContent>
-            </Dialog>
+            {/* ── Corporate ID Card Modal ── */}
+            <EmployeeIdCardModal
+                isOpen={idCardOpen}
+                onClose={() => setIdCardOpen(false)}
+                employee={employee}
+                rawEmployee={rawEmployee}
+                onPhotoUpdated={(newPhotoUrl) => {
+                    if (rawEmployee) {
+                        setRawEmployee({ ...rawEmployee, profile_image: newPhotoUrl });
+                    }
+                }}
+            />
 
             {/* ── Global Action Processing Overlay ── */}
             {actionLoading && (
