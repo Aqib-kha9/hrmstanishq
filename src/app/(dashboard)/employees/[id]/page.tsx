@@ -605,22 +605,114 @@ export default function EmployeeProfilePage() {
         }
     };
 
+    const [updatingModules, setUpdatingModules] = useState(false);
+    const [moduleSuccessMsg, setModuleSuccessMsg] = useState<string | null>(null);
+
+    const handleToggleModule = async (moduleKey: 'attendance' | 'leave' | 'payroll' | 'loans' | 'documents' | 'letters', explicitValue?: boolean) => {
+        if (!employee) return;
+
+        const currentModules = employee.app_modules || {
+            attendance: employee.is_attendance_allowed !== false,
+            leave: employee.is_leave_allowed !== false,
+            payroll: employee.is_payroll_allowed !== false,
+            loans: employee.is_loans_allowed !== false,
+            documents: employee.is_documents_allowed !== false,
+            letters: employee.is_letters_allowed !== false,
+        };
+
+        const targetValue = explicitValue !== undefined ? explicitValue : !(currentModules as any)[moduleKey];
+        const nextModules = {
+            ...currentModules,
+            [moduleKey]: targetValue,
+        };
+
+        const updatedEmp: FrontendEmployee = {
+            ...employee,
+            is_attendance_allowed: nextModules.attendance !== false,
+            is_leave_allowed: nextModules.leave !== false,
+            is_payroll_allowed: nextModules.payroll !== false,
+            is_loans_allowed: nextModules.loans !== false,
+            is_documents_allowed: nextModules.documents !== false,
+            is_letters_allowed: nextModules.letters !== false,
+            app_modules: nextModules,
+        };
+        setEmployee(updatedEmp);
+        if (rawEmployee) {
+            setRawEmployee({
+                ...rawEmployee,
+                ...updatedEmp,
+            } as any);
+        }
+
+        setUpdatingModules(true);
+        try {
+            await apiPatch(`/employees/${employee.employeeId}/app-modules`, {
+                is_attendance_allowed: nextModules.attendance,
+                is_leave_allowed: nextModules.leave,
+                is_payroll_allowed: nextModules.payroll,
+                is_loans_allowed: nextModules.loans,
+                is_documents_allowed: nextModules.documents,
+                is_letters_allowed: nextModules.letters,
+                app_modules: nextModules,
+            });
+            setModuleSuccessMsg("App module access updated");
+            setTimeout(() => setModuleSuccessMsg(null), 3000);
+        } catch (err: any) {
+            console.error("Failed to update module access:", err);
+            alert(err?.response?.data?.message || "Failed to update module access");
+        } finally {
+            setUpdatingModules(false);
+        }
+    };
+
+    const handleApplyModulePreset = async (preset: 'regular' | 'contract') => {
+        if (!employee) return;
+        const nextModules = preset === 'regular'
+            ? { attendance: true, leave: true, payroll: true, loans: true, documents: true, letters: true }
+            : { attendance: true, leave: false, payroll: false, loans: false, documents: false, letters: false };
+
+        const updatedEmp: FrontendEmployee = {
+            ...employee,
+            is_attendance_allowed: nextModules.attendance,
+            is_leave_allowed: nextModules.leave,
+            is_payroll_allowed: nextModules.payroll,
+            is_loans_allowed: nextModules.loans,
+            is_documents_allowed: nextModules.documents,
+            is_letters_allowed: nextModules.letters,
+            app_modules: nextModules,
+        };
+        setEmployee(updatedEmp);
+        if (rawEmployee) {
+            setRawEmployee({
+                ...rawEmployee,
+                ...updatedEmp,
+            } as any);
+        }
+
+        setUpdatingModules(true);
+        try {
+            await apiPatch(`/employees/${employee.employeeId}/app-modules`, {
+                is_attendance_allowed: nextModules.attendance,
+                is_leave_allowed: nextModules.leave,
+                is_payroll_allowed: nextModules.payroll,
+                is_loans_allowed: nextModules.loans,
+                is_documents_allowed: nextModules.documents,
+                is_letters_allowed: nextModules.letters,
+                app_modules: nextModules,
+            });
+            setModuleSuccessMsg(preset === 'regular' ? "Activated All Tabs (Regular Employee)" : "Applied Contract Worker Mode (Attendance Only)");
+            setTimeout(() => setModuleSuccessMsg(null), 3500);
+        } catch (err: any) {
+            console.error("Failed to apply preset:", err);
+            alert(err?.response?.data?.message || "Failed to apply preset");
+        } finally {
+            setUpdatingModules(false);
+        }
+    };
+
     const [togglingLeaveAccess, setTogglingLeaveAccess] = useState(false);
     const handleToggleLeaveAccess = async () => {
-        if (!employee) return;
-        const currentAllowed = employee.is_leave_allowed !== false;
-        const newStatus = !currentAllowed;
-        setTogglingLeaveAccess(true);
-        try {
-            await apiPatch(`/employees/${employee.employeeId}/leave-access`, { is_leave_allowed: newStatus });
-            setEmployee({ ...employee, is_leave_allowed: newStatus });
-            if (rawEmployee) setRawEmployee({ ...rawEmployee, is_leave_allowed: newStatus });
-        } catch (err: any) {
-            console.error("Failed to toggle leave access:", err);
-            alert(err?.response?.data?.message || "Failed to update leave access");
-        } finally {
-            setTogglingLeaveAccess(false);
-        }
+        await handleToggleModule('leave');
     };
 
     const handleDeleteEmployee = async () => {
@@ -1285,6 +1377,180 @@ export default function EmployeeProfilePage() {
                                         <History className="h-3.5 w-3.5 text-indigo-600" /> View Full Leave History & Audit
                                     </Button>
                                 </Link>
+                            </div>
+                        </Card>
+
+                        {/* ── CARD 3: Mobile App Module & Tab Access Control ── */}
+                        <Card className="border border-slate-200/80 shadow-sm rounded-3xl bg-white p-6">
+                            <CardHeader className="px-0 pt-0 pb-4 border-b border-slate-100 mb-4 flex flex-row items-center justify-between">
+                                <CardTitle className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
+                                    <Smartphone className="h-4 w-4 text-indigo-600" /> Mobile App Tab Access
+                                </CardTitle>
+                                {(() => {
+                                    const m = employee?.app_modules || {
+                                        attendance: employee?.is_attendance_allowed !== false,
+                                        leave: employee?.is_leave_allowed !== false,
+                                        payroll: employee?.is_payroll_allowed !== false,
+                                        loans: employee?.is_loans_allowed !== false,
+                                        documents: employee?.is_documents_allowed !== false,
+                                        letters: employee?.is_letters_allowed !== false,
+                                    };
+                                    const activeCount = Object.values(m).filter(Boolean).length;
+                                    const isContract = m.attendance && !m.leave && !m.payroll && !m.loans && !m.documents && !m.letters;
+                                    const isAll = activeCount === 6;
+
+                                    if (isAll) {
+                                        return (
+                                            <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[9px] font-black uppercase">
+                                                All Active (6/6)
+                                            </Badge>
+                                        );
+                                    }
+                                    if (isContract) {
+                                        return (
+                                            <Badge className="bg-amber-50 text-amber-700 border-amber-200 text-[9px] font-black uppercase">
+                                                Contract (Attendance Only)
+                                            </Badge>
+                                        );
+                                    }
+                                    return (
+                                        <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 text-[9px] font-black uppercase">
+                                            Custom ({activeCount}/6 Active)
+                                        </Badge>
+                                    );
+                                })()}
+                            </CardHeader>
+
+                            <div className="space-y-4">
+                                <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                                    Select which tabs and features this employee can access on their mobile application.
+                                </p>
+
+                                {/* Quick Presets */}
+                                <div className="grid grid-cols-2 gap-2">
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={updatingModules || !hasPermission('EMPLOYEES', 'UPDATE')}
+                                        onClick={() => handleApplyModulePreset('regular')}
+                                        className="h-8 rounded-xl text-[10px] font-bold border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 text-slate-700"
+                                    >
+                                        <Sparkles className="h-3 w-3 mr-1 text-indigo-600" /> Regular (All Tabs)
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={updatingModules || !hasPermission('EMPLOYEES', 'UPDATE')}
+                                        onClick={() => handleApplyModulePreset('contract')}
+                                        className="h-8 rounded-xl text-[10px] font-bold border-amber-200 bg-amber-50/40 hover:bg-amber-100/60 text-amber-900"
+                                    >
+                                        Contract (Att. Only)
+                                    </Button>
+                                </div>
+
+                                {moduleSuccessMsg && (
+                                    <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center gap-2 text-[11px] font-bold text-emerald-700 animate-in fade-in">
+                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                                        <span>{moduleSuccessMsg}</span>
+                                    </div>
+                                )}
+
+                                {/* Individual Module Switches */}
+                                <div className="space-y-2 pt-1 border-t border-slate-100">
+                                    {[
+                                        {
+                                            key: 'attendance' as const,
+                                            label: 'Attendance & Clock-In',
+                                            desc: 'Daily punch, geofencing & muster',
+                                            icon: Clock,
+                                            active: (employee?.app_modules?.attendance ?? employee?.is_attendance_allowed) !== false,
+                                        },
+                                        {
+                                            key: 'leave' as const,
+                                            label: 'Leave Management',
+                                            desc: 'Leave balance & leave application tab',
+                                            icon: Award,
+                                            active: (employee?.app_modules?.leave ?? employee?.is_leave_allowed) !== false,
+                                        },
+                                        {
+                                            key: 'payroll' as const,
+                                            label: 'Payroll & Payslips',
+                                            desc: 'Monthly salary slips & pay history',
+                                            icon: Banknote,
+                                            active: (employee?.app_modules?.payroll ?? employee?.is_payroll_allowed) !== false,
+                                        },
+                                        {
+                                            key: 'loans' as const,
+                                            label: 'Loans & Advances',
+                                            desc: 'Loan requests & repayment schedule',
+                                            icon: Receipt,
+                                            active: (employee?.app_modules?.loans ?? employee?.is_loans_allowed) !== false,
+                                        },
+                                        {
+                                            key: 'documents' as const,
+                                            label: 'Employee Documents',
+                                            desc: 'Documents quick-access tile in profile',
+                                            icon: FileCheck,
+                                            active: (employee?.app_modules?.documents ?? employee?.is_documents_allowed) !== false,
+                                        },
+                                        {
+                                            key: 'letters' as const,
+                                            label: 'Letters & Certificates',
+                                            desc: 'Official offer & appointment letters',
+                                            icon: FileText,
+                                            active: (employee?.app_modules?.letters ?? employee?.is_letters_allowed) !== false,
+                                        },
+                                    ].map((mod) => {
+                                        const ModIcon = mod.icon;
+                                        return (
+                                            <div
+                                                key={mod.key}
+                                                className="p-2.5 rounded-2xl bg-slate-50/80 border border-slate-200/70 flex items-center justify-between hover:bg-slate-50 transition-colors"
+                                            >
+                                                <div className="flex items-center gap-2.5 overflow-hidden">
+                                                    <div className={cn(
+                                                        "h-7 w-7 rounded-lg flex items-center justify-center shrink-0",
+                                                        mod.active ? "bg-indigo-50 text-indigo-600" : "bg-slate-200 text-slate-400"
+                                                    )}>
+                                                        <ModIcon className="h-3.5 w-3.5" />
+                                                    </div>
+                                                    <div className="overflow-hidden">
+                                                        <span className="text-xs font-bold text-slate-800 block truncate leading-tight">
+                                                            {mod.label}
+                                                        </span>
+                                                        <span className="text-[10px] text-slate-400 block truncate">
+                                                            {mod.desc}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                <button
+                                                    type="button"
+                                                    role="switch"
+                                                    aria-checked={mod.active}
+                                                    disabled={updatingModules || !hasPermission('EMPLOYEES', 'UPDATE')}
+                                                    onClick={() => handleToggleModule(mod.key)}
+                                                    className={cn(
+                                                        "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                                                        mod.active ? "bg-indigo-600" : "bg-slate-300",
+                                                        (updatingModules || !hasPermission('EMPLOYEES', 'UPDATE')) && "opacity-60 cursor-not-allowed"
+                                                    )}
+                                                    title={mod.active ? `Disable ${mod.label}` : `Enable ${mod.label}`}
+                                                >
+                                                    <span
+                                                        aria-hidden="true"
+                                                        className={cn(
+                                                            "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out",
+                                                            mod.active ? "translate-x-4" : "translate-x-0"
+                                                        )}
+                                                    />
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         </Card>
 

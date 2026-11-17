@@ -3,8 +3,9 @@
 import { useRole } from "@/context/RoleContext";
 import MonthYearPicker from "@/components/MonthYearPicker";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { apiGet, apiPost, apiPut, apiPatch } from "@/lib/api-client";
+import * as XLSX from "xlsx";
 import dynamic from "next/dynamic";
 import {
     Clock,
@@ -294,85 +295,86 @@ export default function AttendancePage() {
         "July", "August", "September", "October", "November", "December"
     ];
 
-    // Export monthly attendance with dynamic per-day columns (Req 6.1, 6.2, 6.4)
-    // Dynamically uses cycleDates so that:
-    // - 28/29 day February has exactly 28/29 columns
-    // - 30-day months (Apr, Jun, Sep, Nov) have exactly 30 columns (Zero phantom 31st date)
-    // - 31-day months have 31 columns
-    // - Payroll cycle (26th to 25th) correctly maps dates across month boundaries
-    const exportMonthlyToCSV = (rows: any[], filename: string) => {
+    // Export monthly attendance with exact grid columns matching the UI table (Employee Details, Company, Muster, Present, Payable, LWP, Leave Bal, Off Day, and per-day cycle columns)
+    const exportMonthlyToExcel = (rows: any[], filename: string) => {
         if (!rows || rows.length === 0) return;
         const daysInMonth = cycleDates.length;
-        const baseHeaders = [
-            "Emp Code", "Name", "Role", "Department", "Hub", "Company",
-            "Muster Days", "Present Days", "Week Off", "Paid Leave", "Holiday", "Tour (Paid)",
-            "Payable Days", "LWP Days", "Fixed Gross (INR)", "Estimated Payout (INR)"
-        ];
+
+        // Dynamic day headers matching table format: '26 Mo', '27 Tu', ...
         const dayHeaders = cycleDates.map((date) => {
-            const yyyy = date.getFullYear();
-            const mm = String(date.getMonth() + 1).padStart(2, '0');
             const dd = String(date.getDate()).padStart(2, '0');
             const dayStr = dayNames[date.getDay()];
-            return `${yyyy}-${mm}-${dd} (${dayStr})`;
+            return `${dd} ${dayStr}`;
         });
-        const headers = [...baseHeaders, ...dayHeaders];
 
-        const csv = [
-            headers.join(","),
-            ...rows.map((row) => {
-                const grid = row.grid || "";
-                const dayValues = cycleDates.map((_, i) => {
-                    const ch = grid[i] || "-";
-                    switch (ch) {
-                        case "P": return "P";
-                        case "A": return "A";
-                        case "W": return "WO";
-                        case "H": return "H";
-                        case "T": return "T";
-                        case "L": return "L";
-                        case "-": return "-";
-                        default: return ch;
-                    }
-                });
-                const musterDays = row.muster_days ?? daysInMonth;
-                const payableDays = (row.present ?? 0) + (row.woff ?? 0) + (row.leave ?? 0) + (row.holiday ?? 0) + (row.tour ?? 0);
-                const lwpDays = row.absent ?? 0;
-                const salary = row.salary || 0;
-                const dailyRate = Math.round(salary / (musterDays || 1));
-                const estimatedPayout = payableDays * dailyRate;
+        const sheetData = rows.map((row) => {
+            const empDetails = row.id ? `${row.name} (${row.id})` : row.name;
+            const company = row.company || "---";
+            const muster = row.muster_days ?? daysInMonth;
+            const present = row.present ?? 0;
+            const payable = row.payable_days ?? ((row.present ?? 0) + (row.woff ?? 0) + (row.leave ?? 0) + (row.holiday ?? 0) + (row.tour ?? 0));
+            const lwp = row.absent ?? row.lwp_days ?? 0;
+            const leaveBal = row.remaining_leave_balance != null
+                ? `${row.remaining_leave_balance}d`
+                : (row.leave_balance != null ? `${row.leave_balance}d` : "24d");
+            const offDay = Array.isArray(row.weekly_off_days)
+                ? row.weekly_off_days.join('/')
+                : (row.off_day || 'Sun');
+            const offDayStr = `${offDay}${row.rotational_weekly_off ? ' (Rot)' : ''}`;
 
-                const baseValues = [
-                    row.id ?? "",
-                    row.name ?? "",
-                    row.role ?? "",
-                    row.department ?? "---",
-                    row.hub ?? "",
-                    row.company ?? "",
-                    musterDays,
-                    row.present ?? 0,
-                    row.woff ?? 0,
-                    row.leave ?? 0,
-                    row.holiday ?? 0,
-                    row.tour ?? 0,
-                    payableDays,
-                    lwpDays,
-                    salary,
-                    estimatedPayout,
-                ];
-                const allValues = [...baseValues, ...dayValues];
-                return allValues.map((v) => `"${(v ?? "").toString().replace(/"/g, '""')}"`).join(",");
-            }),
-        ].join("\n");
+            const rowObj: Record<string, any> = {
+                "Employee Details": empDetails,
+                "Company": company,
+                "Muster": muster,
+                "Present": present,
+                "Payable": payable,
+                "LWP": lwp,
+                "Leave Bal": leaveBal,
+                "Off Day": offDayStr,
+            };
 
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
+            const grid = row.grid || "";
+            cycleDates.forEach((_, i) => {
+                const headerKey = dayHeaders[i];
+                let displayVal = "-";
+                if (row.grid_details && row.grid_details[i]) {
+                    displayVal = row.grid_details[i].display_code || row.grid_details[i].status || "-";
+                } else if (grid[i]) {
+                    displayVal = grid[i];
+                }
+                if (displayVal === "WO") displayVal = "W";
+                rowObj[headerKey] = displayVal;
+            });
+
+            return rowObj;
+        });
+
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(sheetData);
+
+        // Column widths for optimal display in Excel
+        ws['!cols'] = [
+            { wch: 28 }, // Employee Details
+            { wch: 20 }, // Company
+            { wch: 10 }, // Muster
+            { wch: 10 }, // Present
+            { wch: 10 }, // Payable
+            { wch: 10 }, // LWP
+            { wch: 12 }, // Leave Bal
+            { wch: 12 }, // Off Day
+            ...cycleDates.map(() => ({ wch: 7 })), // Day headers: 26 Mo, etc.
+        ];
+
+        XLSX.utils.book_append_sheet(wb, ws, "Monthly Attendance");
         const cycleLabel = cycleType === "payroll" ? "PayrollCycle_26-25" : "CalendarMonth";
-        a.download = `${filename}_${cycleLabel}_${monthNames[selectedMonth]}_${selectedYear}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
+        const cleanDept = exportDeptSelection === "All" ? "All_Departments" : exportDeptSelection.replace(/\s/g, "_");
+        const fullFilename = `${filename}_${cleanDept}_${cycleLabel}_${monthNames[selectedMonth]}_${selectedYear}.xlsx`;
+
+        XLSX.writeFile(wb, fullFilename);
     };
+
+    // Alias for backward compatibility
+    const exportMonthlyToCSV = exportMonthlyToExcel;
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 8;
 
@@ -482,6 +484,24 @@ export default function AttendancePage() {
 
     // Monthly tab data
     const [monthlyRows, setMonthlyRows] = useState<any[]>([]);
+
+    // Genuine unique departments derived dynamically from database & active employee records
+    const dynamicDepartments = useMemo(() => {
+        const set = new Set<string>();
+        (departments || []).forEach((d) => {
+            const t = (d || "").trim();
+            if (t && t !== "---" && t !== "All Departments" && t !== "All") set.add(t);
+        });
+        (allEmployees || []).forEach((e: any) => {
+            const t = (e.department || "").trim();
+            if (t && t !== "---") set.add(t);
+        });
+        (monthlyRows || []).forEach((r: any) => {
+            const t = (r.department || "").trim();
+            if (t && t !== "---") set.add(t);
+        });
+        return Array.from(set).sort();
+    }, [departments, allEmployees, monthlyRows]);
     const [monthlyDaysInMonth, setMonthlyDaysInMonth] = useState(daysInSelectedMonth);
     const [monthlyLoading, setMonthlyLoading] = useState(false);
     const [monthlySearch, setMonthlySearch] = useState("");
@@ -522,7 +542,7 @@ export default function AttendancePage() {
                 alert("No records found to export.");
                 return;
             }
-            exportMonthlyToCSV(rowsToExport, `Monthly_Attendance_Report_${exportDeptSelection.replace(/\s/g, "_")}`);
+            exportMonthlyToExcel(rowsToExport, "Monthly_Attendance_Report");
         } catch (err) {
             console.error("Failed to export monthly attendance:", err);
             alert("Failed to export monthly attendance.");
@@ -1202,7 +1222,7 @@ export default function AttendancePage() {
                                             }}
                                         >
                                             <option value="">All Departments</option>
-                                            {departments.map((d) => (
+                                            {dynamicDepartments.map((d) => (
                                                 <option key={d} value={d}>{d}</option>
                                             ))}
                                         </select>
@@ -1458,7 +1478,7 @@ export default function AttendancePage() {
                                             <Users2 className="h-3.5 w-3.5 text-indigo-400" />
                                             <select value={selectedDepartment} onChange={(e) => setSelectedDepartment(e.target.value)} className="bg-transparent border-none text-[9px] font-black uppercase outline-none pr-2 h-full">
                                                 <option value="">All Departments</option>
-                                                {departments.map((d) => (
+                                                {dynamicDepartments.map((d) => (
                                                     <option key={d} value={d}>{d}</option>
                                                 ))}
                                             </select>
@@ -1994,7 +2014,7 @@ export default function AttendancePage() {
                                                 className="bg-transparent border-none text-[10px] font-bold text-slate-700 outline-none pr-2 h-full cursor-pointer"
                                             >
                                                 <option value="">All Departments</option>
-                                                {departments.map((d) => (
+                                                {dynamicDepartments.map((d) => (
                                                     <option key={d} value={d}>{d}</option>
                                                 ))}
                                             </select>
@@ -2028,7 +2048,7 @@ export default function AttendancePage() {
                                                 </span>
                                             ) : (
                                                 <>
-                                                    <FileSpreadsheet className="h-4 w-4 mr-1.5 text-emerald-600" /> Export CSV
+                                                    <FileSpreadsheet className="h-4 w-4 mr-1.5 text-emerald-600" /> Export Excel
                                                 </>
                                             )}
                                         </Button>
@@ -2378,7 +2398,7 @@ export default function AttendancePage() {
                                         className="h-9 px-3 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 outline-none"
                                     >
                                         <option value="">All Departments</option>
-                                        {departments.map((dept) => (
+                                        {dynamicDepartments.map((dept) => (
                                             <option key={dept} value={dept}>{dept}</option>
                                         ))}
                                     </select>
@@ -3625,7 +3645,7 @@ export default function AttendancePage() {
                                     className="bg-transparent border-none text-xs font-bold outline-none w-full h-full cursor-pointer"
                                 >
                                     <option value="All">All Departments (Combined)</option>
-                                    {departments.map((d) => (
+                                    {dynamicDepartments.map((d) => (
                                         <option key={d} value={d}>{d}</option>
                                     ))}
                                 </select>

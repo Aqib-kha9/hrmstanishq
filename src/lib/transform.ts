@@ -54,7 +54,13 @@ export interface BackendEmployee {
   shift_end_time?: string | null;
   is_rotational_shift?: boolean | null;
   half_day_late_minutes?: number | null;
+  is_attendance_allowed?: boolean | null;
   is_leave_allowed?: boolean | null;
+  is_payroll_allowed?: boolean | null;
+  is_loans_allowed?: boolean | null;
+  is_documents_allowed?: boolean | null;
+  is_letters_allowed?: boolean | null;
+  app_modules?: Record<string, boolean> | null;
   // Additional
   company_name: string | null;
   emergency_contact_name: string | null;
@@ -81,7 +87,13 @@ export interface FrontendEmployee {
   hr_manager?: string;
   color: string;
   employeeId: number; // numeric DB id for API calls
+  is_attendance_allowed?: boolean;
   is_leave_allowed?: boolean;
+  is_payroll_allowed?: boolean;
+  is_loans_allowed?: boolean;
+  is_documents_allowed?: boolean;
+  is_letters_allowed?: boolean;
+  app_modules?: Record<string, boolean>;
 }
 
 const ROLE_COLORS: Record<string, string> = {
@@ -133,6 +145,19 @@ export function toFrontendEmployee(be: BackendEmployee): FrontendEmployee {
     hr_manager: be.hr_manager || "HR Operations",
     color: ROLE_COLORS[role] || "blue",
     employeeId: be.id,
+    is_attendance_allowed: be.is_attendance_allowed !== false,
     is_leave_allowed: be.is_leave_allowed !== false,
+    is_payroll_allowed: be.is_payroll_allowed !== false,
+    is_loans_allowed: be.is_loans_allowed !== false,
+    is_documents_allowed: be.is_documents_allowed !== false,
+    is_letters_allowed: be.is_letters_allowed !== false,
+    app_modules: be.app_modules || {
+      attendance: be.is_attendance_allowed !== false,
+      leave: be.is_leave_allowed !== false,
+      payroll: be.is_payroll_allowed !== false,
+      loans: be.is_loans_allowed !== false,
+      documents: be.is_documents_allowed !== false,
+      letters: be.is_letters_allowed !== false,
+    },
   };
 }
