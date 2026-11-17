@@ -32,6 +32,7 @@ import {
 export interface IdCardData {
     orgName: string;
     orgInitials: string;
+    logoUrl?: string | null;
     unitName: string;
     name: string;
     designation: string;
@@ -115,6 +116,7 @@ export function EmployeeIdCardModal({
     const [cardData, setCardData] = useState({
         orgName: "APAAR LOGISTICS",
         orgInitials: "AL",
+        logoUrl: "/company_logopng.png",
         unitName: "UJJAIN BRANCH",
         name: "ADAM",
         designation: "EXECUTIVE",
@@ -184,6 +186,7 @@ export function EmployeeIdCardModal({
             ...prev,
             orgName: org,
             orgInitials: initials,
+            logoUrl: (rawEmployee?.company as any)?.logo || "/company_logopng.png",
             unitName: branchUnit,
             name: empName,
             designation: empDesig,
@@ -304,13 +307,13 @@ export function EmployeeIdCardModal({
         }
     };
 
-    // ── DYNAMIC VECTOR QR CODE (High Resolution 240x240 in #EA580C) ──
-    const renderOrangeQRCode = () => {
+    // ── DYNAMIC VECTOR QR CODE (Brand Theme #124479) ──
+    const renderBrandQRCode = () => {
         const qrPayload = `COMPANY:${cardData.orgName}|EMP_ID:${cardData.memberId}|NAME:${cardData.name}|DESIG:${cardData.designation}|BRANCH:${cardData.stateUnit}|STATUS:${cardData.status}`;
-        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&color=ea580c&bgcolor=ffffff&data=${encodeURIComponent(qrPayload)}`;
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&color=124479&bgcolor=ffffff&data=${encodeURIComponent(qrPayload)}`;
 
         return (
-            <div className="w-[105px] h-[105px] rounded-xl p-1 bg-white border border-orange-200/60 shadow-sm flex items-center justify-center overflow-hidden">
+            <div className="w-[105px] h-[105px] rounded-xl p-1 bg-white border border-blue-200/80 shadow-sm flex items-center justify-center overflow-hidden">
                 <img
                     src={qrUrl}
                     alt="Corporate Verification QR Code"
@@ -321,24 +324,24 @@ export function EmployeeIdCardModal({
                         const parent = target.parentElement;
                         if (parent) {
                             parent.innerHTML = `
-                                <svg viewBox="0 0 100 100" class="w-full h-full text-orange-600">
+                                <svg viewBox="0 0 100 100" class="w-full h-full text-[#124479]">
                                     <rect width="100" height="100" fill="#ffffff" />
-                                    <rect x="10" y="10" width="28" height="28" fill="#ea580c" />
+                                    <rect x="10" y="10" width="28" height="28" fill="#124479" />
                                     <rect x="15" y="15" width="18" height="18" fill="#ffffff" />
-                                    <rect x="19" y="19" width="10" height="10" fill="#ea580c" />
-                                    <rect x="62" y="10" width="28" height="28" fill="#ea580c" />
+                                    <rect x="19" y="19" width="10" height="10" fill="#124479" />
+                                    <rect x="62" y="10" width="28" height="28" fill="#124479" />
                                     <rect x="67" y="15" width="18" height="18" fill="#ffffff" />
-                                    <rect x="71" y="19" width="10" height="10" fill="#ea580c" />
-                                    <rect x="10" y="62" width="28" height="28" fill="#ea580c" />
+                                    <rect x="71" y="19" width="10" height="10" fill="#124479" />
+                                    <rect x="10" y="62" width="28" height="28" fill="#124479" />
                                     <rect x="15" y="67" width="18" height="18" fill="#ffffff" />
-                                    <rect x="19" y="71" width="10" height="10" fill="#ea580c" />
-                                    <rect x="44" y="14" width="8" height="16" fill="#ea580c" />
-                                    <rect x="14" y="44" width="16" height="8" fill="#ea580c" />
-                                    <rect x="44" y="44" width="12" height="12" fill="#ea580c" />
-                                    <rect x="64" y="44" width="14" height="8" fill="#ea580c" />
-                                    <rect x="44" y="64" width="8" height="22" fill="#ea580c" />
-                                    <rect x="60" y="64" width="16" height="8" fill="#ea580c" />
-                                    <rect x="70" y="76" width="16" height="12" fill="#ea580c" />
+                                    <rect x="19" y="71" width="10" height="10" fill="#124479" />
+                                    <rect x="44" y="14" width="8" height="16" fill="#124479" />
+                                    <rect x="14" y="44" width="16" height="8" fill="#124479" />
+                                    <rect x="44" y="44" width="12" height="12" fill="#124479" />
+                                    <rect x="64" y="44" width="14" height="8" fill="#124479" />
+                                    <rect x="44" y="64" width="8" height="22" fill="#124479" />
+                                    <rect x="60" y="64" width="16" height="8" fill="#124479" />
+                                    <rect x="70" y="76" width="16" height="12" fill="#124479" />
                                 </svg>
                             `;
                         }
@@ -359,14 +362,16 @@ export function EmployeeIdCardModal({
                     isPrint && "shadow-none border border-slate-300 print-card-border"
                 )}
             >
-                {/* ── TOP HEADER (Diagonal Split Black & Vibrant Orange) ── */}
+                {/* ── TOP HEADER (Brand Navy Blue & Crimson Red Diagonal Split) ── */}
                 <div className="relative h-[54px] w-full shrink-0 overflow-hidden">
-                    {/* Background SVG with Diagonal Cut */}
+                    {/* Background SVG with Diagonal Cut & Red Accent */}
                     <svg viewBox="0 0 480 54" preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
-                        {/* Right Orange Section */}
-                        <rect x="0" y="0" width="480" height="54" fill="#E65100" />
-                        {/* Left Black Angled Section (slanted diagonal cut) */}
-                        <polygon points="0,0 350,0 332,54 0,54" fill="#0A0A0A" />
+                        {/* Right Navy Blue Section */}
+                        <rect x="0" y="0" width="480" height="54" fill="#124479" />
+                        {/* Diagonal Red Accent Stripe */}
+                        <polygon points="340,0 354,0 336,54 322,54" fill="#E61F26" />
+                        {/* Left Deep Midnight Section */}
+                        <polygon points="0,0 346,0 328,54 0,54" fill="#0A1128" />
                     </svg>
 
                     {/* Content inside Header */}
@@ -374,24 +379,18 @@ export function EmployeeIdCardModal({
                         {/* Left: Dynamic Company Logo Emblem + Names */}
                         <div className="flex items-center gap-2.5 max-w-[325px]">
                             {/* Circular Corporate Logo Badge */}
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-orange-600 via-amber-500 to-orange-500 border-2 border-white shadow-md flex items-center justify-center shrink-0 p-0.5">
-                                <div className="w-full h-full rounded-full border border-white/80 flex flex-col items-center justify-center bg-orange-600 relative overflow-hidden">
-                                    <svg viewBox="0 0 100 100" className="w-full h-full">
-                                        <circle cx="50" cy="50" r="48" fill="#E65100" />
-                                        <circle cx="50" cy="50" r="38" fill="none" stroke="#FFFFFF" strokeWidth="2" strokeDasharray="4 2" />
-                                        <defs>
-                                            <path id={badgePathId} d="M 50,50 m -30,0 a 30,30 0 1,1 60,0 a 30,30 0 1,1 -60,0" fill="none" />
-                                        </defs>
-                                        <text fill="#FFFFFF" fontSize="7.5" fontWeight="900" letterSpacing="0.5">
-                                            <textPath href={`#${badgePathId}`} startOffset="50%" textAnchor="middle">
-                                                {cardData.orgName.slice(0, 24)}
-                                            </textPath>
-                                        </text>
-                                        <text x="50" y="55" fill="#FFFFFF" fontSize="16" fontWeight="900" textAnchor="middle" dominantBaseline="middle" fontFamily="sans-serif">
-                                            {cardData.orgInitials}
-                                        </text>
-                                    </svg>
-                                </div>
+                            <div className="w-10 h-10 rounded-full bg-white border-2 border-white/95 shadow-md flex items-center justify-center shrink-0 p-1 overflow-hidden">
+                                {cardData.logoUrl ? (
+                                    <img
+                                        src={cardData.logoUrl}
+                                        alt={cardData.orgName}
+                                        className="w-full h-full object-contain"
+                                    />
+                                ) : (
+                                    <div className="w-full h-full rounded-full bg-[#124479] flex items-center justify-center text-white font-black text-xs">
+                                        {cardData.orgInitials}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Organization & Unit Titles */}
@@ -399,7 +398,7 @@ export function EmployeeIdCardModal({
                                 <span className="text-[10px] font-black tracking-wider text-white uppercase truncate">
                                     {cardData.orgName}
                                 </span>
-                                <span className="text-[13px] font-black tracking-wide text-[#FF7043] uppercase truncate">
+                                <span className="text-[13px] font-black tracking-wide text-[#FF4D52] uppercase truncate">
                                     {cardData.unitName}
                                 </span>
                             </div>
@@ -410,14 +409,14 @@ export function EmployeeIdCardModal({
                             <svg viewBox="0 0 46 32" className="w-11 h-8 drop-shadow">
                                 <path
                                     d="M23,2 L40,7 C40,18 31,27 23,30 C15,27 6,18 6,7 Z"
-                                    fill="#FFA726"
+                                    fill="#124479"
                                     stroke="#FFFFFF"
                                     strokeWidth="1.8"
                                 />
                                 <path
                                     d="M23,6 L35,10 C35,17 28,24 23,26 C18,24 11,17 11,10 Z"
-                                    fill="#E65100"
-                                    opacity="0.4"
+                                    fill="#E61F26"
+                                    opacity="0.85"
                                 />
                                 <path
                                     d="M17,15 L21,19 L29,11"
@@ -438,7 +437,7 @@ export function EmployeeIdCardModal({
                     <div className="flex flex-col items-center shrink-0">
                         {/* Oval Photo Frame */}
                         <div className="relative group">
-                            <div className="w-[115px] h-[142px] rounded-[48px] border-2 border-[#FED7AA] overflow-hidden bg-slate-100 shadow-sm flex items-center justify-center">
+                            <div className="w-[115px] h-[142px] rounded-[48px] border-2 border-[#93C5FD] overflow-hidden bg-slate-100 shadow-sm flex items-center justify-center">
                                 {localPhoto ? (
                                     <img
                                         src={localPhoto}
@@ -460,7 +459,7 @@ export function EmployeeIdCardModal({
                                     type="button"
                                     onClick={() => fileInputRef.current?.click()}
                                     title="Upload / Change Photo"
-                                    className="absolute bottom-0 right-0 h-6 w-6 rounded-full bg-[#EA580C] hover:bg-[#C2410C] text-white flex items-center justify-center shadow-md border-2 border-white transition-transform hover:scale-110 cursor-pointer"
+                                    className="absolute bottom-0 right-0 h-6 w-6 rounded-full bg-[#124479] hover:bg-[#0E335C] text-white flex items-center justify-center shadow-md border-2 border-white transition-transform hover:scale-110 cursor-pointer"
                                 >
                                     {uploadingPhoto ? (
                                         <Loader2 className="h-3 w-3 animate-spin" />
@@ -472,7 +471,7 @@ export function EmployeeIdCardModal({
                         </div>
 
                         {/* Status Label below photo */}
-                        <span className="text-[10px] font-black text-[#EA580C] uppercase tracking-wider text-center mt-1.5 leading-none">
+                        <span className="text-[10px] font-black text-[#124479] uppercase tracking-wider text-center mt-1.5 leading-none">
                             STATUS: {cardData.status}
                         </span>
                     </div>
@@ -484,8 +483,8 @@ export function EmployeeIdCardModal({
                             {cardData.name}
                         </h2>
 
-                        {/* Designation / Role in Orange */}
-                        <div className="text-[11.5px] font-black text-[#EA580C] uppercase tracking-wider leading-none pb-1 truncate">
+                        {/* Designation / Role in Crimson Red */}
+                        <div className="text-[11.5px] font-black text-[#E61F26] uppercase tracking-wider leading-none pb-1 truncate">
                             {cardData.designation}
                         </div>
 
@@ -524,7 +523,7 @@ export function EmployeeIdCardModal({
                             {/* Contact Row: Phone & Blood Group */}
                             <div className="flex items-center justify-between pt-1">
                                 <div className="flex items-center gap-1.5 text-slate-900 font-black text-[10.5px]">
-                                    <Phone className="h-3.5 w-3.5 text-[#EA580C] shrink-0" />
+                                    <Phone className="h-3.5 w-3.5 text-[#124479] shrink-0" />
                                     <span>{cardData.phone}</span>
                                 </div>
                                 <div className="flex items-center gap-1 text-slate-900 font-black text-[10.5px]">
@@ -553,7 +552,7 @@ export function EmployeeIdCardModal({
                         <span className="text-[8.5px] font-black text-slate-400 uppercase tracking-widest leading-none">
                             BRANCH / LOCATION
                         </span>
-                        <span className="text-[12px] font-black text-[#EA580C] uppercase tracking-wider mt-0.5 leading-tight">
+                        <span className="text-[12px] font-black text-[#124479] uppercase tracking-wider mt-0.5 leading-tight">
                             {cardData.stateUnit}
                         </span>
                     </div>
@@ -575,7 +574,7 @@ export function EmployeeIdCardModal({
             >
                 {/* Center Faint Corporate Watermark Logo */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.04] overflow-hidden">
-                    <svg viewBox="0 0 200 200" className="w-48 h-48 text-[#E65100]">
+                    <svg viewBox="0 0 200 200" className="w-48 h-48 text-[#124479]">
                         <circle cx="100" cy="100" r="88" fill="none" stroke="currentColor" strokeWidth="3" />
                         <circle cx="100" cy="100" r="74" fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 2" />
                         <circle cx="100" cy="100" r="52" fill="none" stroke="currentColor" strokeWidth="1.5" />
@@ -593,7 +592,7 @@ export function EmployeeIdCardModal({
                     </svg>
                 </div>
 
-                {/* ── MAIN CONTENT (Instructions + Orange QR Code) ── */}
+                {/* ── MAIN CONTENT (Instructions + Brand QR Code) ── */}
                 <div className="p-6 pb-2 grow flex items-start justify-between gap-4 z-10">
                     {/* Left: General Corporate Instructions */}
                     <div className="flex flex-col space-y-2 max-w-[310px]">
@@ -602,27 +601,27 @@ export function EmployeeIdCardModal({
                         </h3>
                         <ul className="space-y-1.5 text-[9.5px] font-black text-slate-800 uppercase leading-snug">
                             <li className="flex items-start gap-2">
-                                <span className="text-[#EA580C] text-[11px] leading-none shrink-0 mt-0.5">▪</span>
+                                <span className="text-[#E61F26] text-[11px] leading-none shrink-0 mt-0.5">▪</span>
                                 <span>THIS IDENTITY CARD IS STRICTLY NON-TRANSFERABLE.</span>
                             </li>
                             <li className="flex items-start gap-2">
-                                <span className="text-[#EA580C] text-[11px] leading-none shrink-0 mt-0.5">▪</span>
+                                <span className="text-[#E61F26] text-[11px] leading-none shrink-0 mt-0.5">▪</span>
                                 <span>VALID ONLY WITH AUTHORIZED SIGNATURE.</span>
                             </li>
                             <li className="flex items-start gap-2">
-                                <span className="text-[#EA580C] text-[11px] leading-none shrink-0 mt-0.5">▪</span>
+                                <span className="text-[#E61F26] text-[11px] leading-none shrink-0 mt-0.5">▪</span>
                                 <span>IF FOUND OR LOST, REPORT IMMEDIATELY TO HR DEPARTMENT.</span>
                             </li>
                             <li className="flex items-start gap-2">
-                                <span className="text-[#EA580C] text-[11px] leading-none shrink-0 mt-0.5">▪</span>
+                                <span className="text-[#E61F26] text-[11px] leading-none shrink-0 mt-0.5">▪</span>
                                 <span>ONLINE VERIFICATION AVAILABLE AT {cardData.website.replace(/^HTTPS?:\/\//i, "").replace(/^WWW\./i, "").toLowerCase()}.</span>
                             </li>
                         </ul>
                     </div>
 
-                    {/* Right: Orange QR Code */}
+                    {/* Right: Brand QR Code */}
                     <div className="flex flex-col items-center shrink-0 pt-1">
-                        {renderOrangeQRCode()}
+                        {renderBrandQRCode()}
                         <span className="text-[7.5px] font-black uppercase tracking-widest text-slate-500 text-center mt-1 leading-tight">
                             SCAN TO VERIFY<br />AUTHENTICITY
                         </span>
@@ -634,7 +633,7 @@ export function EmployeeIdCardModal({
                     {/* Left: Authorized Signatory */}
                     <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-xl border border-slate-200 bg-white flex items-center justify-center text-slate-400 shadow-sm shrink-0">
-                            <ShieldCheck className="h-5 w-5 text-slate-400 stroke-[1.5]" />
+                            <ShieldCheck className="h-5 w-5 text-[#124479] stroke-[1.5]" />
                         </div>
                         <div className="flex flex-col items-center">
                             {/* Digital Signature Image if present */}
@@ -664,10 +663,10 @@ export function EmployeeIdCardModal({
                         <span className="text-[11px] font-black text-slate-900 uppercase tracking-tight">
                             {cardData.orgName} • {cardData.stateUnit}
                         </span>
-                        <span className="text-[8.5px] font-black text-[#EA580C] uppercase tracking-wider mt-0.5">
+                        <span className="text-[8.5px] font-black text-[#E61F26] uppercase tracking-wider mt-0.5">
                             {cardData.tagline}
                         </span>
-                        <span className="text-[8px] font-bold text-slate-500 underline uppercase mt-0.5">
+                        <span className="text-[8px] font-bold text-[#124479] underline uppercase mt-0.5">
                             {cardData.website}
                         </span>
                     </div>
@@ -686,7 +685,7 @@ export function EmployeeIdCardModal({
                 <div className="shrink-0 p-4 sm:p-5 pb-3.5 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950/80">
                     <div>
                         <DialogTitle className="text-sm sm:text-base font-black uppercase tracking-wider text-white flex items-center gap-2">
-                            <Sparkles className="h-4 w-4 text-[#EA580C]" />
+                            <Sparkles className="h-4 w-4 text-[#E61F26]" />
                             Official Identity Badge Production Studio
                         </DialogTitle>
                         <DialogDescription className="text-xs text-slate-400 mt-0.5">
@@ -702,7 +701,7 @@ export function EmployeeIdCardModal({
                                 onClick={() => setViewMode("both")}
                                 className={cn(
                                     "px-2.5 sm:px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer",
-                                    viewMode === "both" ? "bg-[#EA580C] text-white shadow-md" : "text-slate-400 hover:text-white"
+                                    viewMode === "both" ? "bg-[#124479] text-white shadow-md" : "text-slate-400 hover:text-white"
                                 )}
                             >
                                 Both Sides
@@ -712,7 +711,7 @@ export function EmployeeIdCardModal({
                                 onClick={() => setViewMode("front")}
                                 className={cn(
                                     "px-2.5 sm:px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer",
-                                    viewMode === "front" ? "bg-[#EA580C] text-white shadow-md" : "text-slate-400 hover:text-white"
+                                    viewMode === "front" ? "bg-[#124479] text-white shadow-md" : "text-slate-400 hover:text-white"
                                 )}
                             >
                                 Front
@@ -722,7 +721,7 @@ export function EmployeeIdCardModal({
                                 onClick={() => setViewMode("back")}
                                 className={cn(
                                     "px-2.5 sm:px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer",
-                                    viewMode === "back" ? "bg-[#EA580C] text-white shadow-md" : "text-slate-400 hover:text-white"
+                                    viewMode === "back" ? "bg-[#124479] text-white shadow-md" : "text-slate-400 hover:text-white"
                                 )}
                             >
                                 Back
@@ -768,7 +767,7 @@ export function EmployeeIdCardModal({
                                 onClick={() => setPrintLayout("foldable")}
                                 className={cn(
                                     "px-2 py-0.5 rounded cursor-pointer transition-colors",
-                                    printLayout === "foldable" ? "bg-[#EA580C] text-white" : "hover:text-white"
+                                    printLayout === "foldable" ? "bg-[#124479] text-white" : "hover:text-white"
                                 )}
                             >
                                 Foldable A4
@@ -778,7 +777,7 @@ export function EmployeeIdCardModal({
                                 onClick={() => setPrintLayout("sideBySide")}
                                 className={cn(
                                     "px-2 py-0.5 rounded cursor-pointer transition-colors",
-                                    printLayout === "sideBySide" ? "bg-[#EA580C] text-white" : "hover:text-white"
+                                    printLayout === "sideBySide" ? "bg-[#124479] text-white" : "hover:text-white"
                                 )}
                             >
                                 Side-by-Side
@@ -794,7 +793,7 @@ export function EmployeeIdCardModal({
                                 title="Standard 85.6mm × 54.0mm wallet/lanyard badge"
                                 className={cn(
                                     "px-2 py-0.5 rounded cursor-pointer transition-colors",
-                                    printScale === "cr80" ? "bg-emerald-600 text-white" : "hover:text-white"
+                                    printScale === "cr80" ? "bg-[#124479] text-white" : "hover:text-white"
                                 )}
                             >
                                 CR80 Standard (85.6×54mm)
@@ -805,7 +804,7 @@ export function EmployeeIdCardModal({
                                 title="Large Display Badge (120mm × 76mm)"
                                 className={cn(
                                     "px-2 py-0.5 rounded cursor-pointer transition-colors",
-                                    printScale === "large" ? "bg-emerald-600 text-white" : "hover:text-white"
+                                    printScale === "large" ? "bg-[#124479] text-white" : "hover:text-white"
                                 )}
                             >
                                 Large (120×76mm)
@@ -847,7 +846,7 @@ export function EmployeeIdCardModal({
                             {uploadingPhoto ? (
                                 <Loader2 className="h-3 w-3 animate-spin mr-1" />
                             ) : (
-                                <Upload className="h-3 w-3 text-[#EA580C]" />
+                                <Upload className="h-3 w-3 text-[#124479]" />
                             )}
                             {localPhoto ? "Change Photo" : "Upload Photo"}
                         </Button>
@@ -975,7 +974,7 @@ export function EmployeeIdCardModal({
                             {/* ── AUTHORIZED SIGNATORY CONTROLS ── */}
                             <div className="col-span-2 sm:col-span-3 md:col-span-4 border-t border-slate-800 pt-2.5 mt-1">
                                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                                    <span className="text-[10px] font-black uppercase text-[#EA580C] tracking-wider flex items-center gap-1.5">
+                                    <span className="text-[10px] font-black uppercase text-[#124479] tracking-wider flex items-center gap-1.5">
                                         <ShieldCheck className="h-3.5 w-3.5" />
                                         Authorized Signatory & Signature (Back Side)
                                     </span>
@@ -994,7 +993,7 @@ export function EmployeeIdCardModal({
                                             onClick={() => sigFileInputRef.current?.click()}
                                             className="h-7 px-2.5 text-[9px] font-black uppercase tracking-wider rounded-lg border-slate-700 bg-slate-800/90 hover:bg-slate-800 text-slate-200 cursor-pointer"
                                         >
-                                            <Upload className="h-3 w-3 mr-1 text-[#EA580C]" />
+                                            <Upload className="h-3 w-3 mr-1 text-[#124479]" />
                                             {cardData.signatureUrl ? "Change Signature Image" : "Upload Signature Image"}
                                         </Button>
                                         {cardData.signatureUrl && (
@@ -1039,7 +1038,7 @@ export function EmployeeIdCardModal({
                                                     }
                                                 }
                                             }}
-                                            className="h-8 w-full text-xs bg-slate-900 border border-slate-700 rounded-md px-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
+                                            className="h-8 w-full text-xs bg-slate-900 border border-slate-700 rounded-md px-2 text-white focus:outline-none focus:ring-1 focus:ring-blue-600"
                                         >
                                             <option value="">None (Blank Physical Signature Line)</option>
                                             {signatoriesList.map((sig) => (
@@ -1180,7 +1179,7 @@ export function EmployeeIdCardModal({
                             {generatingPdf ? (
                                 <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
                             ) : (
-                                <Download className="h-3.5 w-3.5 text-amber-400" />
+                                <Download className="h-3.5 w-3.5 text-blue-400" />
                             )}
                             Download PDF (Ultra HD)
                         </Button>
@@ -1188,7 +1187,7 @@ export function EmployeeIdCardModal({
                         <Button
                             type="button"
                             onClick={() => window.print()}
-                            className="h-9 sm:h-10 px-5 sm:px-6 rounded-xl font-black text-xs uppercase tracking-wider bg-[#EA580C] hover:bg-[#C2410C] text-white shadow-lg shadow-orange-600/30 flex items-center gap-2 cursor-pointer"
+                            className="h-9 sm:h-10 px-5 sm:px-6 rounded-xl font-black text-xs uppercase tracking-wider bg-[#124479] hover:bg-[#0E335C] text-white shadow-lg shadow-blue-900/30 flex items-center gap-2 cursor-pointer"
                         >
                             <Printer className="h-4 w-4 stroke-[2.5]" />
                             Print Card

@@ -42,13 +42,13 @@ function drawAspectFillImage(
 }
 
 function drawStylizedQr(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
-    ctx.fillStyle = "#EA580C";
+    ctx.fillStyle = "#124479";
     const cell = size / 21;
     const drawFinder = (fx: number, fy: number) => {
         ctx.fillRect(x + fx * cell, y + fy * cell, 7 * cell, 7 * cell);
         ctx.fillStyle = "#FFFFFF";
         ctx.fillRect(x + (fx + 1) * cell, y + (fy + 1) * cell, 5 * cell, 5 * cell);
-        ctx.fillStyle = "#EA580C";
+        ctx.fillStyle = "#124479";
         ctx.fillRect(x + (fx + 2) * cell, y + (fy + 2) * cell, 3 * cell, 3 * cell);
     };
 
@@ -64,7 +64,7 @@ function drawStylizedQr(ctx: CanvasRenderingContext2D, x: number, y: number, siz
     ctx.fillRect(x + 14 * cell, y + 14 * cell, 3 * cell, 3 * cell);
     ctx.fillStyle = "#FFFFFF";
     ctx.fillRect(x + 15 * cell, y + 15 * cell, cell, cell);
-    ctx.fillStyle = "#EA580C";
+    ctx.fillStyle = "#124479";
 
     const dots = [
         [8, 2], [9, 3], [11, 4], [8, 8], [9, 10], [12, 9], [10, 12],
@@ -122,11 +122,13 @@ function drawCropMarks(ctx: CanvasRenderingContext2D, x: number, y: number, w: n
 /**
  * Draw Front Card scaled proportionally to any canvas dimensions.
  * Base reference width is 480px, height is 305px.
+ * Themed with Apaar Logistics brand colors: Navy Blue (#124479) & Crimson Red (#E61F26).
  */
 export function drawFrontCard(
     ctx: CanvasRenderingContext2D,
     card: IdCardData,
     photoImg: HTMLImageElement | null,
+    logoImg: HTMLImageElement | null,
     x: number,
     y: number,
     w: number,
@@ -137,7 +139,7 @@ export function drawFrontCard(
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
 
-    // Rounded Card Boundary (CR80 standard 3.18mm corner radius ≈ 26px * s)
+    // Rounded Card Boundary (CR80 standard corner radius ≈ 26px * s)
     const cardRadius = 26 * s;
     ctx.beginPath();
     ctx.roundRect(x, y, w, h, cardRadius);
@@ -148,16 +150,28 @@ export function drawFrontCard(
     ctx.stroke();
     ctx.clip();
 
-    // ── TOP HEADER (Diagonal Split Black & Vibrant Orange) ──
+    // ── TOP HEADER (Brand Navy Blue & Crimson Red Diagonal Split) ──
     const headerH = 54 * s;
-    // Right Orange section
-    ctx.fillStyle = "#E65100";
+    // Right Navy Blue section (#124479)
+    ctx.fillStyle = "#124479";
     ctx.fillRect(x, y, w, headerH);
 
-    // Deep Black Slanted Left Section
-    const slantTop = 350 * s;
-    const slantBottom = 332 * s;
-    ctx.fillStyle = "#0A0A0A";
+    // Diagonal Crimson Red Accent Stripe (#E61F26)
+    const slantRedTop = 354 * s;
+    const slantRedBottom = 336 * s;
+    ctx.fillStyle = "#E61F26";
+    ctx.beginPath();
+    ctx.moveTo(x + slantRedTop - 14 * s, y);
+    ctx.lineTo(x + slantRedTop, y);
+    ctx.lineTo(x + slantRedBottom, y + headerH);
+    ctx.lineTo(x + slantRedBottom - 14 * s, y + headerH);
+    ctx.closePath();
+    ctx.fill();
+
+    // Left Midnight Navy / Black Slanted Section (#0A1128)
+    const slantTop = 346 * s;
+    const slantBottom = 328 * s;
+    ctx.fillStyle = "#0A1128";
     ctx.beginPath();
     ctx.moveTo(x, y);
     ctx.lineTo(x + slantTop, y);
@@ -166,35 +180,48 @@ export function drawFrontCard(
     ctx.closePath();
     ctx.fill();
 
-    // Logo Circle Emblem
+    // Logo Circle Emblem (White circular container with real company logo)
     const emblemCx = x + 28 * s;
     const emblemCy = y + headerH / 2;
     const emblemR = 19 * s;
 
+    ctx.save();
     ctx.beginPath();
     ctx.arc(emblemCx, emblemCy, emblemR, 0, Math.PI * 2);
-    ctx.fillStyle = "#E65100";
+    ctx.fillStyle = "#FFFFFF";
     ctx.fill();
     ctx.lineWidth = Math.max(1.5, 2 * s);
     ctx.strokeStyle = "#FFFFFF";
     ctx.stroke();
+    ctx.clip();
 
-    // Dashed inner ring
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(emblemCx, emblemCy, emblemR - 4 * s, 0, Math.PI * 2);
-    ctx.setLineDash([3 * s, 2 * s]);
-    ctx.lineWidth = Math.max(1, 1.2 * s);
-    ctx.strokeStyle = "rgba(255,255,255,0.85)";
-    ctx.stroke();
+    if (logoImg) {
+        const logoPadding = 4 * s;
+        const logoSize = (emblemR - logoPadding) * 2;
+        ctx.drawImage(
+            logoImg,
+            emblemCx - logoSize / 2,
+            emblemCy - logoSize / 2,
+            logoSize,
+            logoSize
+        );
+    } else {
+        ctx.fillStyle = "#124479";
+        ctx.fillRect(emblemCx - emblemR, emblemCy - emblemR, emblemR * 2, emblemR * 2);
+        ctx.fillStyle = "#FFFFFF";
+        ctx.font = `bold ${Math.round(13 * s)}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(card.orgInitials, emblemCx, emblemCy);
+    }
     ctx.restore();
 
-    // Logo Initials
-    ctx.fillStyle = "#FFFFFF";
-    ctx.font = `bold ${Math.round(13 * s)}px sans-serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(card.orgInitials, emblemCx, emblemCy);
+    // Outer ring for emblem
+    ctx.beginPath();
+    ctx.arc(emblemCx, emblemCy, emblemR, 0, Math.PI * 2);
+    ctx.lineWidth = Math.max(1.2, 1.8 * s);
+    ctx.strokeStyle = "rgba(255,255,255,0.9)";
+    ctx.stroke();
 
     // Titles
     ctx.textAlign = "left";
@@ -204,10 +231,10 @@ export function drawFrontCard(
     ctx.fillText(card.orgName.toUpperCase().slice(0, 34), x + 54 * s, y + headerH * 0.44);
 
     ctx.font = `900 ${Math.round(13.5 * s)}px sans-serif`;
-    ctx.fillStyle = "#FF7043";
+    ctx.fillStyle = "#FF4D52";
     ctx.fillText(card.unitName.toUpperCase().slice(0, 34), x + 54 * s, y + headerH * 0.82);
 
-    // Right Security Shield Icon
+    // Right Corporate Security Shield Icon (#124479 with #E61F26 inner)
     const shieldX = x + w - 34 * s;
     const shieldY = y + headerH / 2;
     ctx.save();
@@ -217,11 +244,20 @@ export function drawFrontCard(
     ctx.quadraticCurveTo(shieldX + 14 * s, shieldY + 8 * s, shieldX, shieldY + 14 * s);
     ctx.quadraticCurveTo(shieldX - 14 * s, shieldY + 8 * s, shieldX - 14 * s, shieldY - 7 * s);
     ctx.closePath();
-    ctx.fillStyle = "#FFA726";
+    ctx.fillStyle = "#124479";
     ctx.fill();
     ctx.strokeStyle = "#FFFFFF";
     ctx.lineWidth = Math.max(1, 1.8 * s);
     ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(shieldX, shieldY - 8 * s);
+    ctx.lineTo(shieldX + 9 * s, shieldY - 4 * s);
+    ctx.quadraticCurveTo(shieldX + 9 * s, shieldY + 6 * s, shieldX, shieldY + 10 * s);
+    ctx.quadraticCurveTo(shieldX - 9 * s, shieldY + 6 * s, shieldX - 9 * s, shieldY - 4 * s);
+    ctx.closePath();
+    ctx.fillStyle = "#E61F26";
+    ctx.fill();
 
     // White checkmark inside shield
     ctx.beginPath();
@@ -263,16 +299,16 @@ export function drawFrontCard(
     }
     ctx.restore();
 
-    // Photo Border
+    // Photo Border (Navy/Ice Blue #93C5FD)
     ctx.beginPath();
     ctx.roundRect(photoX, photoY, photoW, photoH, photoR);
     ctx.lineWidth = Math.max(1.5, 2.5 * s);
-    ctx.strokeStyle = "#FED7AA";
+    ctx.strokeStyle = "#93C5FD";
     ctx.stroke();
 
-    // Status Label below photo
+    // Status Label below photo (#124479)
     ctx.font = `900 ${Math.round(10 * s)}px sans-serif`;
-    ctx.fillStyle = "#EA580C";
+    ctx.fillStyle = "#124479";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("STATUS: " + card.status.toUpperCase(), photoX + photoW / 2, photoY + photoH + 14 * s);
@@ -288,10 +324,10 @@ export function drawFrontCard(
     ctx.fillStyle = "#0F172A";
     ctx.fillText(card.name.toUpperCase().slice(0, 28), colX, curY);
 
-    // Designation
+    // Designation in Crimson Red (#E61F26)
     curY += 17 * s;
     ctx.font = `900 ${Math.round(11.5 * s)}px sans-serif`;
-    ctx.fillStyle = "#EA580C";
+    ctx.fillStyle = "#E61F26";
     ctx.fillText(card.designation.toUpperCase().slice(0, 32), colX, curY);
 
     // Data Fields Table
@@ -330,7 +366,7 @@ export function drawFrontCard(
     // Phone & Blood Group
     curY += 21 * s;
     ctx.font = `900 ${Math.round(10.5 * s)}px sans-serif`;
-    ctx.fillStyle = "#EA580C";
+    ctx.fillStyle = "#124479";
     ctx.fillText("📞", colX, curY);
     ctx.fillStyle = "#0F172A";
     ctx.fillText(card.phone, colX + 16 * s, curY);
@@ -362,13 +398,13 @@ export function drawFrontCard(
     ctx.fillStyle = "#0F172A";
     ctx.fillText(card.memberId, x + 18 * s, footerY + 33 * s);
 
-    // BRANCH / LOCATION
+    // BRANCH / LOCATION (#124479)
     ctx.textAlign = "right";
     ctx.font = `900 ${Math.round(8.5 * s)}px sans-serif`;
     ctx.fillStyle = "#94A3B8";
     ctx.fillText("BRANCH / LOCATION", x + w - 18 * s, footerY + 16 * s);
     ctx.font = `900 ${Math.round(12 * s)}px sans-serif`;
-    ctx.fillStyle = "#EA580C";
+    ctx.fillStyle = "#124479";
     ctx.fillText(card.stateUnit.toUpperCase(), x + w - 18 * s, footerY + 33 * s);
 
     ctx.restore();
@@ -377,6 +413,7 @@ export function drawFrontCard(
 /**
  * Draw Back Card scaled proportionally to any canvas dimensions.
  * Base reference width is 480px, height is 305px.
+ * Themed with Apaar Logistics brand colors.
  */
 export function drawBackCard(
     ctx: CanvasRenderingContext2D,
@@ -404,13 +441,13 @@ export function drawBackCard(
     ctx.stroke();
     ctx.clip();
 
-    // Center Watermark Logo
+    // Center Watermark Logo (#124479 at low opacity)
     const wmCx = x + w / 2;
     const wmCy = y + h / 2 - 10 * s;
     ctx.save();
     ctx.globalAlpha = 0.04;
-    ctx.strokeStyle = "#E65100";
-    ctx.fillStyle = "#E65100";
+    ctx.strokeStyle = "#124479";
+    ctx.fillStyle = "#124479";
     ctx.lineWidth = Math.max(1.5, 3 * s);
     ctx.beginPath();
     ctx.arc(wmCx, wmCy, 75 * s, 0, Math.PI * 2);
@@ -435,12 +472,12 @@ export function drawBackCard(
     ctx.fillStyle = "#0F172A";
     ctx.fillText("GENERAL INSTRUCTIONS", instrX, curY);
 
-    // Underline
+    // Underline (#124479)
     ctx.beginPath();
     ctx.moveTo(instrX, curY + 6 * s);
     ctx.lineTo(instrX + 270 * s, curY + 6 * s);
-    ctx.strokeStyle = "#E2E8F0";
-    ctx.lineWidth = Math.max(1, 1 * s);
+    ctx.strokeStyle = "#124479";
+    ctx.lineWidth = Math.max(1, 1.2 * s);
     ctx.stroke();
 
     const instructions = [
@@ -453,7 +490,8 @@ export function drawBackCard(
     curY += 22 * s;
     ctx.font = `900 ${Math.round(9.5 * s)}px sans-serif`;
     for (const item of instructions) {
-        ctx.fillStyle = "#EA580C";
+        // Crimson Red bullet square (#E61F26)
+        ctx.fillStyle = "#E61F26";
         ctx.fillRect(instrX, curY - 7 * s, 5 * s, 5 * s);
 
         ctx.fillStyle = "#1E293B";
@@ -472,7 +510,7 @@ export function drawBackCard(
     ctx.roundRect(qrX, qrY, qrBoxW, qrBoxH, 12 * s);
     ctx.fillStyle = "#FFFFFF";
     ctx.fill();
-    ctx.strokeStyle = "#FED7AA";
+    ctx.strokeStyle = "#BFDBFE";
     ctx.lineWidth = Math.max(1, 1.5 * s);
     ctx.stroke();
     ctx.clip();
@@ -504,7 +542,7 @@ export function drawBackCard(
     ctx.lineWidth = Math.max(1, 1 * s);
     ctx.stroke();
 
-    // Shield Icon
+    // Shield Icon (#124479)
     const sigShieldX = x + 24 * s;
     const sigShieldY = footerY + footerH / 2;
     ctx.save();
@@ -518,7 +556,7 @@ export function drawBackCard(
 
     ctx.beginPath();
     ctx.arc(sigShieldX + 15 * s, sigShieldY, 8 * s, 0, Math.PI * 2);
-    ctx.strokeStyle = "#94A3B8";
+    ctx.strokeStyle = "#124479";
     ctx.lineWidth = Math.max(1, 1.5 * s);
     ctx.stroke();
     ctx.restore();
@@ -553,18 +591,18 @@ export function drawBackCard(
         ctx.fillText((card.signatoryName + titleStr).slice(0, 32), sigLineX + sigLineW / 2, sigLineY + 18 * s);
     }
 
-    // Right Company Titles
+    // Right Company Titles (#E61F26 Tagline & #124479 Website)
     ctx.textAlign = "right";
     ctx.font = `900 ${Math.round(11 * s)}px sans-serif`;
     ctx.fillStyle = "#0F172A";
     ctx.fillText(`${card.orgName} • ${card.stateUnit}`, x + w - 24 * s, footerY + 18 * s);
 
     ctx.font = `900 ${Math.round(8.5 * s)}px sans-serif`;
-    ctx.fillStyle = "#EA580C";
+    ctx.fillStyle = "#E61F26";
     ctx.fillText(card.tagline, x + w - 24 * s, footerY + 32 * s);
 
     ctx.font = `bold ${Math.round(8 * s)}px sans-serif`;
-    ctx.fillStyle = "#64748B";
+    ctx.fillStyle = "#124479";
     ctx.fillText(card.website, x + w - 24 * s, footerY + 46 * s);
 
     ctx.restore();
@@ -572,6 +610,7 @@ export function drawBackCard(
 
 /**
  * Generate Ultra High-Definition ID Card PDF (712 DPI CR80 Badges + 300 DPI A4 Print Sheet)
+ * Styled according to Apaar brand colors: Navy Blue (#124479) & Crimson Red (#E61F26).
  */
 export async function downloadIdCardPdf({
     cardData,
@@ -588,12 +627,14 @@ export async function downloadIdCardPdf({
 
     // Preload all assets in parallel at highest resolution
     const qrPayload = `COMPANY:${cardData.orgName}|EMP_ID:${cardData.memberId}|NAME:${cardData.name}|DESIG:${cardData.designation}|BRANCH:${cardData.stateUnit}|STATUS:${cardData.status}`;
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=600x600&color=ea580c&bgcolor=ffffff&data=${encodeURIComponent(qrPayload)}`;
+    // Navy Blue QR Code (#124479)
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=600x600&color=124479&bgcolor=ffffff&data=${encodeURIComponent(qrPayload)}`;
 
-    const [photoImg, sigImg, qrImg] = await Promise.all([
+    const [photoImg, sigImg, qrImg, logoImg] = await Promise.all([
         loadImage(photoUrl),
         loadImage(cardData.signatureUrl),
         loadImage(qrUrl).catch(() => null),
+        loadImage(cardData.logoUrl || "/company_logopng.png").catch(() => null),
     ]);
 
     // ── 1. RENDER ULTRA HD FRONT CARD CANVAS (2400 x 1525 px @ 712 DPI) ──
@@ -605,7 +646,7 @@ export async function downloadIdCardPdf({
     frontCanvas.height = cardCanvasH;
     const frontCtx = frontCanvas.getContext("2d");
     if (!frontCtx) throw new Error("Could not initialize Front Canvas");
-    drawFrontCard(frontCtx, cardData, photoImg, 0, 0, cardCanvasW, cardCanvasH);
+    drawFrontCard(frontCtx, cardData, photoImg, logoImg, 0, 0, cardCanvasW, cardCanvasH);
 
     // ── 2. RENDER ULTRA HD BACK CARD CANVAS (2400 x 1525 px @ 712 DPI) ──
     const backCanvas = document.createElement("canvas");
@@ -632,13 +673,13 @@ export async function downloadIdCardPdf({
 
     a4Ctx.textAlign = "center";
     a4Ctx.font = "900 22px sans-serif";
-    a4Ctx.fillStyle = "#475569";
+    a4Ctx.fillStyle = "#124479";
     a4Ctx.fillText(`${cardData.orgName.toUpperCase()} — OFFICIAL IDENTITY BADGE`, a4Canvas.width / 2, 110);
 
     if (printLayout === "foldable") {
         const frontX = Math.round((a4Canvas.width - sheetCardW) / 2);
         const frontY = 170;
-        drawFrontCard(a4Ctx, cardData, photoImg, frontX, frontY, sheetCardW, sheetCardH);
+        drawFrontCard(a4Ctx, cardData, photoImg, logoImg, frontX, frontY, sheetCardW, sheetCardH);
         drawCropMarks(a4Ctx, frontX, frontY, sheetCardW, sheetCardH, sA4);
 
         // Center Fold Guide
@@ -681,7 +722,7 @@ export async function downloadIdCardPdf({
 
         const frontX = startX;
         const frontY = startY;
-        drawFrontCard(a4Ctx, cardData, photoImg, frontX, frontY, sheetCardW, sheetCardH);
+        drawFrontCard(a4Ctx, cardData, photoImg, logoImg, frontX, frontY, sheetCardW, sheetCardH);
         drawCropMarks(a4Ctx, frontX, frontY, sheetCardW, sheetCardH, sA4);
 
         const backX = frontX + sheetCardW + gap;
@@ -702,7 +743,6 @@ export async function downloadIdCardPdf({
     }
 
     // ── 4. COMPOSE MULTI-PAGE ULTRA-HD PDF VIA jsPDF ──
-    // Page 1: Front Card (CR80 85.6 x 54.0 mm, 712 DPI, Zero Lossy Compression)
     const pdf = new jsPDF({
         orientation: "landscape",
         unit: "mm",
@@ -713,12 +753,10 @@ export async function downloadIdCardPdf({
     const frontDataUrl = frontCanvas.toDataURL("image/png");
     pdf.addImage(frontDataUrl, "PNG", 0, 0, 85.6, 54.0, undefined, "NONE");
 
-    // Page 2: Back Card (CR80 85.6 x 54.0 mm, 712 DPI)
     const backDataUrl = backCanvas.toDataURL("image/png");
     pdf.addPage([85.6, 54.0], "landscape");
     pdf.addImage(backDataUrl, "PNG", 0, 0, 85.6, 54.0, undefined, "NONE");
 
-    // Page 3: Full A4 Print Sheet (210 x 297 mm, 300 DPI)
     const a4DataUrl = a4Canvas.toDataURL("image/png");
     pdf.addPage("a4", "portrait");
     pdf.addImage(a4DataUrl, "PNG", 0, 0, 210, 297, undefined, "NONE");
