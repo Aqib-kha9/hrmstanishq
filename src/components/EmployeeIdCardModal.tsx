@@ -29,6 +29,27 @@ import {
     FileCheck2,
 } from "lucide-react";
 
+export interface IdCardData {
+    orgName: string;
+    orgInitials: string;
+    unitName: string;
+    name: string;
+    designation: string;
+    fatherName: string;
+    dob: string;
+    address: string;
+    phone: string;
+    bloodGroup: string;
+    status: string;
+    memberId: string;
+    stateUnit: string;
+    tagline: string;
+    website: string;
+    signatureUrl?: string | null;
+    signatoryName?: string;
+    signatoryTitle?: string;
+}
+
 interface EmployeeIdCardModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -263,47 +284,20 @@ export function EmployeeIdCardModal({
         reader.readAsDataURL(file);
     };
 
-    // ── HIGH-RES PDF DOWNLOAD (300 DPI) ──
+    // ── HIGH-RES PDF DOWNLOAD (Canvas 2D + jsPDF — Zero Tailwind lab() issues) ──
     const handleDownloadPdf = async () => {
         try {
             setGeneratingPdf(true);
-            const html2canvas = (await import("html2canvas")).default;
-            const { jsPDF } = await import("jspdf");
-
-            const renderArea = document.getElementById("id-card-pdf-render-area");
-            if (!renderArea) {
-                alert("Unable to locate badge render area.");
-                return;
-            }
-
-            renderArea.style.display = "flex";
-            const canvas = await html2canvas(renderArea, {
-                scale: 3, // 3x scale produces razor-sharp 300 DPI print quality
-                useCORS: true,
-                allowTaint: true,
-                backgroundColor: "#ffffff",
-                logging: false,
+            const { downloadIdCardPdf } = await import("@/lib/idCardCanvas");
+            await downloadIdCardPdf({
+                cardData,
+                photoUrl: localPhoto,
+                printLayout,
+                printScale,
             });
-            renderArea.style.display = "none";
-
-            const imgData = canvas.toDataURL("image/png");
-            const pdf = new jsPDF({
-                orientation: "portrait",
-                unit: "mm",
-                format: "a4",
-            });
-
-            // Target dimensions on A4 (Exact CR80 width = 85.6mm, or scaled)
-            const mmWidth = printScale === "cr80" ? 100 : 130;
-            const mmHeight = (canvas.height * mmWidth) / canvas.width;
-            const xPos = (210 - mmWidth) / 2;
-            const yPos = (297 - mmHeight) / 2;
-
-            pdf.addImage(imgData, "PNG", xPos, yPos, mmWidth, mmHeight);
-            pdf.save(`ID_Card_${cardData.memberId}_${cardData.name.replace(/\s+/g, "_")}.pdf`);
         } catch (err: any) {
             console.error("PDF generation error:", err);
-            alert("PDF generation completed via print dialog.");
+            alert("PDF direct download fallback: opening print dialog...");
             window.print();
         } finally {
             setGeneratingPdf(false);
@@ -1155,19 +1149,6 @@ export function EmployeeIdCardModal({
                     </div>
                 </div>
 
-                {/* ── HIDDEN PDF RENDER AREA (For html2canvas 300 DPI Export) ── */}
-                <div id="id-card-pdf-render-area" style={{ display: "none" }} className="flex flex-col items-center p-8 bg-white text-slate-900 gap-4">
-                    <div className="flex flex-col items-center gap-1">
-                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{cardData.orgName} Official Identity Card</span>
-                    </div>
-                    {renderFrontCard(true, "pdf-front")}
-                    <div className="w-[480px] flex items-center justify-center gap-3 my-1">
-                        <div className="h-[1px] flex-1 border-t border-dashed border-slate-300" />
-                        <span className="text-[9px] font-mono text-slate-400 font-bold tracking-widest">✂ FOLD / CUT GUIDE ✂</span>
-                        <div className="h-[1px] flex-1 border-t border-dashed border-slate-300" />
-                    </div>
-                    {renderBackCard(true, "pdf-back")}
-                </div>
 
                 {/* ── MODAL FOOTER (Sticky) ── */}
                 <div className="shrink-0 p-4 sm:p-5 border-t border-slate-800 bg-slate-950/90 flex flex-wrap items-center justify-between gap-3">
