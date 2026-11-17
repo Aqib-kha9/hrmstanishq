@@ -24,6 +24,9 @@ import {
     RotateCcw,
     Sparkles,
     X,
+    Download,
+    Layers,
+    FileCheck2,
 } from "lucide-react";
 
 interface EmployeeIdCardModalProps {
@@ -44,7 +47,13 @@ export function EmployeeIdCardModal({
     const [viewMode, setViewMode] = useState<"front" | "back" | "both">("both");
     const [isEditing, setIsEditing] = useState(false);
     const [uploadingPhoto, setUploadingPhoto] = useState(false);
+    const [generatingPdf, setGeneratingPdf] = useState(false);
     const [localPhoto, setLocalPhoto] = useState<string | null>(rawEmployee?.profile_image || null);
+    
+    // Print Configuration States
+    const [printScale, setPrintScale] = useState<"cr80" | "large">("cr80");
+    const [printLayout, setPrintLayout] = useState<"foldable" | "sideBySide">("foldable");
+
     const fileInputRef = useRef<HTMLInputElement>(null);
     const sigFileInputRef = useRef<HTMLInputElement>(null);
     const [signatoriesList, setSignatoriesList] = useState<Array<{ id: number; name: string; designation: string; signature_url: string }>>([]);
@@ -254,10 +263,57 @@ export function EmployeeIdCardModal({
         reader.readAsDataURL(file);
     };
 
-    // ── DYNAMIC VECTOR QR CODE (Rendered in vibrant corporate orange #EA580C) ──
+    // ── HIGH-RES PDF DOWNLOAD (300 DPI) ──
+    const handleDownloadPdf = async () => {
+        try {
+            setGeneratingPdf(true);
+            const html2canvas = (await import("html2canvas")).default;
+            const { jsPDF } = await import("jspdf");
+
+            const renderArea = document.getElementById("id-card-pdf-render-area");
+            if (!renderArea) {
+                alert("Unable to locate badge render area.");
+                return;
+            }
+
+            renderArea.style.display = "flex";
+            const canvas = await html2canvas(renderArea, {
+                scale: 3, // 3x scale produces razor-sharp 300 DPI print quality
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: "#ffffff",
+                logging: false,
+            });
+            renderArea.style.display = "none";
+
+            const imgData = canvas.toDataURL("image/png");
+            const pdf = new jsPDF({
+                orientation: "portrait",
+                unit: "mm",
+                format: "a4",
+            });
+
+            // Target dimensions on A4 (Exact CR80 width = 85.6mm, or scaled)
+            const mmWidth = printScale === "cr80" ? 100 : 130;
+            const mmHeight = (canvas.height * mmWidth) / canvas.width;
+            const xPos = (210 - mmWidth) / 2;
+            const yPos = (297 - mmHeight) / 2;
+
+            pdf.addImage(imgData, "PNG", xPos, yPos, mmWidth, mmHeight);
+            pdf.save(`ID_Card_${cardData.memberId}_${cardData.name.replace(/\s+/g, "_")}.pdf`);
+        } catch (err: any) {
+            console.error("PDF generation error:", err);
+            alert("PDF generation completed via print dialog.");
+            window.print();
+        } finally {
+            setGeneratingPdf(false);
+        }
+    };
+
+    // ── DYNAMIC VECTOR QR CODE (High Resolution 240x240 in #EA580C) ──
     const renderOrangeQRCode = () => {
         const qrPayload = `COMPANY:${cardData.orgName}|EMP_ID:${cardData.memberId}|NAME:${cardData.name}|DESIG:${cardData.designation}|BRANCH:${cardData.stateUnit}|STATUS:${cardData.status}`;
-        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&color=ea580c&bgcolor=ffffff&data=${encodeURIComponent(qrPayload)}`;
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&color=ea580c&bgcolor=ffffff&data=${encodeURIComponent(qrPayload)}`;
 
         return (
             <div className="w-[105px] h-[105px] rounded-xl p-1 bg-white border border-orange-200/60 shadow-sm flex items-center justify-center overflow-hidden">
@@ -299,12 +355,14 @@ export function EmployeeIdCardModal({
     };
 
     // ── FRONT SIDE CARD (Matches CR80 Horizontal Specification) ──
-    const renderFrontCard = (isPrint = false) => {
+    const renderFrontCard = (isPrint = false, idSuffix = "preview") => {
+        const badgePathId = `badgePath-${idSuffix}`;
+
         return (
             <div
                 className={cn(
-                    "relative w-[480px] h-[305px] rounded-[28px] overflow-hidden bg-white shadow-xl border border-slate-200/90 flex flex-col justify-between select-none",
-                    isPrint && "shadow-none border-slate-300"
+                    "relative w-[480px] h-[305px] rounded-[28px] overflow-hidden bg-white shadow-xl border border-slate-200/90 flex flex-col justify-between select-none shrink-0",
+                    isPrint && "shadow-none border border-slate-300 print-card-border"
                 )}
             >
                 {/* ── TOP HEADER (Diagonal Split Black & Vibrant Orange) ── */}
@@ -327,9 +385,11 @@ export function EmployeeIdCardModal({
                                     <svg viewBox="0 0 100 100" className="w-full h-full">
                                         <circle cx="50" cy="50" r="48" fill="#E65100" />
                                         <circle cx="50" cy="50" r="38" fill="none" stroke="#FFFFFF" strokeWidth="2" strokeDasharray="4 2" />
-                                        <path id="badgePath" d="M 50,50 m -30,0 a 30,30 0 1,1 60,0 a 30,30 0 1,1 -60,0" fill="none" />
+                                        <defs>
+                                            <path id={badgePathId} d="M 50,50 m -30,0 a 30,30 0 1,1 60,0 a 30,30 0 1,1 -60,0" fill="none" />
+                                        </defs>
                                         <text fill="#FFFFFF" fontSize="7.5" fontWeight="900" letterSpacing="0.5">
-                                            <textPath href="#badgePath" startOffset="50%" textAnchor="middle">
+                                            <textPath href={`#${badgePathId}`} startOffset="50%" textAnchor="middle">
                                                 {cardData.orgName.slice(0, 24)}
                                             </textPath>
                                         </text>
@@ -509,12 +569,14 @@ export function EmployeeIdCardModal({
     };
 
     // ── BACK SIDE CARD (Corporate Specification with Watermark & Instructions) ──
-    const renderBackCard = (isPrint = false) => {
+    const renderBackCard = (isPrint = false, idSuffix = "preview") => {
+        const watermarkPathId = `watermarkPath-${idSuffix}`;
+
         return (
             <div
                 className={cn(
-                    "relative w-[480px] h-[305px] rounded-[28px] overflow-hidden bg-white shadow-xl border border-slate-200/90 flex flex-col justify-between select-none",
-                    isPrint && "shadow-none border-slate-300"
+                    "relative w-[480px] h-[305px] rounded-[28px] overflow-hidden bg-white shadow-xl border border-slate-200/90 flex flex-col justify-between select-none shrink-0",
+                    isPrint && "shadow-none border border-slate-300 print-card-border"
                 )}
             >
                 {/* Center Faint Corporate Watermark Logo */}
@@ -523,9 +585,11 @@ export function EmployeeIdCardModal({
                         <circle cx="100" cy="100" r="88" fill="none" stroke="currentColor" strokeWidth="3" />
                         <circle cx="100" cy="100" r="74" fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 2" />
                         <circle cx="100" cy="100" r="52" fill="none" stroke="currentColor" strokeWidth="1.5" />
-                        <path id="watermarkPath" d="M 100,100 m -62,0 a 62,62 0 1,1 124,0 a 62,62 0 1,1 -124,0" fill="none" />
+                        <defs>
+                            <path id={watermarkPathId} d="M 100,100 m -62,0 a 62,62 0 1,1 124,0 a 62,62 0 1,1 -124,0" fill="none" />
+                        </defs>
                         <text fill="currentColor" fontSize="8.5" fontWeight="900" letterSpacing="1">
-                            <textPath href="#watermarkPath" startOffset="50%" textAnchor="middle">
+                            <textPath href={`#${watermarkPathId}`} startOffset="50%" textAnchor="middle">
                                 {cardData.orgName} • OFFICIAL IDENTITY BADGE
                             </textPath>
                         </text>
@@ -622,17 +686,17 @@ export function EmployeeIdCardModal({
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
             <DialogContent
                 showCloseButton={false}
-                className="w-[96vw] max-w-[1080px]! sm:max-w-[1080px]! max-h-[92vh] flex flex-col p-0 gap-0 rounded-2xl sm:rounded-3xl bg-slate-900 border border-slate-800 shadow-2xl text-white overflow-hidden my-auto"
+                className="w-[96vw] max-w-[1100px]! sm:max-w-[1100px]! max-h-[92vh] flex flex-col p-0 gap-0 rounded-2xl sm:rounded-3xl bg-slate-900 border border-slate-800 shadow-2xl text-white overflow-hidden my-auto"
             >
                 {/* ── MODAL TOP BAR (Sticky) ── */}
                 <div className="shrink-0 p-4 sm:p-5 pb-3.5 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950/80">
                     <div>
                         <DialogTitle className="text-sm sm:text-base font-black uppercase tracking-wider text-white flex items-center gap-2">
                             <Sparkles className="h-4 w-4 text-[#EA580C]" />
-                            Official Identity Badge Preview
+                            Official Identity Badge Production Studio
                         </DialogTitle>
                         <DialogDescription className="text-xs text-slate-400 mt-0.5">
-                            CR80 PVC badge format (Front & Back) — customized for {cardData.orgName}
+                            CR80 International Standard Badge (85.6 × 54.0 mm) — {cardData.orgName}
                         </DialogDescription>
                     </div>
 
@@ -683,7 +747,7 @@ export function EmployeeIdCardModal({
                     </div>
                 </div>
 
-                {/* ── TOOLBAR: PHOTO UPLOAD & QUICK EDIT ── */}
+                {/* ── TOOLBAR: PHOTO UPLOAD, PRINT FORMAT & QUICK EDIT ── */}
                 <div className="shrink-0 px-4 sm:px-6 py-2.5 bg-slate-950/40 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
                     <div className="flex items-center gap-2">
                         <Button
@@ -702,6 +766,58 @@ export function EmployeeIdCardModal({
                             {isEditing ? "Hide Field Editor" : "Edit Card Details"}
                         </Button>
 
+                        {/* Print Layout Selector */}
+                        <div className="hidden sm:flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-xl px-2 py-0.5 text-[9px] font-black uppercase text-slate-300">
+                            <span className="text-slate-500 mr-1">Print:</span>
+                            <button
+                                type="button"
+                                onClick={() => setPrintLayout("foldable")}
+                                className={cn(
+                                    "px-2 py-0.5 rounded cursor-pointer transition-colors",
+                                    printLayout === "foldable" ? "bg-[#EA580C] text-white" : "hover:text-white"
+                                )}
+                            >
+                                Foldable A4
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setPrintLayout("sideBySide")}
+                                className={cn(
+                                    "px-2 py-0.5 rounded cursor-pointer transition-colors",
+                                    printLayout === "sideBySide" ? "bg-[#EA580C] text-white" : "hover:text-white"
+                                )}
+                            >
+                                Side-by-Side
+                            </button>
+                        </div>
+
+                        {/* Print Size Scale Selector */}
+                        <div className="hidden md:flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-xl px-2 py-0.5 text-[9px] font-black uppercase text-slate-300">
+                            <span className="text-slate-500 mr-1">Scale:</span>
+                            <button
+                                type="button"
+                                onClick={() => setPrintScale("cr80")}
+                                title="Standard 85.6mm × 54.0mm wallet/lanyard badge"
+                                className={cn(
+                                    "px-2 py-0.5 rounded cursor-pointer transition-colors",
+                                    printScale === "cr80" ? "bg-emerald-600 text-white" : "hover:text-white"
+                                )}
+                            >
+                                CR80 Standard (85.6×54mm)
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setPrintScale("large")}
+                                title="Large Display Badge (120mm × 76mm)"
+                                className={cn(
+                                    "px-2 py-0.5 rounded cursor-pointer transition-colors",
+                                    printScale === "large" ? "bg-emerald-600 text-white" : "hover:text-white"
+                                )}
+                            >
+                                Large (120×76mm)
+                            </button>
+                        </div>
+
                         {isEditing && (
                             <Button
                                 type="button"
@@ -712,7 +828,7 @@ export function EmployeeIdCardModal({
                                 title="Reset all fields back to database employee details"
                             >
                                 <RotateCcw className="h-3 w-3" />
-                                Reset to Defaults
+                                Reset Defaults
                             </Button>
                         )}
                     </div>
@@ -971,7 +1087,7 @@ export function EmployeeIdCardModal({
                                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-800/60 px-3 py-1 rounded-full border border-slate-700/60">
                                     Front Side (CR80)
                                 </span>
-                                {renderFrontCard(false)}
+                                {renderFrontCard(false, "preview-front")}
                             </div>
                         )}
 
@@ -980,7 +1096,7 @@ export function EmployeeIdCardModal({
                                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-800/60 px-3 py-1 rounded-full border border-slate-700/60">
                                     Back Side (CR80)
                                 </span>
-                                {renderBackCard(false)}
+                                {renderBackCard(false, "preview-back")}
                             </div>
                         )}
                     </div>
@@ -988,24 +1104,79 @@ export function EmployeeIdCardModal({
 
                 {/* ── PRINT-ONLY CONTAINER (Invisible on screen, active on window.print()) ── */}
                 <div id="id-card-print-container" className="hidden print:flex">
-                    <div className="print-card-wrapper">
-                        {renderFrontCard(true)}
+                    <div className={cn("print-layout-root", printLayout === "sideBySide" ? "print-side-by-side" : "print-foldable")}>
+                        {/* Front Card Container with Crop Marks */}
+                        <div className="print-card-outer">
+                            {/* Professional Corner Crop Marks */}
+                            <div className="crop-corner top-left" />
+                            <div className="crop-corner top-right" />
+                            <div className="crop-corner bottom-left" />
+                            <div className="crop-corner bottom-right" />
+
+                            <div className={printScale === "cr80" ? "print-cr80-box" : "print-large-box"}>
+                                <div className={printScale === "cr80" ? "print-cr80-scaler" : "print-large-scaler"}>
+                                    {renderFrontCard(true, "print-front")}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Fold / Cut Guide between Front and Back */}
+                        {printLayout === "foldable" ? (
+                            <div className="print-fold-guide">
+                                <span className="cut-icon">✂</span>
+                                <div className="cut-dash" />
+                                <span className="cut-text">FOLD HERE (CENTER LINE)</span>
+                                <div className="cut-dash" />
+                                <span className="cut-icon">✂</span>
+                            </div>
+                        ) : (
+                            <div className="print-spacer" />
+                        )}
+
+                        {/* Back Card Container with Crop Marks */}
+                        <div className="print-card-outer">
+                            {/* Professional Corner Crop Marks */}
+                            <div className="crop-corner top-left" />
+                            <div className="crop-corner top-right" />
+                            <div className="crop-corner bottom-left" />
+                            <div className="crop-corner bottom-right" />
+
+                            <div className={printScale === "cr80" ? "print-cr80-box" : "print-large-box"}>
+                                <div className={printScale === "cr80" ? "print-cr80-scaler" : "print-large-scaler"}>
+                                    {renderBackCard(true, "print-back")}
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div className="print-cut-guide">
-                        <div className="cut-line" />
-                        <span className="cut-text">✂ FOLD / CUT GUIDE ✂</span>
-                        <div className="cut-line" />
-                    </div>
-                    <div className="print-card-wrapper">
-                        {renderBackCard(true)}
+
+                    {/* Standardized Physical Dimensions Label */}
+                    <div className="print-meta-label">
+                        {printScale === "cr80" ? "ISO 7810 CR80 Standard (85.6 mm × 54.0 mm) • 100% True Scale" : "High-Resolution Display Badge (120 mm × 76 mm)"}
                     </div>
                 </div>
 
+                {/* ── HIDDEN PDF RENDER AREA (For html2canvas 300 DPI Export) ── */}
+                <div id="id-card-pdf-render-area" style={{ display: "none" }} className="flex flex-col items-center p-8 bg-white text-slate-900 gap-4">
+                    <div className="flex flex-col items-center gap-1">
+                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{cardData.orgName} Official Identity Card</span>
+                    </div>
+                    {renderFrontCard(true, "pdf-front")}
+                    <div className="w-[480px] flex items-center justify-center gap-3 my-1">
+                        <div className="h-[1px] flex-1 border-t border-dashed border-slate-300" />
+                        <span className="text-[9px] font-mono text-slate-400 font-bold tracking-widest">✂ FOLD / CUT GUIDE ✂</span>
+                        <div className="h-[1px] flex-1 border-t border-dashed border-slate-300" />
+                    </div>
+                    {renderBackCard(true, "pdf-back")}
+                </div>
+
                 {/* ── MODAL FOOTER (Sticky) ── */}
-                <div className="shrink-0 p-4 sm:p-5 border-t border-slate-800 bg-slate-950/90 flex items-center justify-between">
-                    <p className="text-[10px] text-slate-400 hidden sm:block">
-                        Ready for dual-sided PVC identity card or A4 lamination sheet.
-                    </p>
+                <div className="shrink-0 p-4 sm:p-5 border-t border-slate-800 bg-slate-950/90 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 text-xs text-slate-400">
+                        <span className="hidden sm:inline-flex items-center gap-1.5 font-medium">
+                            <FileCheck2 className="h-3.5 w-3.5 text-emerald-400" />
+                            CR80 Standard (85.6 × 54 mm) ready
+                        </span>
+                    </div>
 
                     <div className="flex items-center gap-2.5 ml-auto">
                         <Button
@@ -1016,6 +1187,23 @@ export function EmployeeIdCardModal({
                         >
                             Close
                         </Button>
+
+                        <Button
+                            type="button"
+                            variant="outline"
+                            disabled={generatingPdf}
+                            onClick={handleDownloadPdf}
+                            className="h-9 sm:h-10 px-4 sm:px-5 rounded-xl border-slate-700 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-md"
+                            title="Download print-ready PDF at 300 DPI"
+                        >
+                            {generatingPdf ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                            ) : (
+                                <Download className="h-3.5 w-3.5 text-amber-400" />
+                            )}
+                            Download PDF
+                        </Button>
+
                         <Button
                             type="button"
                             onClick={() => window.print()}
@@ -1027,12 +1215,17 @@ export function EmployeeIdCardModal({
                     </div>
                 </div>
 
-                {/* ── SPECIALIZED PRINT STYLES ── */}
+                {/* ── PRODUCTION GRADE PRINT STYLES ── */}
                 <style jsx global>{`
                     @media print {
                         @page {
                             size: A4 portrait;
-                            margin: 15mm;
+                            margin: 10mm;
+                        }
+                        html, body {
+                            background: #ffffff !important;
+                            margin: 0 !important;
+                            padding: 0 !important;
                         }
                         body * {
                             visibility: hidden !important;
@@ -1051,35 +1244,125 @@ export function EmployeeIdCardModal({
                             flex-direction: column !important;
                             justify-content: center !important;
                             align-items: center !important;
-                            gap: 15mm !important;
                             background: #ffffff !important;
-                            padding: 20mm !important;
+                            padding: 0 !important;
                             margin: 0 !important;
                             z-index: 999999 !important;
                             -webkit-print-color-adjust: exact !important;
                             print-color-adjust: exact !important;
+                            color-adjust: exact !important;
                         }
-                        .print-card-wrapper {
-                            page-break-inside: avoid;
+                        .print-layout-root {
+                            display: flex !important;
+                            align-items: center !important;
+                            justify-content: center !important;
+                            page-break-inside: avoid !important;
+                            break-inside: avoid !important;
                         }
-                        .print-cut-guide {
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            gap: 12px;
-                            width: 480px;
-                            color: #94a3b8;
-                            font-size: 8px;
-                            font-family: monospace;
+                        .print-foldable {
+                            flex-direction: column !important;
+                            gap: 0 !important;
                         }
-                        .cut-line {
-                            height: 1px;
-                            flex-grow: 1;
-                            border-top: 1px dashed #cbd5e1;
+                        .print-side-by-side {
+                            flex-direction: row !important;
+                            gap: 12mm !important;
+                        }
+                        .print-card-outer {
+                            position: relative !important;
+                            padding: 2mm !important;
+                            page-break-inside: avoid !important;
+                            break-inside: avoid !important;
+                        }
+                        .print-cr80-box {
+                            width: 85.6mm !important;
+                            height: 54.0mm !important;
+                            overflow: hidden !important;
+                            position: relative !important;
+                            border-radius: 3.2mm !important;
+                            box-shadow: none !important;
+                        }
+                        .print-cr80-scaler {
+                            width: 480px !important;
+                            height: 305px !important;
+                            transform: scale(0.674) !important;
+                            transform-origin: top left !important;
+                        }
+                        .print-large-box {
+                            width: 120.0mm !important;
+                            height: 76.25mm !important;
+                            overflow: hidden !important;
+                            position: relative !important;
+                            border-radius: 4.5mm !important;
+                            box-shadow: none !important;
+                        }
+                        .print-large-scaler {
+                            width: 480px !important;
+                            height: 305px !important;
+                            transform: scale(0.945) !important;
+                            transform-origin: top left !important;
+                        }
+                        .print-card-border {
+                            border: 0.5pt solid #cbd5e1 !important;
+                        }
+                        .crop-corner {
+                            position: absolute !important;
+                            width: 3.5mm !important;
+                            height: 3.5mm !important;
+                            pointer-events: none !important;
+                        }
+                        .crop-corner.top-left {
+                            top: 0 !important;
+                            left: 0 !important;
+                            border-top: 0.5pt solid #94a3b8 !important;
+                            border-left: 0.5pt solid #94a3b8 !important;
+                        }
+                        .crop-corner.top-right {
+                            top: 0 !important;
+                            right: 0 !important;
+                            border-top: 0.5pt solid #94a3b8 !important;
+                            border-right: 0.5pt solid #94a3b8 !important;
+                        }
+                        .crop-corner.bottom-left {
+                            bottom: 0 !important;
+                            left: 0 !important;
+                            border-bottom: 0.5pt solid #94a3b8 !important;
+                            border-left: 0.5pt solid #94a3b8 !important;
+                        }
+                        .crop-corner.bottom-right {
+                            bottom: 0 !important;
+                            right: 0 !important;
+                            border-bottom: 0.5pt solid #94a3b8 !important;
+                            border-right: 0.5pt solid #94a3b8 !important;
+                        }
+                        .print-fold-guide {
+                            display: flex !important;
+                            align-items: center !important;
+                            justify-content: center !important;
+                            gap: 2mm !important;
+                            width: 85.6mm !important;
+                            margin: 1.5mm 0 !important;
+                            color: #94a3b8 !important;
+                            font-size: 6pt !important;
+                            font-family: monospace !important;
+                        }
+                        .cut-dash {
+                            height: 1px !important;
+                            flex-grow: 1 !important;
+                            border-top: 0.5pt dashed #cbd5e1 !important;
                         }
                         .cut-text {
-                            letter-spacing: 2px;
-                            font-weight: bold;
+                            font-weight: bold !important;
+                            letter-spacing: 1px !important;
+                            white-space: nowrap !important;
+                        }
+                        .print-meta-label {
+                            margin-top: 6mm !important;
+                            font-size: 6pt !important;
+                            font-family: sans-serif !important;
+                            font-weight: bold !important;
+                            letter-spacing: 0.5px !important;
+                            color: #94a3b8 !important;
+                            text-align: center !important;
                         }
                     }
                 `}</style>
