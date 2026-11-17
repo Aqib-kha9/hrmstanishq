@@ -6,7 +6,7 @@ import {
   CheckCircle2, Search, Clock, FileSignature, ArrowUpRight, Mail,
   Loader2, AlertCircle, Send, Pencil, X, Save, RefreshCw,
   Plus, Trash2, History, UserCheck, Briefcase, Building2, Sparkles, Phone, ExternalLink,
-  Rocket, Copy
+  Rocket, Copy, PenTool, XCircle, Check
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -112,6 +112,15 @@ type IssuedLetter = {
     candidate_details?: any;
     onboarding_link?: string | null;
     onboarding_invitation_id?: number | null;
+    onboarding_invited?: boolean;
+    onboarding_invited_at?: string | null;
+    acceptance_token?: string | null;
+    acceptance_status?: "pending" | "accepted" | "rejected" | null;
+    candidate_signature?: string | null;
+    signed_name?: string | null;
+    accepted_at?: string | null;
+    rejected_at?: string | null;
+    rejection_reason?: string | null;
   } | null;
 };
 
@@ -249,6 +258,7 @@ export default function LettersPage() {
   const [emailingLetterId, setEmailingLetterId] = useState<number | null>(null);
   const [viewingLetter, setViewingLetter] = useState<IssuedLetter | null>(null);
   const [downloadingLetterId, setDownloadingLetterId] = useState<number | null>(null);
+  const [sendingOnboardingId, setSendingOnboardingId] = useState<number | null>(null);
 
   // Template Editor Modal state (Req 12.3)
   const [editorOpen, setEditorOpen] = useState(false);
@@ -602,13 +612,11 @@ export default function LettersPage() {
       });
 
       const recipientName = candidateMode ? (candidateData.name || "Candidate") : (previewData?.employee?.name || "Employee");
-      const onboardingLink = res?.data?.onboarding_link;
+      const acceptanceLink = res?.data?.acceptance_link;
 
-      if (onboardingLink) {
-        setLastOnboardingLink(onboardingLink);
-        setIssueSuccess(`Offer Letter & Self-Onboarding invitation sent successfully to ${recipientName} (${candidateData.email})!`);
+      if (candidateMode) {
+        setIssueSuccess(`Offer Letter sent to ${recipientName} (${candidateData.email}) with Digital Acceptance & Signature link! You can monitor acceptance status in the table below.`);
       } else {
-        setLastOnboardingLink(null);
         setIssueSuccess(`Letter successfully issued, recorded, and sent to ${recipientName} via email!`);
       }
       await fetchLetters();
@@ -703,6 +711,37 @@ export default function LettersPage() {
       alert(err?.message || "Failed to download PDF");
     } finally {
       setDownloadingLetterId(null);
+    }
+  };
+
+  // ── 1-Click Send Onboarding Portal Invitation Handler ──
+  const handleSendOnboardingInvite = async (letter: IssuedLetter) => {
+    const candidateName = letter.candidate_name || letter.issuedTo?.name || "Candidate";
+    const candidateEmail = letter.candidate_email || letter.issuedTo?.email || "";
+    
+    if (!window.confirm(`Send official Self-Onboarding Portal invitation link to ${candidateName} (${candidateEmail})?`)) {
+      return;
+    }
+
+    try {
+      setSendingOnboardingId(letter.id);
+      const res: any = await apiPost(`/letters/${letter.id}/send-onboarding-invite`, {});
+      alert(res?.message || `Self-onboarding portal link sent successfully to ${candidateName}!`);
+      await fetchLetters();
+      if (viewingLetter && viewingLetter.id === letter.id) {
+        setViewingLetter((prev) => prev ? {
+          ...prev,
+          metadata: {
+            ...prev.metadata,
+            onboarding_invited: true,
+            onboarding_link: res?.data?.link,
+          }
+        } : null);
+      }
+    } catch (err: any) {
+      alert(err?.message || "Failed to dispatch self-onboarding invitation.");
+    } finally {
+      setSendingOnboardingId(null);
     }
   };
 
@@ -1186,22 +1225,41 @@ export default function LettersPage() {
                               <p className="text-[9px] text-slate-400">
                                 Signatory: <span className="font-semibold text-slate-600">{item.signatory?.name || "Default Signatory"}</span>
                               </p>
-                              {item.metadata?.onboarding_link && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    navigator.clipboard.writeText(item.metadata?.onboarding_link || "");
-                                    alert("Self-onboarding link copied to clipboard!");
-                                  }}
-                                  title="Click to copy self-onboarding link"
-                                  className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded text-[8px] font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors"
-                                >
-                                  <Rocket className="h-2.5 w-2.5 text-blue-600" />
-                                  <span>Onboarding Portal</span>
-                                  <Copy className="h-2.5 w-2.5 text-blue-500 ml-0.5" />
-                                </button>
-                              )}
+                              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                {item.type === "offer" && item.metadata?.acceptance_token && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const url = `${window.location.origin}/offer-acceptance?token=${item.metadata?.acceptance_token}`;
+                                      navigator.clipboard.writeText(url);
+                                      alert("Candidate Offer Acceptance link copied to clipboard!");
+                                    }}
+                                    title="Copy Candidate Digital Acceptance & Signature Link"
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition-colors"
+                                  >
+                                    <PenTool className="h-2.5 w-2.5 text-indigo-600" />
+                                    <span>Acceptance Link</span>
+                                    <Copy className="h-2 w-2 text-indigo-500 ml-0.5" />
+                                  </button>
+                                )}
+                                {item.metadata?.onboarding_link && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigator.clipboard.writeText(item.metadata?.onboarding_link || "");
+                                      alert("Self-onboarding link copied to clipboard!");
+                                    }}
+                                    title="Click to copy self-onboarding link"
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors"
+                                  >
+                                    <Rocket className="h-2.5 w-2.5 text-blue-600" />
+                                    <span>Onboarding Portal</span>
+                                    <Copy className="h-2.5 w-2.5 text-blue-500 ml-0.5" />
+                                  </button>
+                                )}
+                              </div>
                             </td>
 
                             <td className="py-3.5 px-4 font-mono text-[10px] text-slate-600">
@@ -1209,18 +1267,69 @@ export default function LettersPage() {
                             </td>
 
                             <td className="py-3.5 px-4">
-                              <Badge className={cn(
-                                "border text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md",
-                                item.status === "acknowledged" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                                item.status === "issued" ? "bg-blue-50 text-blue-700 border-blue-200" :
-                                "bg-slate-50 text-slate-600 border-slate-200"
-                              )}>
-                                {item.status}
-                              </Badge>
+                              {item.type === "offer" ? (
+                                <div>
+                                  {item.metadata?.acceptance_status === "accepted" || item.status === "acknowledged" ? (
+                                    <div>
+                                      <Badge className="bg-emerald-50 text-emerald-700 border-emerald-300 text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md flex items-center gap-1 w-fit">
+                                        <CheckCircle2 className="h-2.5 w-2.5 text-emerald-600" />
+                                        <span>Accepted &amp; Signed</span>
+                                      </Badge>
+                                      {item.metadata?.accepted_at && (
+                                        <span className="text-[7.5px] text-slate-400 block mt-0.5 font-mono">
+                                          {new Date(item.metadata.accepted_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
+                                        </span>
+                                      )}
+                                    </div>
+                                  ) : item.metadata?.acceptance_status === "rejected" || item.status === "revoked" ? (
+                                    <Badge className="bg-rose-50 text-rose-700 border-rose-300 text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md flex items-center gap-1 w-fit" title={item.metadata?.rejection_reason || "Declined"}>
+                                      <XCircle className="h-2.5 w-2.5 text-rose-600" />
+                                      <span>Declined</span>
+                                    </Badge>
+                                  ) : (
+                                    <Badge className="bg-amber-50 text-amber-700 border-amber-200 text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md flex items-center gap-1 w-fit">
+                                      <Clock className="h-2.5 w-2.5 text-amber-600" />
+                                      <span>Pending Sign</span>
+                                    </Badge>
+                                  )}
+                                </div>
+                              ) : (
+                                <Badge className={cn(
+                                  "border text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md",
+                                  item.status === "acknowledged" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                                  item.status === "issued" ? "bg-blue-50 text-blue-700 border-blue-200" :
+                                  "bg-slate-50 text-slate-600 border-slate-200"
+                                )}>
+                                  {item.status}
+                                </Badge>
+                              )}
                             </td>
 
                             <td className="py-3.5 px-4 text-right">
-                              <div className="flex items-center justify-end gap-1">
+                              <div className="flex items-center justify-end gap-1.5">
+                                {/* 1-Click Send Onboarding Button if Offer is Accepted */}
+                                {item.type === "offer" && (item.metadata?.acceptance_status === "accepted" || item.status === "acknowledged") && (
+                                  item.metadata?.onboarding_invited ? (
+                                    <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-[8px] font-bold px-2 py-1 rounded-md flex items-center gap-1">
+                                      <Check className="h-2.5 w-2.5 text-blue-600" /> Onboarded
+                                    </Badge>
+                                  ) : (
+                                    <Button
+                                      size="sm"
+                                      onClick={() => handleSendOnboardingInvite(item)}
+                                      disabled={sendingOnboardingId === item.id}
+                                      className="h-7 text-[8px] font-black bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-2.5 rounded-lg shadow-sm flex items-center gap-1"
+                                      title="Dispatch Self-Onboarding invitation email with 1-click"
+                                    >
+                                      {sendingOnboardingId === item.id ? (
+                                        <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                                      ) : (
+                                        <Rocket className="h-2.5 w-2.5 text-white" />
+                                      )}
+                                      <span>Send Onboarding</span>
+                                    </Button>
+                                  )
+                                )}
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -1312,8 +1421,136 @@ export default function LettersPage() {
                   </div>
                 </DialogHeader>
 
-                {/* Onboarding Invitation Link Banner if present */}
-                {viewingLetter.metadata?.onboarding_link && (
+                {/* Offer Letter Digital Acceptance & Signature Status Section */}
+                {viewingLetter.type === "offer" && (
+                  <div className="mt-4">
+                    {viewingLetter.metadata?.acceptance_status === "accepted" || viewingLetter.status === "acknowledged" ? (
+                      <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-50 via-teal-50 to-white border border-emerald-200">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                              <span className="text-xs font-black text-emerald-950 uppercase tracking-wider">
+                                Offer Digitally Accepted &amp; Signed
+                              </span>
+                              <Badge className="bg-emerald-100 text-emerald-800 text-[8px] font-black px-1.5 py-0 rounded">
+                                VERIFIED
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-emerald-800 mt-1">
+                              Signed by <strong>{viewingLetter.metadata?.signed_name || viewingLetter.candidate_name || "Candidate"}</strong> on{" "}
+                              {viewingLetter.metadata?.accepted_at
+                                ? new Date(viewingLetter.metadata.accepted_at).toLocaleString("en-IN", {
+                                    day: "numeric",
+                                    month: "short",
+                                    year: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })
+                                : "Recently"}
+                              .
+                            </p>
+                            {viewingLetter.metadata?.candidate_signature && (
+                              <div className="mt-2.5 inline-block bg-white p-2 rounded-lg border border-emerald-200 shadow-sm">
+                                <span className="text-[8px] font-bold text-slate-400 block mb-0.5">DIGITAL SIGNATURE STAMP</span>
+                                <img
+                                  src={viewingLetter.metadata.candidate_signature}
+                                  alt="Candidate Signature"
+                                  className="h-10 w-auto object-contain"
+                                />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 1-Click Send Onboarding Portal Link Button */}
+                          <div className="flex flex-col gap-2 shrink-0">
+                            {viewingLetter.metadata?.onboarding_invited ? (
+                              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-900">
+                                <span className="font-bold flex items-center gap-1.5">
+                                  <Check className="h-4 w-4 text-blue-600" /> Onboarding Link Dispatched
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(viewingLetter.metadata?.onboarding_link || "");
+                                    alert("Self-onboarding link copied to clipboard!");
+                                  }}
+                                  className="mt-1.5 text-[9px] font-bold text-blue-700 hover:underline flex items-center gap-1"
+                                >
+                                  <Copy className="h-3 w-3" /> Copy Onboarding Link
+                                </button>
+                              </div>
+                            ) : (
+                              <Button
+                                onClick={() => handleSendOnboardingInvite(viewingLetter)}
+                                disabled={sendingOnboardingId === viewingLetter.id}
+                                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-xs h-10 px-4 rounded-xl shadow-md shadow-blue-500/20 flex items-center gap-2"
+                              >
+                                {sendingOnboardingId === viewingLetter.id ? (
+                                  <>
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Dispatching Link…
+                                  </>
+                                ) : (
+                                  <>
+                                    <Rocket className="h-4 w-4" /> 🚀 Send Onboarding Link (1-Click)
+                                  </>
+                                )}
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ) : viewingLetter.metadata?.acceptance_status === "rejected" || viewingLetter.status === "revoked" ? (
+                      <div className="p-4 rounded-xl bg-rose-50 border border-rose-200">
+                        <div className="flex items-center gap-2 text-rose-800 font-bold text-xs">
+                          <XCircle className="h-4 w-4 text-rose-600" />
+                          <span>Offer Declined by Candidate</span>
+                        </div>
+                        {viewingLetter.metadata?.rejection_reason && (
+                          <p className="text-xs text-rose-700 mt-1">
+                            Remarks: <strong>{viewingLetter.metadata.rejection_reason}</strong>
+                          </p>
+                        )}
+                        {viewingLetter.metadata?.rejected_at && (
+                          <p className="text-[10px] text-rose-500 mt-1">
+                            Declined on: {new Date(viewingLetter.metadata.rejected_at).toLocaleString("en-IN")}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5">
+                          <Clock className="h-4 w-4 text-amber-600 shrink-0" />
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-wider text-amber-900">
+                              Awaiting Candidate Digital Acceptance
+                            </p>
+                            <p className="text-[9px] text-amber-700">
+                              Candidate has received the offer letter. Once they accept and sign digitally, you can dispatch their Onboarding Portal link with 1-click.
+                            </p>
+                          </div>
+                        </div>
+                        {viewingLetter.metadata?.acceptance_token && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-[8.5px] font-bold border-amber-300 text-amber-800 hover:bg-amber-100 shrink-0"
+                            onClick={() => {
+                              const url = `${window.location.origin}/offer-acceptance?token=${viewingLetter.metadata?.acceptance_token}`;
+                              navigator.clipboard.writeText(url);
+                              alert("Candidate Offer Acceptance link copied to clipboard!");
+                            }}
+                          >
+                            <Copy className="h-3 w-3 mr-1" /> Copy Acceptance Link
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Onboarding Invitation Link Banner if present for other letters */}
+                {viewingLetter.type !== "offer" && viewingLetter.metadata?.onboarding_link && (
                   <div className="mt-4 p-3.5 rounded-xl bg-blue-50/80 border border-blue-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-2.5">
                       <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center text-white flex-shrink-0 shadow-sm">
@@ -1657,52 +1894,46 @@ export default function LettersPage() {
                           </label>
                         </div>
 
-                        {/* Self-Onboarding Integration Card */}
+                        {/* Digital Acceptance Portal Info Banner */}
                         <div style={{
                           marginTop: 6,
                           padding: "10px 12px",
                           borderRadius: 10,
-                          background: includeOnboarding ? "rgba(37, 99, 235, 0.12)" : "rgba(255, 255, 255, 0.03)",
-                          border: includeOnboarding ? "1px solid rgba(59, 130, 246, 0.35)" : "1px solid rgba(255, 255, 255, 0.08)",
+                          background: "rgba(37, 99, 235, 0.12)",
+                          border: "1px solid rgba(59, 130, 246, 0.35)",
                           transition: "all 0.2s ease",
                         }}>
-                          <label style={{ display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer" }}>
-                            <input
-                              type="checkbox"
-                              checked={includeOnboarding}
-                              onChange={(e) => setIncludeOnboarding(e.target.checked)}
-                              style={{ width: 14, height: 14, marginTop: 2, accentColor: "#3b82f6", cursor: "pointer" }}
-                            />
+                          <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                            <div style={{ width: 14, height: 14, marginTop: 2, color: "#60a5fa" }}>
+                              <PenTool style={{ width: 14, height: 14 }} />
+                            </div>
                             <div style={{ flex: 1 }}>
                               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
-                                <span style={{ fontSize: 9.5, fontWeight: 800, color: includeOnboarding ? "#93c5fd" : "#cbd5e1", display: "flex", alignItems: "center", gap: 5 }}>
-                                  <Rocket style={{ width: 12, height: 12, color: includeOnboarding ? "#60a5fa" : "#94a3b8" }} />
-                                  Include Self-Onboarding Link
+                                <span style={{ fontSize: 9.5, fontWeight: 800, color: "#93c5fd", display: "flex", alignItems: "center", gap: 5 }}>
+                                  ✍️ Digital Offer Acceptance &amp; E-Sign
                                 </span>
                                 <span style={{
                                   fontSize: 7.5,
                                   fontWeight: 800,
                                   padding: "2px 6px",
                                   borderRadius: 4,
-                                  background: includeOnboarding ? "rgba(59, 130, 246, 0.25)" : "rgba(255, 255, 255, 0.05)",
-                                  color: includeOnboarding ? "#93c5fd" : "#64748b",
-                                  border: includeOnboarding ? "1px solid rgba(59, 130, 246, 0.4)" : "1px solid rgba(255, 255, 255, 0.1)",
+                                  background: "rgba(34, 197, 94, 0.2)",
+                                  color: "#86efac",
+                                  border: "1px solid rgba(34, 197, 94, 0.4)",
                                   textTransform: "uppercase",
                                   letterSpacing: "0.5px"
                                 }}>
-                                  {includeOnboarding ? "2-in-1 Combined" : "Letter Only"}
+                                  2-Step Flow
                                 </span>
                               </div>
-                              <p style={{ margin: "3px 0 0", fontSize: 8, color: "#94a3b8", lineHeight: 1.35 }}>
-                                Automatically adds candidate to the Onboarding pipeline and includes a secure 7-day joining portal link in the Offer Letter email.
+                              <p style={{ margin: "3px 0 0", fontSize: 8, color: "#cbd5e1", lineHeight: 1.4 }}>
+                                Candidate receives Offer Letter PDF with a link to review &amp; digitally sign online. Once accepted, you can dispatch their Onboarding Portal link with 1-click!
                               </p>
-                              {includeOnboarding && (
-                                <p style={{ margin: "4px 0 0", fontSize: 7.5, color: "#86efac", fontWeight: 700 }}>
-                                  ✓ Candidate receives Offer Letter PDF + One-Click KYC &amp; Bank submission link
-                                </p>
-                              )}
+                              <p style={{ margin: "4px 0 0", fontSize: 7.5, color: "#86efac", fontWeight: 700 }}>
+                                ✓ Step 1: Candidate Signs &rarr; Step 2: HR 1-Click Send Onboarding
+                              </p>
                             </div>
-                          </label>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1869,10 +2100,8 @@ export default function LettersPage() {
                   >
                     {sending ? (
                       <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Sending Email…</>
-                    ) : candidateMode && includeOnboarding ? (
-                      <><Rocket style={{ width: 14, height: 14, color: "#0f172a" }} /> Email Offer &amp; Onboarding Invite</>
                     ) : candidateMode ? (
-                      <><Mail style={{ width: 13, height: 13 }} /> Email Offer Letter Only</>
+                      <><Send style={{ width: 13, height: 13 }} /> Email Offer For Digital Signature</>
                     ) : (
                       <><Mail style={{ width: 13, height: 13 }} /> Email &amp; Issue to History</>
                     )}
