@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { apiPatch } from "@/lib/api-client";
+import { apiPatch, apiGet } from "@/lib/api-client";
 import type { BackendEmployee, FrontendEmployee } from "@/lib/transform";
 import {
     Printer,
@@ -46,6 +46,8 @@ export function EmployeeIdCardModal({
     const [uploadingPhoto, setUploadingPhoto] = useState(false);
     const [localPhoto, setLocalPhoto] = useState<string | null>(rawEmployee?.profile_image || null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const sigFileInputRef = useRef<HTMLInputElement>(null);
+    const [signatoriesList, setSignatoriesList] = useState<Array<{ id: number; name: string; designation: string; signature_url: string }>>([]);
 
     // Helpers
     const formatDate = (dateStr: string | null | undefined): string => {
@@ -96,6 +98,9 @@ export function EmployeeIdCardModal({
         stateUnit: "UJJAIN",
         tagline: "COMMITTED TO EXCELLENCE & INTEGRITY",
         website: "WWW.APAARLOGISTICS.COM",
+        signatureUrl: null as string | null,
+        signatoryName: "",
+        signatoryTitle: "",
     });
 
     // Populate data dynamically from employee, office, and company records
@@ -145,7 +150,8 @@ export function EmployeeIdCardModal({
         const empBlood = (rawEmployee?.blood_group || "B+VE").toUpperCase().replace("POSITIVE", "+VE").replace("POS", "+VE");
         const empStatus = (rawEmployee?.status || employee.status || "ACTIVE").toUpperCase();
 
-        setCardData({
+        setCardData((prev) => ({
+            ...prev,
             orgName: org,
             orgInitials: initials,
             unitName: branchUnit,
@@ -161,7 +167,7 @@ export function EmployeeIdCardModal({
             stateUnit: locationDisplay,
             tagline: "COMMITTED TO EXCELLENCE & INTEGRITY",
             website: compWebsite,
-        });
+        }));
     };
 
     useEffect(() => {
@@ -170,6 +176,52 @@ export function EmployeeIdCardModal({
             setLocalPhoto(rawEmployee.profile_image);
         }
     }, [employee, rawEmployee]);
+
+    // Fetch available Authorized Signatories from API
+    useEffect(() => {
+        async function loadSignatories() {
+            try {
+                const res = await apiGet<any>("/signatories");
+                const list = Array.isArray(res) ? res : res?.data || [];
+                setSignatoriesList(list);
+                if (list.length > 0) {
+                    const first = list[0];
+                    setCardData((prev) => ({
+                        ...prev,
+                        signatureUrl: prev.signatureUrl || first.signature_url || null,
+                        signatoryName: prev.signatoryName || (first.name ? first.name.toUpperCase() : ""),
+                        signatoryTitle: prev.signatoryTitle || (first.designation ? first.designation.toUpperCase() : ""),
+                    }));
+                }
+            } catch (err) {
+                console.error("Failed to fetch signatories:", err);
+            }
+        }
+        if (isOpen) {
+            loadSignatories();
+        }
+    }, [isOpen]);
+
+    // Handle Custom Signature Upload
+    const handleSignatureSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (file.size > 3 * 1024 * 1024) {
+            alert("Please choose a signature image under 3MB.");
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = () => {
+            const base64Data = reader.result as string;
+            setCardData((prev) => ({
+                ...prev,
+                signatureUrl: base64Data,
+            }));
+        };
+        reader.readAsDataURL(file);
+    };
 
     // Handle Photo Upload
     const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -526,11 +578,26 @@ export function EmployeeIdCardModal({
                         <div className="w-8 h-8 rounded-xl border border-slate-200 bg-white flex items-center justify-center text-slate-400 shadow-sm shrink-0">
                             <ShieldCheck className="h-5 w-5 text-slate-400 stroke-[1.5]" />
                         </div>
-                        <div className="flex flex-col">
-                            <div className="w-28 h-[1px] bg-slate-300 mt-2 mb-1" />
+                        <div className="flex flex-col items-center">
+                            {/* Digital Signature Image if present */}
+                            {cardData.signatureUrl ? (
+                                <div className="h-6 w-28 flex items-end justify-center -mb-0.5">
+                                    <img
+                                        src={cardData.signatureUrl}
+                                        alt="Authorized Signature"
+                                        className="max-h-6 max-w-full object-contain mix-blend-multiply"
+                                    />
+                                </div>
+                            ) : null}
+                            <div className="w-28 h-[1px] bg-slate-300 mt-1 mb-0.5" />
                             <span className="text-[7.5px] font-black uppercase tracking-widest text-slate-500 leading-none">
                                 AUTHORIZED SIGNATORY
                             </span>
+                            {cardData.signatoryName ? (
+                                <span className="text-[6.5px] font-bold text-slate-500 uppercase tracking-tight leading-tight mt-0.5 truncate max-w-[125px]">
+                                    {cardData.signatoryName} {cardData.signatoryTitle ? `• ${cardData.signatoryTitle}` : ""}
+                                </span>
+                            ) : null}
                         </div>
                     </div>
 
@@ -793,6 +860,104 @@ export function EmployeeIdCardModal({
                                     onChange={(e) => setCardData({ ...cardData, address: e.target.value })}
                                     className="h-8 text-xs bg-slate-900 border-slate-700 text-white"
                                 />
+                            </div>
+
+                            {/* ── AUTHORIZED SIGNATORY CONTROLS ── */}
+                            <div className="col-span-2 sm:col-span-3 md:col-span-4 border-t border-slate-800 pt-2.5 mt-1">
+                                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                                    <span className="text-[10px] font-black uppercase text-[#EA580C] tracking-wider flex items-center gap-1.5">
+                                        <ShieldCheck className="h-3.5 w-3.5" />
+                                        Authorized Signatory & Signature (Back Side)
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="file"
+                                            ref={sigFileInputRef}
+                                            onChange={handleSignatureSelect}
+                                            accept="image/*"
+                                            className="hidden"
+                                        />
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => sigFileInputRef.current?.click()}
+                                            className="h-7 px-2.5 text-[9px] font-black uppercase tracking-wider rounded-lg border-slate-700 bg-slate-800/90 hover:bg-slate-800 text-slate-200 cursor-pointer"
+                                        >
+                                            <Upload className="h-3 w-3 mr-1 text-[#EA580C]" />
+                                            {cardData.signatureUrl ? "Change Signature Image" : "Upload Signature Image"}
+                                        </Button>
+                                        {cardData.signatureUrl && (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setCardData((prev) => ({ ...prev, signatureUrl: null }))}
+                                                className="h-7 px-2 text-[9px] font-black uppercase text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 rounded-lg cursor-pointer"
+                                            >
+                                                Remove Signature
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                    <div>
+                                        <label className="text-[9px] font-black text-slate-400 uppercase">Select Saved Signatory</label>
+                                        <select
+                                            value={
+                                                signatoriesList.find((s) => s.signature_url === cardData.signatureUrl)?.id || ""
+                                            }
+                                            onChange={(e) => {
+                                                const id = e.target.value;
+                                                if (!id) {
+                                                    setCardData((prev) => ({
+                                                        ...prev,
+                                                        signatureUrl: null,
+                                                        signatoryName: "",
+                                                        signatoryTitle: "",
+                                                    }));
+                                                } else {
+                                                    const sig = signatoriesList.find((s) => String(s.id) === id);
+                                                    if (sig) {
+                                                        setCardData((prev) => ({
+                                                            ...prev,
+                                                            signatureUrl: sig.signature_url,
+                                                            signatoryName: (sig.name || "").toUpperCase(),
+                                                            signatoryTitle: (sig.designation || "").toUpperCase(),
+                                                        }));
+                                                    }
+                                                }
+                                            }}
+                                            className="h-8 w-full text-xs bg-slate-900 border border-slate-700 rounded-md px-2 text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
+                                        >
+                                            <option value="">None (Blank Physical Signature Line)</option>
+                                            {signatoriesList.map((sig) => (
+                                                <option key={sig.id} value={sig.id}>
+                                                    {sig.name} ({sig.designation})
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="text-[9px] font-black text-slate-400 uppercase">Signatory Name</label>
+                                        <Input
+                                            value={cardData.signatoryName}
+                                            onChange={(e) => setCardData({ ...cardData, signatoryName: e.target.value })}
+                                            placeholder="e.g. JOHN"
+                                            className="h-8 text-xs bg-slate-900 border-slate-700 text-white uppercase"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[9px] font-black text-slate-400 uppercase">Signatory Designation</label>
+                                        <Input
+                                            value={cardData.signatoryTitle}
+                                            onChange={(e) => setCardData({ ...cardData, signatoryTitle: e.target.value })}
+                                            placeholder="e.g. DIRECTOR / HR MANAGER"
+                                            className="h-8 text-xs bg-slate-900 border-slate-700 text-white uppercase"
+                                        />
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
