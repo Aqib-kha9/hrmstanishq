@@ -10,7 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import {
     TrendingUp, Info, Wallet, ArrowUpRight, ChevronRight,
     ShieldCheck, CreditCard, UserCircle, CalendarCheck, Clock, Download,
-    SlidersHorizontal, ShieldAlert, CheckCircle2, Loader2, Sparkles, Building2, Percent, Check, AlertCircle
+    SlidersHorizontal, ShieldAlert, CheckCircle2, Loader2, Sparkles, Building2, Percent, Check, AlertCircle,
+    Calendar, FileSpreadsheet, User, Filter, ArrowRight, CheckCircle, XCircle, Search
 } from "lucide-react";
 import { apiGet, apiPatch, apiPut } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -776,29 +777,122 @@ export function DisbursementDialog({
 }
 
 export function EmployeeHistoryDialog({
-    isOpen, onOpenChange,
-    selectedEmployee
-}: any) {
+    isOpen,
+    onOpenChange,
+    selectedEmployee,
+    allEmployees = [],
+    onSelectEmployee
+}: {
+    isOpen: boolean;
+    onOpenChange: (open: boolean) => void;
+    selectedEmployee: any;
+    allEmployees?: any[];
+    onSelectEmployee?: (emp: any) => void;
+}) {
     const [history, setHistory] = useState<any[]>([]);
+    const [periodAnalysis, setPeriodAnalysis] = useState<any | null>(null);
+    const [employeeDetails, setEmployeeDetails] = useState<any | null>(null);
     const [loading, setLoading] = useState(false);
+
+    // Duration filter: 30, 60, 90, 180, 365, or custom
+    const [durationPreset, setDurationPreset] = useState<string>("30");
+
+    // Initialize custom date range with past 30 days
+    const getDefaultDates = () => {
+        const today = new Date();
+        const past = new Date();
+        past.setDate(today.getDate() - 29);
+        const format = (d: Date) => d.toISOString().split("T")[0];
+        return { from: format(past), to: format(today) };
+    };
+
+    const [customFrom, setCustomFrom] = useState<string>(() => getDefaultDates().from);
+    const [customTo, setCustomTo] = useState<string>(() => getDefaultDates().to);
+    const [timelineFilter, setTimelineFilter] = useState<string>("ALL");
+    const [activeTab, setActiveTab] = useState<string>("timeline");
+
+    const fetchHistory = async (empId: number | string, params: { days?: string; from?: string; to?: string }) => {
+        if (!empId) return;
+        setLoading(true);
+        try {
+            const queryParts: string[] = [];
+            if (params.from && params.to) {
+                queryParts.push(`from=${encodeURIComponent(params.from)}`);
+                queryParts.push(`to=${encodeURIComponent(params.to)}`);
+            } else if (params.days) {
+                queryParts.push(`days=${encodeURIComponent(params.days)}`);
+            }
+            const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+            const res: any = await apiGet(`/payroll/employee/${empId}/history${qs}`);
+
+            if (res && res.employee) {
+                setEmployeeDetails(res.employee);
+                setPeriodAnalysis(res.periodAnalysis || null);
+                setHistory(res.history || []);
+            } else if (Array.isArray(res)) {
+                setHistory(res);
+                setPeriodAnalysis(null);
+                setEmployeeDetails(null);
+            } else {
+                setHistory([]);
+                setPeriodAnalysis(null);
+                setEmployeeDetails(null);
+            }
+        } catch (e) {
+            console.error("Failed to load employee salary history:", e);
+            setHistory([]);
+            setPeriodAnalysis(null);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
         if (!isOpen || !selectedEmployee) return;
-        const fetchHistory = async () => {
-            setLoading(true);
-            try {
-                const empId = selectedEmployee.employeeId || selectedEmployee.id;
-                const data = await apiGet<any[]>(`/payroll/employee/${empId}/history`);
-                setHistory(data || []);
-            } catch (e) {
-                console.error("Failed to load employee history:", e);
-                setHistory([]);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchHistory();
-    }, [isOpen, selectedEmployee]);
+        const empId = selectedEmployee.employeeId || selectedEmployee.id;
+        if (durationPreset === "custom") {
+            fetchHistory(empId, { from: customFrom, to: customTo });
+        } else {
+            fetchHistory(empId, { days: durationPreset });
+        }
+    }, [isOpen, selectedEmployee, durationPreset]);
+
+    const handleApplyCustomRange = () => {
+        if (!selectedEmployee) return;
+        const empId = selectedEmployee.employeeId || selectedEmployee.id;
+        fetchHistory(empId, { from: customFrom, to: customTo });
+    };
+
+    const handleEmployeeChange = (newIdStr: string) => {
+        const found = allEmployees.find(e => String(e.employeeId || e.id) === newIdStr);
+        if (found && onSelectEmployee) {
+            onSelectEmployee(found);
+        }
+    };
+
+    const handleExportCSV = () => {
+        if (!periodAnalysis?.timeline || periodAnalysis.timeline.length === 0) return;
+        const empName = (employeeDetails?.name || selectedEmployee?.name || "Employee").replace(/\s+/g, "_");
+        const headers = ["Date", "Day", "Status", "In Time", "Out Time", "Hours Logged", "Payable Day Credit", "Daily Earned (INR)"];
+        const rows = periodAnalysis.timeline.map((t: any) => [
+            t.date,
+            t.day,
+            t.status?.toUpperCase(),
+            t.checkIn || "--",
+            t.checkOut || "--",
+            t.totalHours || 0,
+            t.payableCredit,
+            t.dailyEarned
+        ]);
+        const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((r: any[]) => r.join(","))].join("\n");
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `Salary_Log_${empName}_${periodAnalysis.from}_to_${periodAnalysis.to}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     const handleDownload = async (row: any) => {
         try {
@@ -821,7 +915,6 @@ export function EmployeeHistoryDialog({
 
         const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a5' });
 
-        // Load logo image
         const img = await new Promise<HTMLImageElement>((resolve, reject) => {
             const tempImg = new Image();
             tempImg.src = '/company_logopng.png';
@@ -959,72 +1052,537 @@ export function EmployeeHistoryDialog({
         doc.setFontSize(6.5);
         doc.text("This is a computer-generated document and does not require a signature.", 105, 142, { align: "center" });
 
-        doc.save(`Payslip_${selectedEmployee.name?.replace(/\s+/g, '_')}_${cycleText}.pdf`);
+        doc.save(`Payslip_${(selectedEmployee?.name || 'Staff').replace(/\s+/g, '_')}_${cycleText}.pdf`);
     };
 
-    const paidEntries = history.filter(h => h.status === 'Paid' || h.status === 'Verified');
-    const totalPaidYTD = paidEntries.reduce((acc, h) => acc + h.net, 0);
-    const avgNetPay = paidEntries.length > 0 ? Math.round(totalPaidYTD / paidEntries.length) : 0;
-    const leavesTaken = history.reduce((acc, h) => acc + (h.absentDays || 0), 0);
+    const currentEmp = employeeDetails || selectedEmployee;
+    const fixedGross = Number(currentEmp?.fixed_gross || currentEmp?.fixedGross || 0);
+    const dailyRate = periodAnalysis?.dailyRate || Math.round(fixedGross / 30);
+    const hourlyRate = periodAnalysis?.hourlyRate || Math.round(dailyRate / 9);
+
+    const filteredTimeline = (periodAnalysis?.timeline || []).filter((t: any) => {
+        if (timelineFilter === "ALL") return true;
+        if (timelineFilter === "present") return t.status === "present" || t.status === "late" || t.status === "tour";
+        if (timelineFilter === "half_day") return t.status === "half_day";
+        if (timelineFilter === "weekend") return t.status === "weekend";
+        if (timelineFilter === "absent") return t.status === "absent";
+        return true;
+    });
+
+    const activeEmpId = String(selectedEmployee?.employeeId || selectedEmployee?.id || "");
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[600px] border-none shadow-2xl rounded-3xl p-0 overflow-hidden">
-                <div className="bg-slate-900 p-8 text-white">
-                    <div className="flex items-center gap-4 mb-6">
-                        <div className="h-14 w-14 rounded-2xl bg-white/10 flex items-center justify-center border border-white/10">
-                            <UserCircle className="h-8 w-8 text-[#D9F99D]" />
+            <DialogContent className="sm:max-w-[960px] w-full max-h-[92vh] border-none shadow-2xl rounded-3xl p-0 overflow-hidden flex flex-col bg-slate-50">
+                {/* ── Top Hero Header (Dark SaaS Theme) ── */}
+                <div className="bg-slate-900 p-6 md:p-8 text-white shrink-0 relative">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                            <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-[#D9F99D]/20 flex items-center justify-center border border-white/10 shrink-0 text-lg font-black text-[#D9F99D]">
+                                {(currentEmp?.name || "Staff").substring(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <h3 className="text-xl font-black italic uppercase tracking-tighter text-white">
+                                        {currentEmp?.name || "Employee"}
+                                    </h3>
+                                    <span className="text-[10px] px-2 py-0.5 rounded-md bg-white/10 font-bold uppercase tracking-wider text-slate-300">
+                                        {currentEmp?.emp_code || currentEmp?.employeeCode || `EMP-${currentEmp?.id || '--'}`}
+                                    </span>
+                                </div>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                                    {currentEmp?.company || "Company"} • {currentEmp?.designation || "Staff"} • {currentEmp?.department || "General"}
+                                </p>
+                            </div>
                         </div>
-                        <div>
-                            <h3 className="text-xl font-black italic uppercase tracking-tighter">{selectedEmployee?.name}</h3>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{selectedEmployee?.company} • Salary History</p>
-                        </div>
+
+                        {/* Staff Switcher Dropdown (Allows changing employee right inside modal) */}
+                        {allEmployees.length > 0 && onSelectEmployee && (
+                            <div className="flex items-center gap-2 bg-white/5 p-1.5 rounded-2xl border border-white/10">
+                                <User className="h-3.5 w-3.5 text-slate-400 ml-2" />
+                                <Select value={activeEmpId} onValueChange={handleEmployeeChange}>
+                                    <SelectTrigger className="h-9 w-[220px] rounded-xl bg-transparent border-none text-white text-[10px] font-bold uppercase tracking-wider focus:ring-0">
+                                        <SelectValue placeholder="Switch Employee..." />
+                                    </SelectTrigger>
+                                    <SelectContent className="border-none shadow-2xl rounded-2xl max-h-72">
+                                        {allEmployees.map((emp) => {
+                                            const id = String(emp.employeeId || emp.id);
+                                            return (
+                                                <SelectItem key={id} value={id} className="text-[10px] font-bold uppercase">
+                                                    {emp.name} ({emp.employeeCode || `EMP-${id}`})
+                                                </SelectItem>
+                                            );
+                                        })}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
                     </div>
-                    <div className="grid grid-cols-3 gap-4">
-                        <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                            <p className="text-[7px] font-black text-slate-500 uppercase mb-1">Total Paid YTD</p>
-                            <p className="text-sm font-black italic text-[#D9F99D]">₹{totalPaidYTD.toLocaleString()}</p>
+
+                    {/* Quick Wage Metrics Bar */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
+                        <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Fixed Monthly Gross</p>
+                            <p className="text-base font-black italic text-[#D9F99D]">₹{fixedGross.toLocaleString()}</p>
                         </div>
-                        <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                            <p className="text-[7px] font-black text-slate-500 uppercase mb-1">Avg. Net Pay</p>
-                            <p className="text-sm font-black italic text-white">₹{avgNetPay.toLocaleString()}</p>
+                        <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Daily Wage Rate (30d)</p>
+                            <p className="text-base font-black italic text-white">₹{dailyRate.toLocaleString()} <span className="text-[9px] text-slate-400 font-normal">/day</span></p>
                         </div>
-                        <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                            <p className="text-[7px] font-black text-slate-500 uppercase mb-1">Leaves Taken</p>
-                            <p className="text-sm font-black italic text-rose-400">{leavesTaken} Days</p>
+                        <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Hourly Rate (9h)</p>
+                            <p className="text-base font-black italic text-indigo-300">₹{hourlyRate.toLocaleString()} <span className="text-[9px] text-slate-400 font-normal">/hr</span></p>
+                        </div>
+                        <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Shift & Weekly Off</p>
+                            <p className="text-xs font-black uppercase text-amber-300 truncate">
+                                {currentEmp?.shift_preset || "09:30 - 18:30"} • {Array.isArray(currentEmp?.weekly_off_days) ? currentEmp.weekly_off_days.join(", ") : (currentEmp?.weekly_off_days || "Sun")}
+                            </p>
                         </div>
                     </div>
                 </div>
-                <div className="p-8 space-y-4">
-                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Recent Payouts</p>
-                    <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
-                        {loading ? (
-                            <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest text-center py-8">Loading history...</p>
-                        ) : history.length === 0 ? (
-                            <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest text-center py-8">No payout history found</p>
-                        ) : (
-                            history.map((h, i) => (
-                                <div key={i} className="flex items-center justify-between p-4 rounded-xl border border-slate-100 bg-slate-50/30">
-                                    <div className="flex items-center gap-3">
-                                        <CalendarCheck className="h-4 w-4 text-slate-400" />
-                                        <span className="text-[10px] font-black text-slate-900 uppercase">{h.month}</span>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                                        <span className="text-xs font-black italic text-slate-900">₹{h.net.toLocaleString()}</span>
-                                        <Badge className="bg-emerald-50 text-emerald-600 border-none font-black text-[7px] h-5 px-2 rounded-lg">{h.status}</Badge>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => handleDownload(h)}
-                                            className="h-8 rounded-lg border-slate-100 font-black uppercase text-[7px] tracking-widest px-3 hover:bg-[#D9F99D] hover:text-slate-900 hover:border-[#D9F99D]"
-                                        >
-                                            <Download className="h-3.5 w-3.5 mr-1" /> PDF
-                                        </Button>
-                                    </div>
-                                </div>
-                            ))
+
+                {/* ── Controls & Duration Selection Filter Bar ── */}
+                <div className="bg-white p-4 border-b border-slate-200/80 px-6 shrink-0 flex flex-wrap items-center justify-between gap-3 shadow-xs">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mr-1">Duration:</span>
+                        {[
+                            { id: "30", label: "Last 30 Days" },
+                            { id: "60", label: "Last 60 Days" },
+                            { id: "90", label: "Last 90 Days" },
+                            { id: "180", label: "Last 180 Days" },
+                            { id: "365", label: "1 Year" },
+                            { id: "custom", label: "Custom Range" },
+                        ].map((btn) => (
+                            <button
+                                key={btn.id}
+                                onClick={() => setDurationPreset(btn.id)}
+                                className={cn(
+                                    "px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all",
+                                    durationPreset === btn.id
+                                        ? "bg-slate-900 text-[#D9F99D] shadow-xs"
+                                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                )}
+                            >
+                                {btn.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="flex items-center gap-2">
+                        {periodAnalysis?.timeline?.length > 0 && (
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={handleExportCSV}
+                                className="h-8 rounded-xl border-slate-200 text-slate-700 font-black uppercase text-[8px] tracking-widest px-3 hover:bg-[#D9F99D] hover:text-slate-900"
+                            >
+                                <FileSpreadsheet className="h-3.5 w-3.5 mr-1 text-emerald-600" /> Export CSV
+                            </Button>
                         )}
                     </div>
+                </div>
+
+                {/* Custom Date Range Row (Revealed when 'Custom Range' is active) */}
+                {durationPreset === "custom" && (
+                    <div className="bg-indigo-50/60 border-b border-indigo-100 p-3 px-6 shrink-0 flex items-center gap-3 flex-wrap">
+                        <span className="text-[9px] font-black text-indigo-900 uppercase tracking-widest flex items-center gap-1.5">
+                            <Calendar className="h-3.5 w-3.5 text-indigo-600" /> Custom Range:
+                        </span>
+                        <div className="flex items-center gap-2">
+                            <label className="text-[9px] font-bold text-slate-500 uppercase">From:</label>
+                            <Input
+                                type="date"
+                                value={customFrom}
+                                onChange={(e) => setCustomFrom(e.target.value)}
+                                className="h-8 w-36 text-[10px] font-bold rounded-lg bg-white border-slate-200"
+                            />
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <label className="text-[9px] font-bold text-slate-500 uppercase">To:</label>
+                            <Input
+                                type="date"
+                                value={customTo}
+                                onChange={(e) => setCustomTo(e.target.value)}
+                                className="h-8 w-36 text-[10px] font-bold rounded-lg bg-white border-slate-200"
+                            />
+                        </div>
+                        <Button
+                            size="sm"
+                            onClick={handleApplyCustomRange}
+                            disabled={loading}
+                            className="h-8 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-[8px] tracking-widest rounded-lg shadow-xs"
+                        >
+                            {loading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null} Apply Range
+                        </Button>
+                    </div>
+                )}
+
+                {/* ── Period Summary KPI Row ── */}
+                {periodAnalysis && (
+                    <div className="p-4 px-6 grid grid-cols-2 md:grid-cols-4 gap-3 bg-white shrink-0 border-b border-slate-200/60">
+                        <div className="p-3 rounded-2xl bg-gradient-to-br from-emerald-50 to-emerald-100/40 border border-emerald-200/60">
+                            <p className="text-[8px] font-black text-emerald-800 uppercase tracking-widest">Period Gross Earned</p>
+                            <p className="text-xl font-black italic text-emerald-700 tracking-tight mt-0.5">
+                                ₹{periodAnalysis.periodGrossEarned?.toLocaleString()}
+                            </p>
+                            <p className="text-[8px] text-emerald-600 font-bold mt-1">
+                                {periodAnalysis.payableDays} payable days × ₹{periodAnalysis.dailyRate?.toLocaleString()}
+                            </p>
+                        </div>
+
+                        <div className="p-3 rounded-2xl bg-gradient-to-br from-indigo-50 to-indigo-100/40 border border-indigo-200/60">
+                            <p className="text-[8px] font-black text-indigo-800 uppercase tracking-widest">Payable Work Ratio</p>
+                            <p className="text-xl font-black italic text-indigo-700 tracking-tight mt-0.5">
+                                {periodAnalysis.payableDays} <span className="text-xs text-indigo-400 font-bold">/ {periodAnalysis.daysCount} Days</span>
+                            </p>
+                            <p className="text-[8px] text-indigo-600 font-bold mt-1">
+                                Range: {periodAnalysis.from} → {periodAnalysis.to}
+                            </p>
+                        </div>
+
+                        <div className="p-3 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200">
+                            <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest">Attendance Breakdown</p>
+                            <div className="flex items-center gap-2 mt-1">
+                                <span className="inline-flex items-center text-[9px] font-bold text-emerald-600">
+                                    <CheckCircle className="h-3 w-3 mr-0.5" /> {periodAnalysis.presentDays} Pres
+                                </span>
+                                <span className="text-slate-300">·</span>
+                                <span className="inline-flex items-center text-[9px] font-bold text-blue-600">
+                                    {periodAnalysis.weeklyOffDays} Off
+                                </span>
+                                <span className="text-slate-300">·</span>
+                                <span className="inline-flex items-center text-[9px] font-bold text-amber-600">
+                                    {periodAnalysis.halfDays} Half
+                                </span>
+                            </div>
+                            <p className="text-[8px] text-slate-500 font-bold mt-1">
+                                {periodAnalysis.totalHoursLogged || 0} Hours Logged
+                            </p>
+                        </div>
+
+                        <div className="p-3 rounded-2xl bg-gradient-to-br from-rose-50 to-rose-100/40 border border-rose-200/60">
+                            <p className="text-[8px] font-black text-rose-800 uppercase tracking-widest">Unpaid Absents (LWP)</p>
+                            <p className="text-xl font-black italic text-rose-700 tracking-tight mt-0.5">
+                                {periodAnalysis.absentDays} Days
+                            </p>
+                            <p className="text-[8px] text-rose-600 font-bold mt-1">
+                                Salary Deducted: ₹{(periodAnalysis.absentDays * dailyRate).toLocaleString()}
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {/* ── Tabbed View Selection ── */}
+                <div className="px-6 pt-3 bg-white shrink-0 border-b border-slate-200/60">
+                    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                        <TabsList className="bg-slate-100 p-1 rounded-2xl h-10 w-full justify-start">
+                            <TabsTrigger
+                                value="timeline"
+                                className="rounded-xl text-[9px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs px-5"
+                            >
+                                <Clock className="h-3.5 w-3.5 mr-1.5 text-indigo-600" />
+                                Day-Wise Salary Log ({periodAnalysis?.timeline?.length || 0})
+                            </TabsTrigger>
+                            <TabsTrigger
+                                value="cycles"
+                                className="rounded-xl text-[9px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs px-5"
+                            >
+                                <CalendarCheck className="h-3.5 w-3.5 mr-1.5 text-emerald-600" />
+                                Past Monthly Payroll Cycles ({history.length})
+                            </TabsTrigger>
+                            <TabsTrigger
+                                value="structure"
+                                className="rounded-xl text-[9px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs px-5"
+                            >
+                                <Wallet className="h-3.5 w-3.5 mr-1.5 text-amber-600" />
+                                Salary & Statutory Structure
+                            </TabsTrigger>
+                        </TabsList>
+                    </Tabs>
+                </div>
+
+                {/* ── Scrollable Body Content ── */}
+                <div className="flex-1 overflow-y-auto p-6">
+                    {loading ? (
+                        <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-3">
+                            <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+                            <p className="text-[10px] uppercase font-black tracking-widest text-slate-500">
+                                Computing period salary and attendance ledger...
+                            </p>
+                        </div>
+                    ) : activeTab === "timeline" ? (
+                        <div className="space-y-4">
+                            {/* Filter pills for status */}
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Filter:</span>
+                                    {["ALL", "present", "half_day", "weekend", "absent"].map((st) => (
+                                        <button
+                                            key={st}
+                                            onClick={() => setTimelineFilter(st)}
+                                            className={cn(
+                                                "px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider",
+                                                timelineFilter === st
+                                                    ? "bg-slate-800 text-white"
+                                                    : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+                                            )}
+                                        >
+                                            {st === "ALL" ? "All Days" : st.replace("_", " ")}
+                                        </button>
+                                    ))}
+                                </div>
+                                <span className="text-[9px] font-bold text-slate-500 uppercase">
+                                    Showing {filteredTimeline.length} of {periodAnalysis?.timeline?.length || 0} Days
+                                </span>
+                            </div>
+
+                            {/* Timeline Table */}
+                            {filteredTimeline.length === 0 ? (
+                                <div className="text-center py-16 bg-white rounded-2xl border border-slate-200/80">
+                                    <Clock className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                                    <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest">
+                                        No attendance entries found for this period
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="bg-slate-50 border-b border-slate-200/80 text-[8px] font-black uppercase text-slate-500 tracking-wider">
+                                                <th className="py-3 px-4">Date & Day</th>
+                                                <th className="py-3 px-4">Attendance Status</th>
+                                                <th className="py-3 px-4">Clock In / Out</th>
+                                                <th className="py-3 px-4">Hours</th>
+                                                <th className="py-3 px-4 text-center">Payable Credit</th>
+                                                <th className="py-3 px-4 text-right">Daily Salary Earned</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100 text-[10px]">
+                                            {filteredTimeline.map((item: any, idx: number) => {
+                                                const isPresent = item.status === "present" || item.status === "late" || item.status === "tour";
+                                                const isHalf = item.status === "half_day";
+                                                const isOff = item.status === "weekend";
+                                                const isAbsent = item.status === "absent";
+
+                                                return (
+                                                    <tr key={idx} className="hover:bg-slate-50/70 transition-colors">
+                                                        <td className="py-3 px-4 font-bold text-slate-900">
+                                                            <div>
+                                                                <span>{item.date}</span>
+                                                                <span className="ml-1.5 text-[8px] font-black uppercase text-slate-400">
+                                                                    ({item.day})
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-3 px-4">
+                                                            {isPresent ? (
+                                                                <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 font-black text-[8px] rounded-md px-2">
+                                                                    {item.status === "tour" ? "Field Tour" : (item.lateMinutes > 0 ? `Present (Late ${item.lateMinutes}m)` : "Present")}
+                                                                </Badge>
+                                                            ) : isHalf ? (
+                                                                <Badge className="bg-amber-50 text-amber-700 border border-amber-200 font-black text-[8px] rounded-md px-2">
+                                                                    Half Day
+                                                                </Badge>
+                                                            ) : isOff ? (
+                                                                <Badge className="bg-blue-50 text-blue-700 border border-blue-200 font-black text-[8px] rounded-md px-2">
+                                                                    Weekly Off
+                                                                </Badge>
+                                                            ) : item.status === "holiday" ? (
+                                                                <Badge className="bg-purple-50 text-purple-700 border border-purple-200 font-black text-[8px] rounded-md px-2">
+                                                                    Paid Holiday
+                                                                </Badge>
+                                                            ) : (
+                                                                <Badge className="bg-rose-50 text-rose-700 border border-rose-200 font-black text-[8px] rounded-md px-2">
+                                                                    Absent (LWP)
+                                                                </Badge>
+                                                            )}
+                                                        </td>
+                                                        <td className="py-3 px-4 font-mono text-[9px] text-slate-600">
+                                                            {item.checkIn || item.checkOut ? (
+                                                                <span>{item.checkIn || "--"} → {item.checkOut || "--"}</span>
+                                                            ) : (
+                                                                <span className="text-slate-300">--</span>
+                                                            )}
+                                                        </td>
+                                                        <td className="py-3 px-4 font-bold text-slate-700">
+                                                            {item.totalHours > 0 ? `${item.totalHours} hrs` : "--"}
+                                                        </td>
+                                                        <td className="py-3 px-4 text-center font-black">
+                                                            <span className={cn(
+                                                                "inline-block px-2 py-0.5 rounded-md text-[9px]",
+                                                                item.payableCredit === 1 ? "bg-emerald-100 text-emerald-800" :
+                                                                item.payableCredit === 0.5 ? "bg-amber-100 text-amber-800" :
+                                                                "bg-rose-100 text-rose-800"
+                                                            )}>
+                                                                {item.payableCredit} Day
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-3 px-4 text-right font-black italic">
+                                                            {item.dailyEarned > 0 ? (
+                                                                <span className="text-emerald-700">₹{item.dailyEarned.toLocaleString()}</span>
+                                                            ) : (
+                                                                <span className="text-rose-400">₹0</span>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    ) : activeTab === "cycles" ? (
+                        <div className="space-y-3">
+                            <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">
+                                Monthly Finalized Payroll Runs & Payslip Slips
+                            </p>
+                            {history.length === 0 ? (
+                                <div className="text-center py-16 bg-white rounded-2xl border border-slate-200/80">
+                                    <CalendarCheck className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                                    <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest">
+                                        No past payroll cycles recorded yet
+                                    </p>
+                                </div>
+                            ) : (
+                                history.map((h, i) => (
+                                    <div
+                                        key={i}
+                                        className="flex flex-col md:flex-row md:items-center justify-between p-4 rounded-2xl border border-slate-200 bg-white gap-3 shadow-xs hover:border-indigo-200 transition-all"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-10 w-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
+                                                <CalendarCheck className="h-5 w-5" />
+                                            </div>
+                                            <div>
+                                                <span className="text-xs font-black text-slate-900 uppercase">
+                                                    {h.month} ({h.year})
+                                                </span>
+                                                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
+                                                    Working Days: {h.workingDays || 0} • Absents: {h.absentDays || 0}d
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-4">
+                                            <div className="text-right">
+                                                <p className="text-[7px] font-black uppercase text-slate-400">Net Take Home</p>
+                                                <span className="text-sm font-black italic text-emerald-700">
+                                                    ₹{Number(h.net || 0).toLocaleString()}
+                                                </span>
+                                            </div>
+                                            <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 font-black text-[8px] h-6 px-2.5 rounded-lg">
+                                                {h.status || "Paid"}
+                                            </Badge>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handleDownload(h)}
+                                                className="h-8 rounded-xl border-slate-200 font-black uppercase text-[8px] tracking-widest px-3 hover:bg-[#D9F99D] hover:text-slate-900"
+                                            >
+                                                <Download className="h-3.5 w-3.5 mr-1" /> PDF Slip
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    ) : (
+                        /* ── Tab: Salary & Statutory Structure ── */
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {/* Salary Breakup */}
+                                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-900 flex items-center gap-2">
+                                        <Wallet className="h-4 w-4 text-emerald-600" />
+                                        Monthly Salary Structure (CTC Breakup)
+                                    </h4>
+                                    <div className="space-y-2 text-[10px] divide-y divide-slate-100">
+                                        <div className="flex justify-between py-1.5 font-bold text-slate-700">
+                                            <span>Basic Salary (50%)</span>
+                                            <span className="font-mono font-black">
+                                                ₹{employeeDetails?.salaryBreakup?.basic?.toLocaleString() || Math.round(fixedGross * 0.50).toLocaleString()}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between py-1.5 font-bold text-slate-700">
+                                            <span>House Rent Allowance (HRA 40%)</span>
+                                            <span className="font-mono font-black">
+                                                ₹{employeeDetails?.salaryBreakup?.hra?.toLocaleString() || Math.round(fixedGross * 0.20).toLocaleString()}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between py-1.5 font-bold text-slate-700">
+                                            <span>Special / Other Allowances</span>
+                                            <span className="font-mono font-black">
+                                                ₹{employeeDetails?.salaryBreakup?.other?.toLocaleString() || Math.max(0, fixedGross - Math.round(fixedGross * 0.70)).toLocaleString()}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between py-2 font-black text-slate-900 bg-slate-50 px-2 rounded-lg">
+                                            <span>Total Fixed Monthly Base</span>
+                                            <span className="font-mono text-emerald-700">₹{fixedGross.toLocaleString()}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Statutory Applicability */}
+                                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-900 flex items-center gap-2">
+                                        <ShieldCheck className="h-4 w-4 text-indigo-600" />
+                                        Statutory & Banking Details
+                                    </h4>
+                                    <div className="space-y-2 text-[10px] divide-y divide-slate-100">
+                                        <div className="flex justify-between py-1.5 font-bold text-slate-700">
+                                            <span>Provident Fund (PF)</span>
+                                            <span>
+                                                {employeeDetails?.pf_applicable ? (
+                                                    <Badge className="bg-emerald-50 text-emerald-700 border-none text-[8px]">Active (12%)</Badge>
+                                                ) : (
+                                                    <Badge className="bg-slate-100 text-slate-500 border-none text-[8px]">Exempt</Badge>
+                                                )}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between py-1.5 font-bold text-slate-700">
+                                            <span>ESIC Health Insurance</span>
+                                            <span>
+                                                {employeeDetails?.esic_applicable ? (
+                                                    <Badge className="bg-emerald-50 text-emerald-700 border-none text-[8px]">Active (0.75%)</Badge>
+                                                ) : (
+                                                    <Badge className="bg-slate-100 text-slate-500 border-none text-[8px]">Exempt</Badge>
+                                                )}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between py-1.5 font-bold text-slate-700">
+                                            <span>Bank Account</span>
+                                            <span className="font-mono font-bold text-slate-800">
+                                                {employeeDetails?.bank_name || "--"} ({employeeDetails?.bank_account_number || "--"})
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between py-1.5 font-bold text-slate-700">
+                                            <span>UAN / PF Number</span>
+                                            <span className="font-mono font-bold text-slate-800">
+                                                {employeeDetails?.uan || employeeDetails?.pf_number || "--"}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* ── Modal Footer ── */}
+                <div className="p-4 px-6 bg-white border-t border-slate-200/80 flex items-center justify-between shrink-0">
+                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">
+                        Single Employee Historical Salary Analytics • Production Grade
+                    </p>
+                    <Button
+                        variant="outline"
+                        onClick={() => onOpenChange(false)}
+                        className="h-9 px-6 rounded-xl font-black uppercase text-[8px] tracking-widest text-slate-700 hover:bg-slate-100"
+                    >
+                        Close
+                    </Button>
                 </div>
             </DialogContent>
         </Dialog>

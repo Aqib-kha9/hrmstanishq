@@ -41,7 +41,8 @@ import {
     ChevronLeft,
     Mail,
     Send,
-    Building2
+    Building2,
+    User
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -669,7 +670,18 @@ export default function PayrollPage() {
                         </div>
                     </div>
                     <div className="flex items-center gap-3">
-
+                        <Button
+                            onClick={() => {
+                                if (!selectedEmployee && ledger.length > 0) {
+                                    setSelectedEmployee(ledger[0]);
+                                }
+                                setIsHistoryOpen(true);
+                            }}
+                            variant="outline"
+                            className="h-10 px-5 rounded-xl border-2 border-indigo-100 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 font-black uppercase text-[9px] tracking-widest transition-all shadow-xs"
+                        >
+                            <User className="h-4 w-4 mr-2 text-indigo-600" /> Staff Salary Lookup
+                        </Button>
 
                         <Link href="/payroll/analytics">
                             <Button
@@ -1096,7 +1108,9 @@ export default function PayrollPage() {
                 <EmployeeHistoryDialog
                     isOpen={isHistoryOpen}
                     onOpenChange={setIsHistoryOpen}
-                    selectedEmployee={selectedEmployee}
+                    selectedEmployee={selectedEmployee || ledger[0]}
+                    allEmployees={ledger}
+                    onSelectEmployee={setSelectedEmployee}
                 />
 
 
