@@ -11,7 +11,7 @@ import {
     TrendingUp, Info, Wallet, ArrowUpRight, ChevronRight,
     ShieldCheck, CreditCard, UserCircle, CalendarCheck, Clock, Download,
     SlidersHorizontal, ShieldAlert, CheckCircle2, Loader2, Sparkles, Building2, Percent, Check, AlertCircle,
-    Calendar, FileSpreadsheet, User, Filter, ArrowRight, CheckCircle, XCircle, Search
+    Calendar, FileSpreadsheet, User, Filter, ArrowRight, CheckCircle, XCircle, Search, X, CalendarDays, Layers
 } from "lucide-react";
 import { apiGet, apiPatch, apiPut } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -794,10 +794,25 @@ export function EmployeeHistoryDialog({
     const [employeeDetails, setEmployeeDetails] = useState<any | null>(null);
     const [loading, setLoading] = useState(false);
 
-    // Duration filter: 30, 60, 90, 180, 365, or custom
+    // Filter Mode: 'monthly' (default), 'rolling', 'custom'
+    const [filterMode, setFilterMode] = useState<"monthly" | "rolling" | "custom">("monthly");
+
+    // Monthly View configuration
+    const monthsList = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    ];
+    const currentMonthIndex = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+
+    const [selectedMonth, setSelectedMonth] = useState<string>(monthsList[currentMonthIndex] || "November");
+    const [selectedYear, setSelectedYear] = useState<string>(String(currentYear));
+    const [cycleType, setCycleType] = useState<"payroll_cycle" | "calendar">("payroll_cycle");
+
+    // Rolling Days filter: 30, 60, 90, 180, 365
     const [durationPreset, setDurationPreset] = useState<string>("30");
 
-    // Initialize custom date range with past 30 days
+    // Custom Date Range
     const getDefaultDates = () => {
         const today = new Date();
         const past = new Date();
@@ -808,20 +823,20 @@ export function EmployeeHistoryDialog({
 
     const [customFrom, setCustomFrom] = useState<string>(() => getDefaultDates().from);
     const [customTo, setCustomTo] = useState<string>(() => getDefaultDates().to);
-    const [timelineFilter, setTimelineFilter] = useState<string>("ALL");
-    const [activeTab, setActiveTab] = useState<string>("timeline");
 
-    const fetchHistory = async (empId: number | string, params: { days?: string; from?: string; to?: string }) => {
+    const [timelineFilter, setTimelineFilter] = useState<string>("ALL");
+    const [activeTab, setActiveTab] = useState<string>("monthly_summary");
+
+    const fetchHistory = async (empId: number | string, params: Record<string, string | undefined>) => {
         if (!empId) return;
         setLoading(true);
         try {
             const queryParts: string[] = [];
-            if (params.from && params.to) {
-                queryParts.push(`from=${encodeURIComponent(params.from)}`);
-                queryParts.push(`to=${encodeURIComponent(params.to)}`);
-            } else if (params.days) {
-                queryParts.push(`days=${encodeURIComponent(params.days)}`);
-            }
+            Object.entries(params).forEach(([key, val]) => {
+                if (val !== undefined && val !== null && val !== "") {
+                    queryParts.push(`${key}=${encodeURIComponent(val)}`);
+                }
+            });
             const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
             const res: any = await apiGet(`/payroll/employee/${empId}/history${qs}`);
 
@@ -850,12 +865,19 @@ export function EmployeeHistoryDialog({
     useEffect(() => {
         if (!isOpen || !selectedEmployee) return;
         const empId = selectedEmployee.employeeId || selectedEmployee.id;
-        if (durationPreset === "custom") {
-            fetchHistory(empId, { from: customFrom, to: customTo });
-        } else {
+
+        if (filterMode === "monthly") {
+            fetchHistory(empId, {
+                month: selectedMonth,
+                year: selectedYear,
+                cycle_type: cycleType
+            });
+        } else if (filterMode === "rolling") {
             fetchHistory(empId, { days: durationPreset });
+        } else if (filterMode === "custom") {
+            fetchHistory(empId, { from: customFrom, to: customTo });
         }
-    }, [isOpen, selectedEmployee, durationPreset]);
+    }, [isOpen, selectedEmployee, filterMode, selectedMonth, selectedYear, cycleType, durationPreset]);
 
     const handleApplyCustomRange = () => {
         if (!selectedEmployee) return;
@@ -1073,35 +1095,36 @@ export function EmployeeHistoryDialog({
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[960px] w-full max-h-[92vh] border-none shadow-2xl rounded-3xl p-0 overflow-hidden flex flex-col bg-slate-50">
-                {/* ── Top Hero Header (Dark SaaS Theme) ── */}
-                <div className="bg-slate-900 p-6 md:p-8 text-white shrink-0 relative">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div className="flex items-center gap-4">
-                            <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-[#D9F99D]/20 flex items-center justify-center border border-white/10 shrink-0 text-lg font-black text-[#D9F99D]">
-                                {(currentEmp?.name || "Staff").substring(0, 2).toUpperCase()}
-                            </div>
-                            <div>
-                                <div className="flex items-center gap-2">
-                                    <h3 className="text-xl font-black italic uppercase tracking-tighter text-white">
-                                        {currentEmp?.name || "Employee"}
-                                    </h3>
-                                    <span className="text-[10px] px-2 py-0.5 rounded-md bg-white/10 font-bold uppercase tracking-wider text-slate-300">
-                                        {currentEmp?.emp_code || currentEmp?.employeeCode || `EMP-${currentEmp?.id || '--'}`}
-                                    </span>
-                                </div>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                                    {currentEmp?.company || "Company"} • {currentEmp?.designation || "Staff"} • {currentEmp?.department || "General"}
-                                </p>
-                            </div>
+            <DialogContent className="sm:max-w-[1020px] w-full max-h-[92vh] h-[92vh] border-none shadow-2xl rounded-3xl p-0 overflow-hidden flex flex-col bg-slate-50">
+                
+                {/* ── 1. Compact SaaS Header Bar (Height ~64px) ── */}
+                <div className="bg-slate-900 px-6 py-3.5 text-white shrink-0 flex items-center justify-between gap-4 border-b border-white/5">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-500/30 to-[#D9F99D]/30 flex items-center justify-center border border-white/10 shrink-0 text-sm font-black text-[#D9F99D]">
+                            {(currentEmp?.name || "Staff").substring(0, 2).toUpperCase()}
                         </div>
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                                <h3 className="text-base font-black italic uppercase tracking-tighter text-white truncate">
+                                    {currentEmp?.name || "Employee"}
+                                </h3>
+                                <span className="text-[9px] px-2 py-0.5 rounded-md bg-white/10 font-bold uppercase tracking-wider text-slate-300 shrink-0">
+                                    {currentEmp?.emp_code || currentEmp?.employeeCode || `EMP-${currentEmp?.id || '--'}`}
+                                </span>
+                            </div>
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest truncate">
+                                {currentEmp?.company || "Company"} • {currentEmp?.designation || "Staff"} • {currentEmp?.department || "General"}
+                            </p>
+                        </div>
+                    </div>
 
-                        {/* Staff Switcher Dropdown (Allows changing employee right inside modal) */}
+                    {/* Right Controls: Staff Switcher + Direct Close Button */}
+                    <div className="flex items-center gap-3 shrink-0">
                         {allEmployees.length > 0 && onSelectEmployee && (
-                            <div className="flex items-center gap-2 bg-white/5 p-1.5 rounded-2xl border border-white/10">
-                                <User className="h-3.5 w-3.5 text-slate-400 ml-2" />
+                            <div className="flex items-center gap-1.5 bg-white/5 px-2.5 py-1 rounded-xl border border-white/10">
+                                <User className="h-3.5 w-3.5 text-slate-400" />
                                 <Select value={activeEmpId} onValueChange={handleEmployeeChange}>
-                                    <SelectTrigger className="h-9 w-[220px] rounded-xl bg-transparent border-none text-white text-[10px] font-bold uppercase tracking-wider focus:ring-0">
+                                    <SelectTrigger className="h-7 w-[190px] rounded-lg bg-transparent border-none text-white text-[9px] font-bold uppercase tracking-wider focus:ring-0 p-0 shadow-none">
                                         <SelectValue placeholder="Switch Employee..." />
                                     </SelectTrigger>
                                     <SelectContent className="border-none shadow-2xl rounded-2xl max-h-72">
@@ -1117,56 +1140,203 @@ export function EmployeeHistoryDialog({
                                 </Select>
                             </div>
                         )}
+
+                        <button
+                            onClick={() => onOpenChange(false)}
+                            className="h-8 w-8 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+                            title="Close Modal"
+                        >
+                            <X className="h-4 w-4" />
+                        </button>
+                    </div>
+                </div>
+
+                {/* ── 2. Unified Quick Metric Strip (Height ~44px) ── */}
+                <div className="bg-slate-800 text-white px-6 py-2 shrink-0 border-b border-slate-700/60 flex items-center justify-between gap-3 text-[10px] overflow-x-auto">
+                    <div className="flex items-center gap-4 shrink-0">
+                        <div>
+                            <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Fixed Gross</span>
+                            <span className="font-black italic text-white">₹{fixedGross.toLocaleString()}</span>
+                        </div>
+                        <div className="h-6 w-px bg-slate-700" />
+                        <div>
+                            <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Daily Rate</span>
+                            <span className="font-bold text-slate-200">₹{dailyRate.toLocaleString()}<span className="text-[8px] text-slate-400 font-normal">/d</span></span>
+                        </div>
+                        <div className="h-6 w-px bg-slate-700" />
+                        <div>
+                            <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Hourly Rate</span>
+                            <span className="font-bold text-indigo-300">₹{hourlyRate.toLocaleString()}<span className="text-[8px] text-slate-400 font-normal">/h</span></span>
+                        </div>
+                        <div className="h-6 w-px bg-slate-700" />
+                        <div>
+                            <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Shift & Off</span>
+                            <span className="font-bold text-amber-300">{currentEmp?.shift_preset || "09:30-18:30"} • {Array.isArray(currentEmp?.weekly_off_days) ? currentEmp.weekly_off_days.join(",") : (currentEmp?.weekly_off_days || "Sun")}</span>
+                        </div>
                     </div>
 
-                    {/* Quick Wage Metrics Bar */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
-                        <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
-                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Fixed Monthly Gross</p>
-                            <p className="text-base font-black italic text-[#D9F99D]">₹{fixedGross.toLocaleString()}</p>
+                    <div className="flex items-center gap-4 shrink-0 pl-4 border-l border-slate-700">
+                        <div>
+                            <span className="text-[8px] uppercase tracking-wider text-emerald-400 font-bold block">Period Gross Earned</span>
+                            <span className="font-black italic text-emerald-300 text-sm">
+                                ₹{periodAnalysis?.periodGrossEarned?.toLocaleString() || "0"}
+                            </span>
                         </div>
-                        <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
-                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Daily Wage Rate (30d)</p>
-                            <p className="text-base font-black italic text-white">₹{dailyRate.toLocaleString()} <span className="text-[9px] text-slate-400 font-normal">/day</span></p>
+                        <div className="h-6 w-px bg-slate-700" />
+                        <div>
+                            <span className="text-[8px] uppercase tracking-wider text-indigo-300 font-bold block">Payable Work Ratio</span>
+                            <span className="font-bold text-white">
+                                {periodAnalysis?.payableDays || 0} <span className="text-slate-400 font-normal">/ {periodAnalysis?.daysCount || 0}d</span>
+                            </span>
                         </div>
-                        <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
-                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Hourly Rate (9h)</p>
-                            <p className="text-base font-black italic text-indigo-300">₹{hourlyRate.toLocaleString()} <span className="text-[9px] text-slate-400 font-normal">/hr</span></p>
-                        </div>
-                        <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
-                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Shift & Weekly Off</p>
-                            <p className="text-xs font-black uppercase text-amber-300 truncate">
-                                {currentEmp?.shift_preset || "09:30 - 18:30"} • {Array.isArray(currentEmp?.weekly_off_days) ? currentEmp.weekly_off_days.join(", ") : (currentEmp?.weekly_off_days || "Sun")}
-                            </p>
+                        <div className="h-6 w-px bg-slate-700" />
+                        <div>
+                            <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Attendance Breakdown</span>
+                            <span className="font-bold text-slate-200">
+                                <span className="text-emerald-400">{periodAnalysis?.presentDays || 0}P</span> · <span className="text-blue-300">{periodAnalysis?.weeklyOffDays || 0}Off</span> · <span className="text-amber-300">{periodAnalysis?.halfDays || 0}H</span> · <span className="text-rose-400">{periodAnalysis?.absentDays || 0}A</span>
+                            </span>
                         </div>
                     </div>
                 </div>
 
-                {/* ── Controls & Duration Selection Filter Bar ── */}
-                <div className="bg-white p-4 border-b border-slate-200/80 px-6 shrink-0 flex flex-wrap items-center justify-between gap-3 shadow-xs">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mr-1">Duration:</span>
-                        {[
-                            { id: "30", label: "Last 30 Days" },
-                            { id: "60", label: "Last 60 Days" },
-                            { id: "90", label: "Last 90 Days" },
-                            { id: "180", label: "Last 180 Days" },
-                            { id: "365", label: "1 Year" },
-                            { id: "custom", label: "Custom Range" },
-                        ].map((btn) => (
+                {/* ── 3. Unified Filter Controls Bar (Monthly Wise / Rolling / Custom) ── */}
+                <div className="bg-white px-6 py-2.5 border-b border-slate-200/80 shrink-0 flex flex-wrap items-center justify-between gap-3 shadow-xs">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        {/* Mode Switcher */}
+                        <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200">
                             <button
-                                key={btn.id}
-                                onClick={() => setDurationPreset(btn.id)}
+                                onClick={() => setFilterMode("monthly")}
                                 className={cn(
-                                    "px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all",
-                                    durationPreset === btn.id
-                                        ? "bg-slate-900 text-[#D9F99D] shadow-xs"
-                                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                    "px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all",
+                                    filterMode === "monthly" ? "bg-slate-900 text-[#D9F99D] shadow-xs" : "text-slate-600 hover:text-slate-900"
                                 )}
                             >
-                                {btn.label}
+                                <CalendarDays className="h-3 w-3 inline mr-1 text-emerald-500" /> Month-Wise
                             </button>
-                        ))}
+                            <button
+                                onClick={() => setFilterMode("rolling")}
+                                className={cn(
+                                    "px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all",
+                                    filterMode === "rolling" ? "bg-slate-900 text-[#D9F99D] shadow-xs" : "text-slate-600 hover:text-slate-900"
+                                )}
+                            >
+                                <Clock className="h-3 w-3 inline mr-1 text-indigo-400" /> Rolling Days
+                            </button>
+                            <button
+                                onClick={() => setFilterMode("custom")}
+                                className={cn(
+                                    "px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all",
+                                    filterMode === "custom" ? "bg-slate-900 text-[#D9F99D] shadow-xs" : "text-slate-600 hover:text-slate-900"
+                                )}
+                            >
+                                <Calendar className="h-3 w-3 inline mr-1 text-amber-500" /> Custom Range
+                            </button>
+                        </div>
+
+                        {/* Mode-Specific Controls */}
+                        {filterMode === "monthly" && (
+                            <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+                                {/* Month Dropdown */}
+                                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                                    <SelectTrigger className="h-8 w-28 text-[9px] font-black uppercase rounded-lg border-slate-200 bg-white">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent className="border-none shadow-xl rounded-xl">
+                                        {monthsList.map(m => (
+                                            <SelectItem key={m} value={m} className="text-[10px] font-bold uppercase">{m}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+
+                                {/* Year Dropdown */}
+                                <Select value={selectedYear} onValueChange={setSelectedYear}>
+                                    <SelectTrigger className="h-8 w-20 text-[9px] font-black uppercase rounded-lg border-slate-200 bg-white">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent className="border-none shadow-xl rounded-xl">
+                                        {[2027, 2026, 2025, 2024].map(y => (
+                                            <SelectItem key={y} value={String(y)} className="text-[10px] font-bold">{y}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+
+                                {/* Cycle Type Toggle */}
+                                <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-[8px] font-bold uppercase">
+                                    <button
+                                        onClick={() => setCycleType("payroll_cycle")}
+                                        className={cn(
+                                            "px-2 py-1 rounded-md transition-all",
+                                            cycleType === "payroll_cycle" ? "bg-indigo-600 text-white shadow-xs font-black" : "text-slate-600 hover:text-slate-900"
+                                        )}
+                                        title="Payroll Cycle (26th prev month to 25th current month)"
+                                    >
+                                        Payroll (26th-25th)
+                                    </button>
+                                    <button
+                                        onClick={() => setCycleType("calendar")}
+                                        className={cn(
+                                            "px-2 py-1 rounded-md transition-all",
+                                            cycleType === "calendar" ? "bg-indigo-600 text-white shadow-xs font-black" : "text-slate-600 hover:text-slate-900"
+                                        )}
+                                        title="Calendar Month (1st to Month End)"
+                                    >
+                                        Calendar (1st-End)
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {filterMode === "rolling" && (
+                            <div className="flex items-center gap-1 pl-2 border-l border-slate-200">
+                                {[
+                                    { id: "30", label: "30 Days" },
+                                    { id: "60", label: "60 Days" },
+                                    { id: "90", label: "90 Days" },
+                                    { id: "180", label: "180 Days" },
+                                    { id: "365", label: "1 Year" },
+                                ].map((btn) => (
+                                    <button
+                                        key={btn.id}
+                                        onClick={() => setDurationPreset(btn.id)}
+                                        className={cn(
+                                            "px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all",
+                                            durationPreset === btn.id
+                                                ? "bg-slate-900 text-[#D9F99D] shadow-xs"
+                                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                        )}
+                                    >
+                                        {btn.label}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
+                        {filterMode === "custom" && (
+                            <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+                                <label className="text-[8px] font-bold text-slate-400 uppercase">From:</label>
+                                <Input
+                                    type="date"
+                                    value={customFrom}
+                                    onChange={(e) => setCustomFrom(e.target.value)}
+                                    className="h-7 w-32 text-[9px] font-bold rounded-md bg-white border-slate-200"
+                                />
+                                <label className="text-[8px] font-bold text-slate-400 uppercase">To:</label>
+                                <Input
+                                    type="date"
+                                    value={customTo}
+                                    onChange={(e) => setCustomTo(e.target.value)}
+                                    className="h-7 w-32 text-[9px] font-bold rounded-md bg-white border-slate-200"
+                                />
+                                <Button
+                                    size="sm"
+                                    onClick={handleApplyCustomRange}
+                                    disabled={loading}
+                                    className="h-7 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-[8px] tracking-widest rounded-md shadow-xs"
+                                >
+                                    Apply
+                                </Button>
+                            </div>
+                        )}
                     </div>
 
                     {/* Action buttons */}
@@ -1176,154 +1346,204 @@ export function EmployeeHistoryDialog({
                                 size="sm"
                                 variant="outline"
                                 onClick={handleExportCSV}
-                                className="h-8 rounded-xl border-slate-200 text-slate-700 font-black uppercase text-[8px] tracking-widest px-3 hover:bg-[#D9F99D] hover:text-slate-900"
+                                className="h-7 rounded-lg border-slate-200 text-slate-700 font-black uppercase text-[8px] tracking-widest px-2.5 hover:bg-[#D9F99D] hover:text-slate-900"
                             >
-                                <FileSpreadsheet className="h-3.5 w-3.5 mr-1 text-emerald-600" /> Export CSV
+                                <FileSpreadsheet className="h-3 w-3 mr-1 text-emerald-600" /> Export CSV
                             </Button>
                         )}
                     </div>
                 </div>
 
-                {/* Custom Date Range Row (Revealed when 'Custom Range' is active) */}
-                {durationPreset === "custom" && (
-                    <div className="bg-indigo-50/60 border-b border-indigo-100 p-3 px-6 shrink-0 flex items-center gap-3 flex-wrap">
-                        <span className="text-[9px] font-black text-indigo-900 uppercase tracking-widest flex items-center gap-1.5">
-                            <Calendar className="h-3.5 w-3.5 text-indigo-600" /> Custom Range:
-                        </span>
-                        <div className="flex items-center gap-2">
-                            <label className="text-[9px] font-bold text-slate-500 uppercase">From:</label>
-                            <Input
-                                type="date"
-                                value={customFrom}
-                                onChange={(e) => setCustomFrom(e.target.value)}
-                                className="h-8 w-36 text-[10px] font-bold rounded-lg bg-white border-slate-200"
-                            />
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <label className="text-[9px] font-bold text-slate-500 uppercase">To:</label>
-                            <Input
-                                type="date"
-                                value={customTo}
-                                onChange={(e) => setCustomTo(e.target.value)}
-                                className="h-8 w-36 text-[10px] font-bold rounded-lg bg-white border-slate-200"
-                            />
-                        </div>
-                        <Button
-                            size="sm"
-                            onClick={handleApplyCustomRange}
-                            disabled={loading}
-                            className="h-8 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-[8px] tracking-widest rounded-lg shadow-xs"
-                        >
-                            {loading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null} Apply Range
-                        </Button>
-                    </div>
-                )}
-
-                {/* ── Period Summary KPI Row ── */}
-                {periodAnalysis && (
-                    <div className="p-4 px-6 grid grid-cols-2 md:grid-cols-4 gap-3 bg-white shrink-0 border-b border-slate-200/60">
-                        <div className="p-3 rounded-2xl bg-gradient-to-br from-emerald-50 to-emerald-100/40 border border-emerald-200/60">
-                            <p className="text-[8px] font-black text-emerald-800 uppercase tracking-widest">Period Gross Earned</p>
-                            <p className="text-xl font-black italic text-emerald-700 tracking-tight mt-0.5">
-                                ₹{periodAnalysis.periodGrossEarned?.toLocaleString()}
-                            </p>
-                            <p className="text-[8px] text-emerald-600 font-bold mt-1">
-                                {periodAnalysis.payableDays} payable days × ₹{periodAnalysis.dailyRate?.toLocaleString()}
-                            </p>
-                        </div>
-
-                        <div className="p-3 rounded-2xl bg-gradient-to-br from-indigo-50 to-indigo-100/40 border border-indigo-200/60">
-                            <p className="text-[8px] font-black text-indigo-800 uppercase tracking-widest">Payable Work Ratio</p>
-                            <p className="text-xl font-black italic text-indigo-700 tracking-tight mt-0.5">
-                                {periodAnalysis.payableDays} <span className="text-xs text-indigo-400 font-bold">/ {periodAnalysis.daysCount} Days</span>
-                            </p>
-                            <p className="text-[8px] text-indigo-600 font-bold mt-1">
-                                Range: {periodAnalysis.from} → {periodAnalysis.to}
-                            </p>
-                        </div>
-
-                        <div className="p-3 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200">
-                            <p className="text-[8px] font-black text-slate-700 uppercase tracking-widest">Attendance Breakdown</p>
-                            <div className="flex items-center gap-2 mt-1">
-                                <span className="inline-flex items-center text-[9px] font-bold text-emerald-600">
-                                    <CheckCircle className="h-3 w-3 mr-0.5" /> {periodAnalysis.presentDays} Pres
-                                </span>
-                                <span className="text-slate-300">·</span>
-                                <span className="inline-flex items-center text-[9px] font-bold text-blue-600">
-                                    {periodAnalysis.weeklyOffDays} Off
-                                </span>
-                                <span className="text-slate-300">·</span>
-                                <span className="inline-flex items-center text-[9px] font-bold text-amber-600">
-                                    {periodAnalysis.halfDays} Half
-                                </span>
-                            </div>
-                            <p className="text-[8px] text-slate-500 font-bold mt-1">
-                                {periodAnalysis.totalHoursLogged || 0} Hours Logged
-                            </p>
-                        </div>
-
-                        <div className="p-3 rounded-2xl bg-gradient-to-br from-rose-50 to-rose-100/40 border border-rose-200/60">
-                            <p className="text-[8px] font-black text-rose-800 uppercase tracking-widest">Unpaid Absents (LWP)</p>
-                            <p className="text-xl font-black italic text-rose-700 tracking-tight mt-0.5">
-                                {periodAnalysis.absentDays} Days
-                            </p>
-                            <p className="text-[8px] text-rose-600 font-bold mt-1">
-                                Salary Deducted: ₹{(periodAnalysis.absentDays * dailyRate).toLocaleString()}
-                            </p>
-                        </div>
-                    </div>
-                )}
-
-                {/* ── Tabbed View Selection ── */}
-                <div className="px-6 pt-3 bg-white shrink-0 border-b border-slate-200/60">
+                {/* ── 4. View Tabs Bar (Height ~38px) ── */}
+                <div className="px-6 pt-1.5 bg-white shrink-0 border-b border-slate-200/60">
                     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                        <TabsList className="bg-slate-100 p-1 rounded-2xl h-10 w-full justify-start">
+                        <TabsList className="bg-slate-100 p-0.5 rounded-xl h-8 w-full justify-start gap-1">
+                            <TabsTrigger
+                                value="monthly_summary"
+                                className="rounded-lg text-[9px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs px-4 h-7"
+                            >
+                                <CalendarDays className="h-3 w-3 mr-1 text-emerald-600" />
+                                Month-Wise Overview ({periodAnalysis?.monthlyBreakdown?.length || history.length || 0})
+                            </TabsTrigger>
                             <TabsTrigger
                                 value="timeline"
-                                className="rounded-xl text-[9px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs px-5"
+                                className="rounded-lg text-[9px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs px-4 h-7"
                             >
-                                <Clock className="h-3.5 w-3.5 mr-1.5 text-indigo-600" />
+                                <Clock className="h-3 w-3 mr-1 text-indigo-600" />
                                 Day-Wise Salary Log ({periodAnalysis?.timeline?.length || 0})
                             </TabsTrigger>
                             <TabsTrigger
                                 value="cycles"
-                                className="rounded-xl text-[9px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs px-5"
+                                className="rounded-lg text-[9px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs px-4 h-7"
                             >
-                                <CalendarCheck className="h-3.5 w-3.5 mr-1.5 text-emerald-600" />
+                                <CalendarCheck className="h-3 w-3 mr-1 text-blue-600" />
                                 Past Monthly Payroll Cycles ({history.length})
                             </TabsTrigger>
                             <TabsTrigger
                                 value="structure"
-                                className="rounded-xl text-[9px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs px-5"
+                                className="rounded-lg text-[9px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs px-4 h-7"
                             >
-                                <Wallet className="h-3.5 w-3.5 mr-1.5 text-amber-600" />
+                                <Wallet className="h-3 w-3 mr-1 text-amber-600" />
                                 Salary & Statutory Structure
                             </TabsTrigger>
                         </TabsList>
                     </Tabs>
                 </div>
 
-                {/* ── Scrollable Body Content ── */}
-                <div className="flex-1 overflow-y-auto p-6">
+                {/* ── 5. Full-Height Scrollable Content Body (Spacious & Clean) ── */}
+                <div className="flex-1 min-h-0 overflow-y-auto p-5">
                     {loading ? (
-                        <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-3">
+                        <div className="flex flex-col items-center justify-center py-24 text-slate-400 gap-3">
                             <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
                             <p className="text-[10px] uppercase font-black tracking-widest text-slate-500">
                                 Computing period salary and attendance ledger...
                             </p>
                         </div>
-                    ) : activeTab === "timeline" ? (
+                    ) : activeTab === "monthly_summary" ? (
+                        /* ── Tab 1: Month-Wise Summary ── */
                         <div className="space-y-4">
-                            {/* Filter pills for status */}
                             <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-1.5">
-                                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Filter:</span>
+                                <div>
+                                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">
+                                        Month-By-Month Salary & Attendance Performance
+                                    </h4>
+                                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
+                                        Summary across all recorded monthly cycles for {currentEmp?.name}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Monthly Breakdown Table */}
+                            {(!periodAnalysis?.monthlyBreakdown || periodAnalysis.monthlyBreakdown.length === 0) && history.length === 0 ? (
+                                <div className="text-center py-16 bg-white rounded-2xl border border-slate-200/80">
+                                    <CalendarDays className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                                    <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest">
+                                        No monthly records found for this period
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="bg-slate-50 border-b border-slate-200/80 text-[8px] font-black uppercase text-slate-500 tracking-wider">
+                                                <th className="py-2.5 px-4">Month & Year</th>
+                                                <th className="py-2.5 px-3 text-center">Muster Days</th>
+                                                <th className="py-2.5 px-3 text-center">Present</th>
+                                                <th className="py-2.5 px-3 text-center">Weekly Off</th>
+                                                <th className="py-2.5 px-3 text-center">Half Day</th>
+                                                <th className="py-2.5 px-3 text-center">Absent (LWP)</th>
+                                                <th className="py-2.5 px-3 text-center">Payable Days</th>
+                                                <th className="py-2.5 px-4 text-right">Earned Gross</th>
+                                                <th className="py-2.5 px-4 text-right">Net Take Home</th>
+                                                <th className="py-2.5 px-3 text-center">Status</th>
+                                                <th className="py-2.5 px-4 text-right">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100 text-[10px]">
+                                            {(periodAnalysis?.monthlyBreakdown || []).map((mb: any, idx: number) => {
+                                                const hasCycle = !!mb.cycleId;
+                                                return (
+                                                    <tr key={idx} className="hover:bg-slate-50/70 transition-colors font-medium">
+                                                        <td className="py-2.5 px-4 font-black text-slate-900">
+                                                            <div className="flex items-center gap-2">
+                                                                <CalendarDays className="h-4 w-4 text-indigo-500 shrink-0" />
+                                                                <span className="uppercase">{mb.label}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-2.5 px-3 text-center font-bold text-slate-600">
+                                                            {mb.totalDays}d
+                                                        </td>
+                                                        <td className="py-2.5 px-3 text-center">
+                                                            <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
+                                                                {mb.presentDays}d
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-2.5 px-3 text-center">
+                                                            <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
+                                                                {mb.weeklyOffDays}d
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-2.5 px-3 text-center">
+                                                            <span className="font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100">
+                                                                {mb.halfDays}d
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-2.5 px-3 text-center">
+                                                            <span className="font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-100">
+                                                                {mb.absentDays}d
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-2.5 px-3 text-center font-black">
+                                                            <span className="bg-indigo-50 text-indigo-800 px-2.5 py-0.5 rounded-md border border-indigo-100">
+                                                                {mb.payableDays} Days
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-2.5 px-4 text-right font-black italic text-slate-800">
+                                                            ₹{mb.grossEarned?.toLocaleString()}
+                                                        </td>
+                                                        <td className="py-2.5 px-4 text-right font-black italic text-emerald-700">
+                                                            {mb.netPay !== undefined ? `₹${Number(mb.netPay).toLocaleString()}` : `₹${mb.grossEarned?.toLocaleString()}`}
+                                                        </td>
+                                                        <td className="py-2.5 px-3 text-center">
+                                                            <Badge className={cn(
+                                                                "border-none text-[8px] font-black px-2 py-0.5 rounded-md",
+                                                                mb.status === "Paid" ? "bg-emerald-100 text-emerald-800" :
+                                                                mb.status === "Verified" ? "bg-blue-100 text-blue-800" :
+                                                                "bg-amber-100 text-amber-800"
+                                                            )}>
+                                                                {mb.status || "Active Ledger"}
+                                                            </Badge>
+                                                        </td>
+                                                        <td className="py-2.5 px-4 text-right">
+                                                            <div className="flex items-center justify-end gap-1.5">
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    onClick={() => {
+                                                                        setSelectedMonth(mb.monthFull || mb.monthName);
+                                                                        setSelectedYear(String(mb.year));
+                                                                        setFilterMode("monthly");
+                                                                        setActiveTab("timeline");
+                                                                    }}
+                                                                    className="h-6 text-[8px] font-black uppercase rounded-md px-2 border-slate-200 hover:bg-indigo-50 hover:text-indigo-600"
+                                                                >
+                                                                    View Days
+                                                                </Button>
+                                                                {hasCycle && (
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        onClick={() => {
+                                                                            const cEntry = history.find(h => h.id === mb.cycleId);
+                                                                            if (cEntry) handleDownload(cEntry);
+                                                                        }}
+                                                                        className="h-6 text-[8px] font-black uppercase rounded-md px-2 border-slate-200 hover:bg-[#D9F99D] hover:text-slate-900"
+                                                                    >
+                                                                        PDF
+                                                                    </Button>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    ) : activeTab === "timeline" ? (
+                        /* ── Tab 2: Day-Wise Salary Log ── */
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Filter Status:</span>
                                     {["ALL", "present", "half_day", "weekend", "absent"].map((st) => (
                                         <button
                                             key={st}
                                             onClick={() => setTimelineFilter(st)}
                                             className={cn(
-                                                "px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider",
+                                                "px-2.5 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider",
                                                 timelineFilter === st
                                                     ? "bg-slate-800 text-white"
                                                     : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
@@ -1351,12 +1571,12 @@ export function EmployeeHistoryDialog({
                                     <table className="w-full text-left border-collapse">
                                         <thead>
                                             <tr className="bg-slate-50 border-b border-slate-200/80 text-[8px] font-black uppercase text-slate-500 tracking-wider">
-                                                <th className="py-3 px-4">Date & Day</th>
-                                                <th className="py-3 px-4">Attendance Status</th>
-                                                <th className="py-3 px-4">Clock In / Out</th>
-                                                <th className="py-3 px-4">Hours</th>
-                                                <th className="py-3 px-4 text-center">Payable Credit</th>
-                                                <th className="py-3 px-4 text-right">Daily Salary Earned</th>
+                                                <th className="py-2.5 px-4">Date & Day</th>
+                                                <th className="py-2.5 px-4">Attendance Status</th>
+                                                <th className="py-2.5 px-4">Clock In / Out</th>
+                                                <th className="py-2.5 px-4">Hours</th>
+                                                <th className="py-2.5 px-4 text-center">Payable Credit</th>
+                                                <th className="py-2.5 px-4 text-right">Daily Salary Earned</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100 text-[10px]">
@@ -1364,11 +1584,10 @@ export function EmployeeHistoryDialog({
                                                 const isPresent = item.status === "present" || item.status === "late" || item.status === "tour";
                                                 const isHalf = item.status === "half_day";
                                                 const isOff = item.status === "weekend";
-                                                const isAbsent = item.status === "absent";
 
                                                 return (
                                                     <tr key={idx} className="hover:bg-slate-50/70 transition-colors">
-                                                        <td className="py-3 px-4 font-bold text-slate-900">
+                                                        <td className="py-2.5 px-4 font-bold text-slate-900">
                                                             <div>
                                                                 <span>{item.date}</span>
                                                                 <span className="ml-1.5 text-[8px] font-black uppercase text-slate-400">
@@ -1376,7 +1595,7 @@ export function EmployeeHistoryDialog({
                                                                 </span>
                                                             </div>
                                                         </td>
-                                                        <td className="py-3 px-4">
+                                                        <td className="py-2.5 px-4">
                                                             {isPresent ? (
                                                                 <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 font-black text-[8px] rounded-md px-2">
                                                                     {item.status === "tour" ? "Field Tour" : (item.lateMinutes > 0 ? `Present (Late ${item.lateMinutes}m)` : "Present")}
@@ -1399,17 +1618,17 @@ export function EmployeeHistoryDialog({
                                                                 </Badge>
                                                             )}
                                                         </td>
-                                                        <td className="py-3 px-4 font-mono text-[9px] text-slate-600">
+                                                        <td className="py-2.5 px-4 font-mono text-[9px] text-slate-600">
                                                             {item.checkIn || item.checkOut ? (
                                                                 <span>{item.checkIn || "--"} → {item.checkOut || "--"}</span>
                                                             ) : (
                                                                 <span className="text-slate-300">--</span>
                                                             )}
                                                         </td>
-                                                        <td className="py-3 px-4 font-bold text-slate-700">
+                                                        <td className="py-2.5 px-4 font-bold text-slate-700">
                                                             {item.totalHours > 0 ? `${item.totalHours} hrs` : "--"}
                                                         </td>
-                                                        <td className="py-3 px-4 text-center font-black">
+                                                        <td className="py-2.5 px-4 text-center font-black">
                                                             <span className={cn(
                                                                 "inline-block px-2 py-0.5 rounded-md text-[9px]",
                                                                 item.payableCredit === 1 ? "bg-emerald-100 text-emerald-800" :
@@ -1419,7 +1638,7 @@ export function EmployeeHistoryDialog({
                                                                 {item.payableCredit} Day
                                                             </span>
                                                         </td>
-                                                        <td className="py-3 px-4 text-right font-black italic">
+                                                        <td className="py-2.5 px-4 text-right font-black italic">
                                                             {item.dailyEarned > 0 ? (
                                                                 <span className="text-emerald-700">₹{item.dailyEarned.toLocaleString()}</span>
                                                             ) : (
@@ -1435,9 +1654,10 @@ export function EmployeeHistoryDialog({
                             )}
                         </div>
                     ) : activeTab === "cycles" ? (
+                        /* ── Tab 3: Past Monthly Payroll Cycles ── */
                         <div className="space-y-3">
                             <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">
-                                Monthly Finalized Payroll Runs & Payslip Slips
+                                Finalized Payroll Runs & Payslip Slips
                             </p>
                             {history.length === 0 ? (
                                 <div className="text-center py-16 bg-white rounded-2xl border border-slate-200/80">
@@ -1450,11 +1670,11 @@ export function EmployeeHistoryDialog({
                                 history.map((h, i) => (
                                     <div
                                         key={i}
-                                        className="flex flex-col md:flex-row md:items-center justify-between p-4 rounded-2xl border border-slate-200 bg-white gap-3 shadow-xs hover:border-indigo-200 transition-all"
+                                        className="flex flex-col md:flex-row md:items-center justify-between p-3.5 rounded-2xl border border-slate-200 bg-white gap-3 shadow-xs hover:border-indigo-200 transition-all"
                                     >
                                         <div className="flex items-center gap-3">
-                                            <div className="h-10 w-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
-                                                <CalendarCheck className="h-5 w-5" />
+                                            <div className="h-9 w-9 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
+                                                <CalendarCheck className="h-4 w-4" />
                                             </div>
                                             <div>
                                                 <span className="text-xs font-black text-slate-900 uppercase">
@@ -1480,9 +1700,9 @@ export function EmployeeHistoryDialog({
                                                 variant="outline"
                                                 size="sm"
                                                 onClick={() => handleDownload(h)}
-                                                className="h-8 rounded-xl border-slate-200 font-black uppercase text-[8px] tracking-widest px-3 hover:bg-[#D9F99D] hover:text-slate-900"
+                                                className="h-7 rounded-lg border-slate-200 font-black uppercase text-[8px] tracking-widest px-2.5 hover:bg-[#D9F99D] hover:text-slate-900"
                                             >
-                                                <Download className="h-3.5 w-3.5 mr-1" /> PDF Slip
+                                                <Download className="h-3 w-3 mr-1" /> PDF Slip
                                             </Button>
                                         </div>
                                     </div>
@@ -1490,49 +1710,47 @@ export function EmployeeHistoryDialog({
                             )}
                         </div>
                     ) : (
-                        /* ── Tab: Salary & Statutory Structure ── */
+                        /* ── Tab 4: Salary & Statutory Structure ── */
                         <div className="space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {/* Salary Breakup */}
-                                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
                                     <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-900 flex items-center gap-2">
                                         <Wallet className="h-4 w-4 text-emerald-600" />
                                         Monthly Salary Structure (CTC Breakup)
                                     </h4>
                                     <div className="space-y-2 text-[10px] divide-y divide-slate-100">
-                                        <div className="flex justify-between py-1.5 font-bold text-slate-700">
+                                        <div className="flex justify-between py-1 font-bold text-slate-700">
                                             <span>Basic Salary (50%)</span>
                                             <span className="font-mono font-black">
                                                 ₹{employeeDetails?.salaryBreakup?.basic?.toLocaleString() || Math.round(fixedGross * 0.50).toLocaleString()}
                                             </span>
                                         </div>
-                                        <div className="flex justify-between py-1.5 font-bold text-slate-700">
+                                        <div className="flex justify-between py-1 font-bold text-slate-700">
                                             <span>House Rent Allowance (HRA 40%)</span>
                                             <span className="font-mono font-black">
                                                 ₹{employeeDetails?.salaryBreakup?.hra?.toLocaleString() || Math.round(fixedGross * 0.20).toLocaleString()}
                                             </span>
                                         </div>
-                                        <div className="flex justify-between py-1.5 font-bold text-slate-700">
+                                        <div className="flex justify-between py-1 font-bold text-slate-700">
                                             <span>Special / Other Allowances</span>
                                             <span className="font-mono font-black">
                                                 ₹{employeeDetails?.salaryBreakup?.other?.toLocaleString() || Math.max(0, fixedGross - Math.round(fixedGross * 0.70)).toLocaleString()}
                                             </span>
                                         </div>
-                                        <div className="flex justify-between py-2 font-black text-slate-900 bg-slate-50 px-2 rounded-lg">
+                                        <div className="flex justify-between py-1.5 font-black text-slate-900 bg-slate-50 px-2 rounded-lg">
                                             <span>Total Fixed Monthly Base</span>
                                             <span className="font-mono text-emerald-700">₹{fixedGross.toLocaleString()}</span>
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Statutory Applicability */}
-                                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
                                     <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-900 flex items-center gap-2">
                                         <ShieldCheck className="h-4 w-4 text-indigo-600" />
                                         Statutory & Banking Details
                                     </h4>
                                     <div className="space-y-2 text-[10px] divide-y divide-slate-100">
-                                        <div className="flex justify-between py-1.5 font-bold text-slate-700">
+                                        <div className="flex justify-between py-1 font-bold text-slate-700">
                                             <span>Provident Fund (PF)</span>
                                             <span>
                                                 {employeeDetails?.pf_applicable ? (
@@ -1542,7 +1760,7 @@ export function EmployeeHistoryDialog({
                                                 )}
                                             </span>
                                         </div>
-                                        <div className="flex justify-between py-1.5 font-bold text-slate-700">
+                                        <div className="flex justify-between py-1 font-bold text-slate-700">
                                             <span>ESIC Health Insurance</span>
                                             <span>
                                                 {employeeDetails?.esic_applicable ? (
@@ -1552,13 +1770,13 @@ export function EmployeeHistoryDialog({
                                                 )}
                                             </span>
                                         </div>
-                                        <div className="flex justify-between py-1.5 font-bold text-slate-700">
+                                        <div className="flex justify-between py-1 font-bold text-slate-700">
                                             <span>Bank Account</span>
                                             <span className="font-mono font-bold text-slate-800">
                                                 {employeeDetails?.bank_name || "--"} ({employeeDetails?.bank_account_number || "--"})
                                             </span>
                                         </div>
-                                        <div className="flex justify-between py-1.5 font-bold text-slate-700">
+                                        <div className="flex justify-between py-1 font-bold text-slate-700">
                                             <span>UAN / PF Number</span>
                                             <span className="font-mono font-bold text-slate-800">
                                                 {employeeDetails?.uan || employeeDetails?.pf_number || "--"}
@@ -1571,15 +1789,15 @@ export function EmployeeHistoryDialog({
                     )}
                 </div>
 
-                {/* ── Modal Footer ── */}
-                <div className="p-4 px-6 bg-white border-t border-slate-200/80 flex items-center justify-between shrink-0">
+                {/* ── 6. Compact Modal Footer (Height ~40px) ── */}
+                <div className="px-6 py-2.5 bg-white border-t border-slate-200/80 flex items-center justify-between shrink-0">
                     <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">
-                        Single Employee Historical Salary Analytics • Production Grade
+                        Active Period: <span className="text-slate-700 font-mono font-black">{periodAnalysis?.from || "--"} → {periodAnalysis?.to || "--"}</span> ({periodAnalysis?.daysCount || 0} days)
                     </p>
                     <Button
                         variant="outline"
                         onClick={() => onOpenChange(false)}
-                        className="h-9 px-6 rounded-xl font-black uppercase text-[8px] tracking-widest text-slate-700 hover:bg-slate-100"
+                        className="h-7 px-4 rounded-lg font-black uppercase text-[8px] tracking-widest text-slate-700 hover:bg-slate-100"
                     >
                         Close
                     </Button>
