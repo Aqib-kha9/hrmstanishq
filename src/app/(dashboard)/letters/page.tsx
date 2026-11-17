@@ -678,25 +678,11 @@ export default function LettersPage() {
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.apaarpulse.com/api/v1";
       const recipientCode = letter.issuedTo?.emp_code || (letter.candidate_name ? letter.candidate_name.replace(/\s+/g, "_") : "recipient");
 
-      const response = await fetch(`${baseUrl}/letters/generate-pdf`, {
-        method: "POST",
+      const response = await fetch(`${baseUrl}/letters/${letter.id}/pdf`, {
+        method: "GET",
         headers: {
-          "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({
-          employee_id: letter.employee_id || undefined,
-          candidateData: !letter.employee_id ? {
-            name: letter.candidate_name || "Candidate",
-            email: letter.candidate_email || "",
-            phone: letter.candidate_phone || "",
-          } : undefined,
-          title: letter.title,
-          type: letter.type,
-          content: letter.content || "",
-          signatory_id: letter.signatory_id || undefined,
-          recordLetter: false,
-        }),
       });
 
       if (!response.ok) throw new Error("Failed to generate PDF");
