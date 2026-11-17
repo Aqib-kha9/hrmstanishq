@@ -12,6 +12,7 @@ import {
     User,
     Building2,
     ShieldCheck,
+    ShieldAlert,
     CreditCard,
     ArrowRight,
     ArrowLeft,
@@ -1016,6 +1017,35 @@ function CandidateOnboardingContent() {
                                     <Badge variant="outline" className="text-[9px] text-emerald-700 border-emerald-300 bg-emerald-50">
                                         Direct Bank Transfer (NEFT/RTGS)
                                     </Badge>
+                                </div>
+
+                                {/* Bank Details Disclaimer Banner */}
+                                <div className="p-4 rounded-xl bg-amber-50/90 border border-amber-200/90 text-amber-950 space-y-2.5">
+                                    <div className="flex items-center gap-2">
+                                        <div className="h-6 w-6 rounded-lg bg-amber-200/90 text-amber-900 flex items-center justify-center shrink-0 font-black">
+                                            <ShieldAlert className="h-4 w-4" />
+                                        </div>
+                                        <h4 className="text-xs font-black uppercase tracking-wider text-amber-950">
+                                            Important Disclaimer • Please Fill Bank Details With Utmost Care
+                                        </h4>
+                                    </div>
+                                    <p className="text-[11px] leading-relaxed text-amber-950/90 font-medium">
+                                        Your monthly salary, expense reimbursements, and bonuses will be credited <strong>strictly to this bank account</strong> via direct automated transfer (NEFT/RTGS/IMPS). Any error or mismatch in the Account Number or IFSC Code will result in salary payment failure, bank bounce, or extensive disbursement delays.
+                                    </p>
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-[10px]">
+                                        <div className="flex items-start gap-1.5 bg-white/80 p-2.5 rounded-lg border border-amber-200/70 font-semibold text-amber-950">
+                                            <CheckCircle2 className="h-3.5 w-3.5 text-amber-700 shrink-0 mt-0.5" />
+                                            <span><strong>Name Match:</strong> Account name must exactly match your name on bank passbook & Aadhaar.</span>
+                                        </div>
+                                        <div className="flex items-start gap-1.5 bg-white/80 p-2.5 rounded-lg border border-amber-200/70 font-semibold text-amber-950">
+                                            <CheckCircle2 className="h-3.5 w-3.5 text-amber-700 shrink-0 mt-0.5" />
+                                            <span><strong>Active Account:</strong> Must be an active savings or salary account without credit freeze.</span>
+                                        </div>
+                                        <div className="flex items-start gap-1.5 bg-white/80 p-2.5 rounded-lg border border-amber-200/70 font-semibold text-amber-950">
+                                            <CheckCircle2 className="h-3.5 w-3.5 text-amber-700 shrink-0 mt-0.5" />
+                                            <span><strong>Passbook Proof:</strong> Uploaded Cheque / Passbook copy in Step 3 must reflect identical numbers.</span>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
