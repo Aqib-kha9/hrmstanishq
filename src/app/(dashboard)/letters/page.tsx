@@ -1266,16 +1266,18 @@ export default function LettersPage() {
                                 Signatory: <span className="font-semibold text-slate-600">{item.signatory?.name || "Default Signatory"}</span>
                               </p>
                               <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                                {item.type === "offer" && item.metadata?.acceptance_token && (
+                                {(item.type === "offer" || item.type === "appointment") && item.metadata?.acceptance_token && (
                                   <button
                                     type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      const url = `${window.location.origin}/offer-acceptance?token=${item.metadata?.acceptance_token}`;
+                                      const route = item.type === "appointment" ? "appointment-acceptance" : "offer-acceptance";
+                                      const label = item.type === "appointment" ? "Appointment" : "Offer";
+                                      const url = `${window.location.origin}/${route}?token=${item.metadata?.acceptance_token}`;
                                       navigator.clipboard.writeText(url);
-                                      alert("Candidate Offer Acceptance link copied to clipboard!");
+                                      alert(`${label} Letter digital signing link copied to clipboard!`);
                                     }}
-                                    title="Copy Candidate Digital Acceptance & Signature Link"
+                                    title="Copy Digital Acceptance & Signature Link"
                                     className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition-colors"
                                   >
                                     <PenTool className="h-2.5 w-2.5 text-indigo-600" />
@@ -1461,8 +1463,8 @@ export default function LettersPage() {
                   </div>
                 </DialogHeader>
 
-                {/* Offer Letter Digital Acceptance & Signature Status Section */}
-                {viewingLetter.type === "offer" && (
+                {/* Offer & Appointment Letter Digital Acceptance & Signature Status Section */}
+                {(viewingLetter.type === "offer" || viewingLetter.type === "appointment") && (
                   <div className="mt-4">
                     {viewingLetter.metadata?.acceptance_status === "accepted" || viewingLetter.status === "acknowledged" ? (
                       <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-50 via-teal-50 to-white border border-emerald-200">
@@ -1566,7 +1568,9 @@ export default function LettersPage() {
                               Awaiting Candidate Digital Acceptance
                             </p>
                             <p className="text-[9px] text-amber-700">
-                              Candidate has received the offer letter. Once they accept and sign digitally, you can dispatch their Onboarding Portal link with 1-click.
+                              {viewingLetter.type === "appointment"
+                                ? "Employee has received the appointment letter. Awaiting digital signature and confirmation."
+                                : "Candidate has received the offer letter. Once they accept and sign digitally, you can dispatch their Onboarding Portal link with 1-click."}
                             </p>
                           </div>
                         </div>
@@ -1576,9 +1580,11 @@ export default function LettersPage() {
                             variant="outline"
                             className="h-7 text-[8.5px] font-bold border-amber-300 text-amber-800 hover:bg-amber-100 shrink-0"
                             onClick={() => {
-                              const url = `${window.location.origin}/offer-acceptance?token=${viewingLetter.metadata?.acceptance_token}`;
+                              const route = viewingLetter.type === "appointment" ? "appointment-acceptance" : "offer-acceptance";
+                              const label = viewingLetter.type === "appointment" ? "Appointment" : "Offer";
+                              const url = `${window.location.origin}/${route}?token=${viewingLetter.metadata?.acceptance_token}`;
                               navigator.clipboard.writeText(url);
-                              alert("Candidate Offer Acceptance link copied to clipboard!");
+                              alert(`${label} Letter digital signing link copied to clipboard!`);
                             }}
                           >
                             <Copy className="h-3 w-3 mr-1" /> Copy Acceptance Link
