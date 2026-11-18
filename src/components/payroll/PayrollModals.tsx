@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -11,7 +11,8 @@ import {
     TrendingUp, Info, Wallet, ArrowUpRight, ChevronRight,
     ShieldCheck, CreditCard, UserCircle, CalendarCheck, Clock, Download,
     SlidersHorizontal, ShieldAlert, CheckCircle2, Loader2, Sparkles, Building2, Percent, Check, AlertCircle,
-    Calendar, FileSpreadsheet, User, Filter, ArrowRight, CheckCircle, XCircle, Search, X, CalendarDays, Layers
+    Calendar, FileSpreadsheet, User, Filter, ArrowRight, CheckCircle, XCircle, Search, X, CalendarDays, Layers,
+    MapPin, Eye, Users, ChevronDown
 } from "lucide-react";
 import { apiGet, apiPatch, apiPut, getToken } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -781,18 +782,29 @@ export function EmployeeHistoryDialog({
     onOpenChange,
     selectedEmployee,
     allEmployees = [],
-    onSelectEmployee
+    onSelectEmployee,
+    calculateProductionNet
 }: {
     isOpen: boolean;
     onOpenChange: (open: boolean) => void;
     selectedEmployee: any;
     allEmployees?: any[];
     onSelectEmployee?: (emp: any) => void;
+    calculateProductionNet?: (row: any) => any;
 }) {
     const [history, setHistory] = useState<any[]>([]);
     const [periodAnalysis, setPeriodAnalysis] = useState<any | null>(null);
     const [employeeDetails, setEmployeeDetails] = useState<any | null>(null);
     const [loading, setLoading] = useState(false);
+
+    // Location / Office Filter State
+    const [selectedLocation, setSelectedLocation] = useState<string>("ALL");
+    // Searchable Employee Picker State
+    const [isEmpPickerOpen, setIsEmpPickerOpen] = useState(false);
+    const [empSearchQuery, setEmpSearchQuery] = useState("");
+    // Location Roster In-Table Filter State
+    const [rosterSearch, setRosterSearch] = useState("");
+    const [rosterStatusFilter, setRosterStatusFilter] = useState("ALL");
 
     // Filter Mode: 'monthly' (default), 'rolling', 'custom'
     const [filterMode, setFilterMode] = useState<"monthly" | "rolling" | "custom">("monthly");
@@ -890,6 +902,172 @@ export function EmployeeHistoryDialog({
         if (found && onSelectEmployee) {
             onSelectEmployee(found);
         }
+    };
+
+    // Row calculation helper for consistent numbers
+    const getRowCalculations = (emp: any) => {
+        if (calculateProductionNet) {
+            return calculateProductionNet(emp);
+        }
+        const daysInMonth = Number(emp.dynamicDays || emp.total_muster_days || 30);
+        const fixedGross = Number(emp.fixedGross ?? emp.fixed_gross ?? 0);
+        const payableDays = Number(emp.payableDays ?? emp.payable_days ?? (daysInMonth - (emp.absentDays || 0)));
+        const earnedGross = emp.totalEarnings !== undefined ? Number(emp.totalEarnings) : Math.round((fixedGross / daysInMonth) * payableDays);
+        const pf = Number(emp.pf || 0);
+        const esi = Number(emp.esi || 0);
+        const pt = Number(emp.pt || 0);
+        const loanDeduction = Number(emp.loanDeduction ?? emp.loan_deduction ?? 0);
+        const deductions = emp.grossDeductions !== undefined ? Number(emp.grossDeductions) : (pf + esi + pt + loanDeduction);
+        const net = emp.net !== undefined ? Number(emp.net) : (earnedGross - deductions);
+        return {
+            fixedGross,
+            payableDays,
+            totalEarnings: earnedGross,
+            pf, esi, pt, loanDeduction,
+            grossDeductions: deductions,
+            net
+        };
+    };
+
+    // Extract unique locations and staff counts
+    const availableLocations = useMemo(() => {
+        const locMap = new Map<string, number>();
+        allEmployees.forEach(emp => {
+            const loc = emp.location || emp.office?.name || emp.location_name || "General HQ";
+            locMap.set(loc, (locMap.get(loc) || 0) + 1);
+        });
+        return [
+            { id: "ALL", name: "All Locations & Offices", count: allEmployees.length },
+            ...Array.from(locMap.entries()).map(([name, count]) => ({ id: name, name, count }))
+        ];
+    }, [allEmployees]);
+
+    // Filter employees by currently selected location
+    const locationEmployees = useMemo(() => {
+        if (selectedLocation === "ALL") return allEmployees;
+        return allEmployees.filter(emp => (emp.location || emp.office?.name || emp.location_name || "General HQ") === selectedLocation);
+    }, [allEmployees, selectedLocation]);
+
+    // Aggregate metrics for selected location
+    const locationStats = useMemo(() => {
+        let totalFixedGross = 0;
+        let totalEarnedGross = 0;
+        let totalDeductions = 0;
+        let totalNet = 0;
+        let totalPayableDays = 0;
+        let totalPossibleDays = 0;
+        let totalPresentDays = 0;
+        let totalAbsentDays = 0;
+
+        locationEmployees.forEach(emp => {
+            const c = getRowCalculations(emp);
+            totalFixedGross += (c.fixedGross || 0);
+            totalEarnedGross += (c.totalEarnings || 0);
+            totalDeductions += (c.grossDeductions || 0);
+            totalNet += (c.net || 0);
+            totalPayableDays += (c.payableDays || emp.payableDays || 0);
+            totalPossibleDays += Number(emp.dynamicDays || emp.total_muster_days || 30);
+            totalPresentDays += Number(emp.presentDays ?? emp.present_days ?? 0);
+            totalAbsentDays += Number(emp.absentDays ?? emp.lwpDays ?? emp.lwp_days ?? 0);
+        });
+
+        const avgWorkRatio = totalPossibleDays > 0 ? Math.round((totalPayableDays / totalPossibleDays) * 100) : 100;
+
+        return {
+            count: locationEmployees.length,
+            totalFixedGross,
+            totalEarnedGross,
+            totalDeductions,
+            totalNet,
+            totalPayableDays,
+            totalPossibleDays,
+            totalPresentDays,
+            totalAbsentDays,
+            avgWorkRatio
+        };
+    }, [locationEmployees, calculateProductionNet]);
+
+    // Filter employees for the searchable employee picker
+    const searchedEmployees = useMemo(() => {
+        const q = empSearchQuery.trim().toLowerCase();
+        const pool = locationEmployees;
+        if (!q) return pool;
+        return pool.filter(emp => {
+            const name = (emp.name || "").toLowerCase();
+            const code = (emp.employeeCode || emp.emp_code || `EMP-${emp.id}`).toLowerCase();
+            const desig = (emp.designation || "").toLowerCase();
+            const dept = (emp.department || "").toLowerCase();
+            const loc = (emp.location || emp.office?.name || "").toLowerCase();
+            return name.includes(q) || code.includes(q) || desig.includes(q) || dept.includes(q) || loc.includes(q);
+        });
+    }, [locationEmployees, empSearchQuery]);
+
+    // Filter employees for the Location Roster Tab table
+    const filteredRosterEmployees = useMemo(() => {
+        return locationEmployees.filter(emp => {
+            if (rosterStatusFilter !== "ALL") {
+                const status = (emp.status || "Draft").toLowerCase();
+                if (rosterStatusFilter.toLowerCase() !== status) return false;
+            }
+            if (!rosterSearch.trim()) return true;
+            const q = rosterSearch.trim().toLowerCase();
+            const name = (emp.name || "").toLowerCase();
+            const code = (emp.employeeCode || emp.emp_code || "").toLowerCase();
+            const desig = (emp.designation || "").toLowerCase();
+            const dept = (emp.department || "").toLowerCase();
+            return name.includes(q) || code.includes(q) || desig.includes(q) || dept.includes(q);
+        });
+    }, [locationEmployees, rosterSearch, rosterStatusFilter]);
+
+    const handleInspectEmployee = (emp: any) => {
+        if (onSelectEmployee) onSelectEmployee(emp);
+        setActiveTab("monthly_summary");
+    };
+
+    const handleExportLocationCSV = () => {
+        if (!filteredRosterEmployees || filteredRosterEmployees.length === 0) return;
+        const locName = (selectedLocation === "ALL" ? "All_Locations" : selectedLocation).replace(/[^\w\d]/g, "_");
+        const headers = [
+            "Employee Code",
+            "Employee Name",
+            "Department",
+            "Designation",
+            "Location",
+            "Fixed Monthly Gross (INR)",
+            "Payable Days",
+            "Present Days",
+            "Absent/LWP Days",
+            "Earned Gross (INR)",
+            "Total Deductions (INR)",
+            "Net Take Home (INR)",
+            "Disbursement Status"
+        ];
+        const rows = filteredRosterEmployees.map((emp) => {
+            const c = getRowCalculations(emp);
+            return [
+                `"${emp.employeeCode || emp.emp_code || `EMP-${emp.id}`}"`,
+                `"${emp.name || 'Staff'}"`,
+                `"${emp.department || '--'}"`,
+                `"${emp.designation || '--'}"`,
+                `"${emp.location || emp.office?.name || '--'}"`,
+                c.fixedGross,
+                c.payableDays ?? emp.payableDays ?? 0,
+                emp.presentDays ?? emp.present_days ?? 0,
+                emp.absentDays ?? emp.lwpDays ?? emp.lwp_days ?? 0,
+                c.totalEarnings ?? emp.totalEarnings ?? 0,
+                c.grossDeductions ?? emp.grossDeductions ?? 0,
+                c.net ?? emp.net ?? 0,
+                `"${emp.status || 'Draft'}"`
+            ];
+        });
+        const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `Location_Salary_Roster_${locName}_${selectedMonth}_${selectedYear}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
     const handleExportCSV = () => {
@@ -1170,55 +1348,215 @@ export function EmployeeHistoryDialog({
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[1020px] w-full max-h-[92vh] h-[92vh] border-none shadow-2xl rounded-3xl p-0 overflow-hidden flex flex-col bg-slate-50">
+            <DialogContent className="sm:max-w-[1100px] w-full max-h-[94vh] h-[94vh] border-none shadow-2xl rounded-3xl p-0 overflow-hidden flex flex-col bg-slate-50">
                 
                 {/* ── 1. Compact SaaS Header Bar (Height ~64px) ── */}
-                <div className="bg-slate-900 px-6 py-3.5 text-white shrink-0 flex items-center justify-between gap-4 border-b border-white/5">
-                    <div className="flex items-center gap-3 min-w-0">
-                        <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-500/30 to-[#D9F99D]/30 flex items-center justify-center border border-white/10 shrink-0 text-sm font-black text-[#D9F99D]">
-                            {(currentEmp?.name || "Staff").substring(0, 2).toUpperCase()}
-                        </div>
-                        <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                                <h3 className="text-base font-black italic uppercase tracking-tighter text-white truncate">
-                                    {currentEmp?.name || "Employee"}
-                                </h3>
-                                <span className="text-[9px] px-2 py-0.5 rounded-md bg-white/10 font-bold uppercase tracking-wider text-slate-300 shrink-0">
-                                    {currentEmp?.emp_code || currentEmp?.employeeCode || `EMP-${currentEmp?.id || '--'}`}
-                                </span>
+                <div className="bg-slate-900 px-6 py-3 text-white shrink-0 flex items-center justify-between gap-4 border-b border-white/5">
+                    {activeTab === "location_roster" ? (
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-500/30 to-[#D9F99D]/30 flex items-center justify-center border border-white/10 shrink-0 text-indigo-400">
+                                <Building2 className="h-5 w-5 text-[#D9F99D]" />
                             </div>
-                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest truncate">
-                                {currentEmp?.company || "Company"} • {currentEmp?.designation || "Staff"} • {currentEmp?.department || "General"}
-                            </p>
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                    <h3 className="text-base font-black italic uppercase tracking-tighter text-white truncate">
+                                        {selectedLocation === "ALL" ? "All Locations & Offices" : selectedLocation}
+                                    </h3>
+                                    <span className="text-[9px] px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 font-bold uppercase tracking-wider shrink-0 border border-indigo-500/30">
+                                        {locationStats.count} Staff Members
+                                    </span>
+                                </div>
+                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest truncate">
+                                    Location Salary Ledger • Total Fixed CTC: ₹{locationStats.totalFixedGross.toLocaleString()} • Net Disbursed: ₹{locationStats.totalNet.toLocaleString()}
+                                </p>
+                            </div>
                         </div>
-                    </div>
+                    ) : (
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-500/30 to-[#D9F99D]/30 flex items-center justify-center border border-white/10 shrink-0 text-sm font-black text-[#D9F99D]">
+                                {(currentEmp?.name || "Staff").substring(0, 2).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                    <h3 className="text-base font-black italic uppercase tracking-tighter text-white truncate">
+                                        {currentEmp?.name || "Employee"}
+                                    </h3>
+                                    <span className="text-[9px] px-2 py-0.5 rounded-md bg-white/10 font-bold uppercase tracking-wider text-slate-300 shrink-0">
+                                        {currentEmp?.emp_code || currentEmp?.employeeCode || `EMP-${currentEmp?.id || '--'}`}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveTab("location_roster")}
+                                        className="text-[8px] px-2 py-0.5 rounded-md bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 font-bold uppercase tracking-wider border border-indigo-500/30 transition-colors flex items-center gap-1"
+                                        title="View entire location salary roster"
+                                    >
+                                        <Building2 className="h-2.5 w-2.5" />
+                                        <span>{currentEmp?.location || currentEmp?.office?.name || "Location Roster"}</span>
+                                    </button>
+                                </div>
+                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest truncate">
+                                    {currentEmp?.company || "Company"} • {currentEmp?.designation || "Staff"} • {currentEmp?.department || "General"}
+                                </p>
+                            </div>
+                        </div>
+                    )}
 
-                    {/* Right Controls: Staff Switcher + Direct Close Button */}
-                    <div className="flex items-center gap-3 shrink-0">
+                    {/* Right Controls: Location Selector + Searchable Staff Picker + Direct Close Button */}
+                    <div className="flex items-center gap-2 shrink-0">
+                        {/* 1. Location / Office Selector */}
+                        <div className="flex items-center gap-1.5 bg-white/5 hover:bg-white/10 px-2.5 py-1 rounded-xl border border-white/10 transition-colors">
+                            <Building2 className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+                            <Select
+                                value={selectedLocation}
+                                onValueChange={(loc) => {
+                                    setSelectedLocation(loc);
+                                    if (loc !== "ALL") {
+                                        const match = allEmployees.find(e => (e.location || e.office?.name || e.location_name) === loc);
+                                        if (match && onSelectEmployee) onSelectEmployee(match);
+                                    }
+                                }}
+                            >
+                                <SelectTrigger className="h-7 w-[140px] md:w-[170px] rounded-lg bg-transparent border-none text-white text-[9px] font-bold uppercase tracking-wider focus:ring-0 p-0 shadow-none">
+                                    <SelectValue placeholder="All Locations" />
+                                </SelectTrigger>
+                                <SelectContent className="border-none shadow-2xl rounded-2xl max-h-72 bg-slate-900 text-white">
+                                    {availableLocations.map(loc => (
+                                        <SelectItem key={loc.id} value={loc.id} className="text-[10px] font-bold uppercase hover:bg-slate-800 text-slate-200">
+                                            {loc.name} ({loc.count})
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* 2. Searchable Staff Picker Popover */}
                         {allEmployees.length > 0 && onSelectEmployee && (
-                            <div className="flex items-center gap-1.5 bg-white/5 px-2.5 py-1 rounded-xl border border-white/10">
-                                <User className="h-3.5 w-3.5 text-slate-400" />
-                                <Select value={activeEmpId} onValueChange={handleEmployeeChange}>
-                                    <SelectTrigger className="h-7 w-[190px] rounded-lg bg-transparent border-none text-white text-[9px] font-bold uppercase tracking-wider focus:ring-0 p-0 shadow-none">
-                                        <SelectValue placeholder="Switch Employee..." />
-                                    </SelectTrigger>
-                                    <SelectContent className="border-none shadow-2xl rounded-2xl max-h-72">
-                                        {allEmployees.map((emp) => {
-                                            const id = String(emp.employeeId || emp.id);
-                                            return (
-                                                <SelectItem key={id} value={id} className="text-[10px] font-bold uppercase">
-                                                    {emp.name} ({emp.employeeCode || `EMP-${id}`})
-                                                </SelectItem>
-                                            );
-                                        })}
-                                    </SelectContent>
-                                </Select>
+                            <div className="relative">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsEmpPickerOpen(!isEmpPickerOpen)}
+                                    className="flex items-center gap-1.5 bg-white/5 hover:bg-white/15 px-3 py-1 rounded-xl border border-white/10 text-white transition-all text-[9px] font-bold uppercase tracking-wider h-8"
+                                    title="Search & Switch Employee by Name or Code"
+                                >
+                                    <User className="h-3.5 w-3.5 text-[#D9F99D] shrink-0" />
+                                    <span className="truncate max-w-[120px] md:max-w-[150px] text-left">
+                                        {currentEmp?.name ? `${currentEmp.name} (${currentEmp.employeeCode || currentEmp.emp_code || 'EMP'})` : "Select Staff..."}
+                                    </span>
+                                    <Search className="h-3 w-3 text-slate-400 ml-1 shrink-0" />
+                                </button>
+
+                                {isEmpPickerOpen && (
+                                    <>
+                                        <div
+                                            className="fixed inset-0 z-40"
+                                            onClick={() => setIsEmpPickerOpen(false)}
+                                        />
+                                        <div className="absolute right-0 mt-2 w-80 md:w-96 bg-slate-900 border border-slate-700/80 shadow-2xl rounded-2xl p-3 z-50 animate-in fade-in zoom-in-95">
+                                            {/* Search Input */}
+                                            <div className="relative mb-2">
+                                                <Search className="h-3.5 w-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                                                <Input
+                                                    type="text"
+                                                    placeholder="Search staff by Name or ID (e.g. Aqib, EMP118196)..."
+                                                    value={empSearchQuery}
+                                                    onChange={(e) => setEmpSearchQuery(e.target.value)}
+                                                    autoFocus
+                                                    className="h-8 pl-8 pr-8 bg-slate-800 border-slate-700 text-white text-[10px] font-medium rounded-xl placeholder:text-slate-500 focus-visible:ring-indigo-500"
+                                                />
+                                                {empSearchQuery && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setEmpSearchQuery("")}
+                                                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                                                    >
+                                                        <X className="h-3 w-3" />
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            {/* Location Filter Tag & Quick Clear */}
+                                            <div className="flex items-center justify-between text-[8px] font-bold uppercase tracking-wider text-slate-400 mb-2 px-1">
+                                                <span className="flex items-center gap-1">
+                                                    <MapPin className="h-2.5 w-2.5 text-indigo-400" />
+                                                    {selectedLocation === "ALL" ? "All Locations" : selectedLocation} ({searchedEmployees.length})
+                                                </span>
+                                                {selectedLocation !== "ALL" && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSelectedLocation("ALL")}
+                                                        className="text-indigo-400 hover:text-indigo-300 underline font-bold"
+                                                    >
+                                                        Show All Locations
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            {/* Results List */}
+                                            <div className="max-h-64 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                                                {searchedEmployees.length === 0 ? (
+                                                    <div className="py-6 text-center text-slate-400 text-[10px] font-bold uppercase tracking-wider">
+                                                        No staff found matching "{empSearchQuery}"
+                                                    </div>
+                                                ) : (
+                                                    searchedEmployees.map((emp) => {
+                                                        const id = String(emp.employeeId || emp.id);
+                                                        const isSelected = id === activeEmpId;
+                                                        const c = getRowCalculations(emp);
+                                                        return (
+                                                            <button
+                                                                key={id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    handleEmployeeChange(id);
+                                                                    setIsEmpPickerOpen(false);
+                                                                    setEmpSearchQuery("");
+                                                                    if (activeTab === "location_roster") {
+                                                                        setActiveTab("monthly_summary");
+                                                                    }
+                                                                }}
+                                                                className={cn(
+                                                                    "w-full flex items-center justify-between p-2 rounded-xl text-left transition-all",
+                                                                    isSelected
+                                                                        ? "bg-indigo-600/30 border border-indigo-500/50 text-white"
+                                                                        : "hover:bg-slate-800/80 text-slate-200"
+                                                                )}
+                                                            >
+                                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                                    <div className="h-7 w-7 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 text-[10px] font-black text-[#D9F99D]">
+                                                                        {(emp.name || "ST").substring(0, 2).toUpperCase()}
+                                                                    </div>
+                                                                    <div className="min-w-0">
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            <span className="text-[10px] font-bold text-white truncate">{emp.name}</span>
+                                                                            <span className="text-[8px] px-1.5 py-0.2 rounded bg-white/10 font-bold uppercase text-slate-300 font-mono">
+                                                                                {emp.employeeCode || emp.emp_code || `EMP-${id}`}
+                                                                            </span>
+                                                                        </div>
+                                                                        <p className="text-[8px] text-slate-400 truncate">
+                                                                            {emp.designation || "Staff"} • {emp.location || emp.office?.name || "General"}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="text-right shrink-0 pl-2">
+                                                                    <span className="text-[9px] font-black text-[#D9F99D] block">
+                                                                        ₹{Number(c.fixedGross || emp.fixedGross || emp.fixed_gross || 0).toLocaleString()}
+                                                                    </span>
+                                                                    {isSelected && <Check className="h-3 w-3 text-indigo-400 ml-auto mt-0.5" />}
+                                                                </div>
+                                                            </button>
+                                                        );
+                                                    })
+                                                )}
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         )}
 
                         <button
                             onClick={() => onOpenChange(false)}
-                            className="h-8 w-8 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+                            className="h-8 w-8 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors shrink-0"
                             title="Close Modal"
                         >
                             <X className="h-4 w-4" />
@@ -1228,243 +1566,368 @@ export function EmployeeHistoryDialog({
 
                 {/* ── 2. Unified Quick Metric Strip (Height ~44px) ── */}
                 <div className="bg-slate-800 text-white px-6 py-2 shrink-0 border-b border-slate-700/60 flex items-center justify-between gap-3 text-[10px] overflow-x-auto">
-                    <div className="flex items-center gap-4 shrink-0">
-                        <div>
-                            <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Fixed Gross</span>
-                            <span className="font-black italic text-white">₹{fixedGross.toLocaleString()}</span>
-                        </div>
-                        <div className="h-6 w-px bg-slate-700" />
-                        <div>
-                            <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Daily Rate</span>
-                            <span className="font-bold text-slate-200">₹{dailyRate.toLocaleString()}<span className="text-[8px] text-slate-400 font-normal">/d</span></span>
-                        </div>
-                        <div className="h-6 w-px bg-slate-700" />
-                        <div>
-                            <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Hourly Rate</span>
-                            <span className="font-bold text-indigo-300">₹{hourlyRate.toLocaleString()}<span className="text-[8px] text-slate-400 font-normal">/h</span></span>
-                        </div>
-                        <div className="h-6 w-px bg-slate-700" />
-                        <div>
-                            <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Shift & Off</span>
-                            <span className="font-bold text-amber-300">{currentEmp?.shift_preset || "09:30-18:30"} • {Array.isArray(currentEmp?.weekly_off_days) ? currentEmp.weekly_off_days.join(",") : (currentEmp?.weekly_off_days || "Sun")}</span>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-4 shrink-0 pl-4 border-l border-slate-700">
-                        <div>
-                            <span className="text-[8px] uppercase tracking-wider text-emerald-400 font-bold block">Period Gross Earned</span>
-                            <span className="font-black italic text-emerald-300 text-sm">
-                                ₹{periodAnalysis?.periodGrossEarned?.toLocaleString() || "0"}
-                            </span>
-                        </div>
-                        <div className="h-6 w-px bg-slate-700" />
-                        <div>
-                            <span className="text-[8px] uppercase tracking-wider text-indigo-300 font-bold block">Payable Work Ratio</span>
-                            <span className="font-bold text-white">
-                                {periodAnalysis?.payableDays || 0} <span className="text-slate-400 font-normal">/ {periodAnalysis?.daysCount || 0}d</span>
-                            </span>
-                        </div>
-                        <div className="h-6 w-px bg-slate-700" />
-                        <div>
-                            <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Attendance Breakdown</span>
-                            <span className="font-bold text-slate-200">
-                                <span className="text-emerald-400">{periodAnalysis?.presentDays || 0}P</span> · <span className="text-blue-300">{periodAnalysis?.weeklyOffDays || 0}Off</span> · <span className="text-amber-300">{periodAnalysis?.halfDays || 0}H</span> · <span className="text-rose-400">{periodAnalysis?.absentDays || 0}A</span>
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* ── 3. Unified Filter Controls Bar (Monthly Wise / Rolling / Custom) ── */}
-                <div className="bg-white px-6 py-2.5 border-b border-slate-200/80 shrink-0 flex flex-wrap items-center justify-between gap-3 shadow-xs">
-                    <div className="flex items-center gap-2 flex-wrap">
-                        {/* Mode Switcher */}
-                        <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200">
-                            <button
-                                onClick={() => setFilterMode("monthly")}
-                                className={cn(
-                                    "px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all",
-                                    filterMode === "monthly" ? "bg-slate-900 text-[#D9F99D] shadow-xs" : "text-slate-600 hover:text-slate-900"
-                                )}
-                            >
-                                <CalendarDays className="h-3 w-3 inline mr-1 text-emerald-500" /> Month-Wise
-                            </button>
-                            <button
-                                onClick={() => setFilterMode("rolling")}
-                                className={cn(
-                                    "px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all",
-                                    filterMode === "rolling" ? "bg-slate-900 text-[#D9F99D] shadow-xs" : "text-slate-600 hover:text-slate-900"
-                                )}
-                            >
-                                <Clock className="h-3 w-3 inline mr-1 text-indigo-400" /> Rolling Days
-                            </button>
-                            <button
-                                onClick={() => setFilterMode("custom")}
-                                className={cn(
-                                    "px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all",
-                                    filterMode === "custom" ? "bg-slate-900 text-[#D9F99D] shadow-xs" : "text-slate-600 hover:text-slate-900"
-                                )}
-                            >
-                                <Calendar className="h-3 w-3 inline mr-1 text-amber-500" /> Custom Range
-                            </button>
-                        </div>
-
-                        {/* Mode-Specific Controls */}
-                        {filterMode === "monthly" && (
-                            <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
-                                {/* Month Dropdown */}
-                                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                                    <SelectTrigger className="h-8 w-28 text-[9px] font-black uppercase rounded-lg border-slate-200 bg-white">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent className="border-none shadow-xl rounded-xl">
-                                        {monthsList.map(m => (
-                                            <SelectItem key={m} value={m} className="text-[10px] font-bold uppercase">{m}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-
-                                {/* Year Dropdown */}
-                                <Select value={selectedYear} onValueChange={setSelectedYear}>
-                                    <SelectTrigger className="h-8 w-20 text-[9px] font-black uppercase rounded-lg border-slate-200 bg-white">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent className="border-none shadow-xl rounded-xl">
-                                        {[2027, 2026, 2025, 2024].map(y => (
-                                            <SelectItem key={y} value={String(y)} className="text-[10px] font-bold">{y}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-
-                                {/* Cycle Type Toggle */}
-                                <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-[8px] font-bold uppercase">
-                                    <button
-                                        onClick={() => setCycleType("payroll_cycle")}
-                                        className={cn(
-                                            "px-2 py-1 rounded-md transition-all",
-                                            cycleType === "payroll_cycle" ? "bg-indigo-600 text-white shadow-xs font-black" : "text-slate-600 hover:text-slate-900"
-                                        )}
-                                        title="Payroll Cycle (26th prev month to 25th current month)"
-                                    >
-                                        Payroll (26th-25th)
-                                    </button>
-                                    <button
-                                        onClick={() => setCycleType("calendar")}
-                                        className={cn(
-                                            "px-2 py-1 rounded-md transition-all",
-                                            cycleType === "calendar" ? "bg-indigo-600 text-white shadow-xs font-black" : "text-slate-600 hover:text-slate-900"
-                                        )}
-                                        title="Calendar Month (1st to Month End)"
-                                    >
-                                        Calendar (1st-End)
-                                    </button>
+                    {activeTab === "location_roster" ? (
+                        <>
+                            <div className="flex items-center gap-4 shrink-0">
+                                <div>
+                                    <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Location Staff</span>
+                                    <span className="font-black italic text-[#D9F99D]">{locationStats.count} Active Staff</span>
+                                </div>
+                                <div className="h-6 w-px bg-slate-700" />
+                                <div>
+                                    <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Fixed Payroll</span>
+                                    <span className="font-bold text-slate-200">₹{locationStats.totalFixedGross.toLocaleString()}</span>
+                                </div>
+                                <div className="h-6 w-px bg-slate-700" />
+                                <div>
+                                    <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Earned Gross</span>
+                                    <span className="font-bold text-emerald-300">₹{locationStats.totalEarnedGross.toLocaleString()}</span>
+                                </div>
+                                <div className="h-6 w-px bg-slate-700" />
+                                <div>
+                                    <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Total Deductions</span>
+                                    <span className="font-bold text-rose-300">₹{locationStats.totalDeductions.toLocaleString()}</span>
                                 </div>
                             </div>
-                        )}
 
-                        {filterMode === "rolling" && (
-                            <div className="flex items-center gap-1 pl-2 border-l border-slate-200">
-                                {[
-                                    { id: "30", label: "30 Days" },
-                                    { id: "60", label: "60 Days" },
-                                    { id: "90", label: "90 Days" },
-                                    { id: "180", label: "180 Days" },
-                                    { id: "365", label: "1 Year" },
-                                ].map((btn) => (
-                                    <button
-                                        key={btn.id}
-                                        onClick={() => setDurationPreset(btn.id)}
-                                        className={cn(
-                                            "px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all",
-                                            durationPreset === btn.id
-                                                ? "bg-slate-900 text-[#D9F99D] shadow-xs"
-                                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                                        )}
-                                    >
-                                        {btn.label}
-                                    </button>
-                                ))}
+                            <div className="flex items-center gap-4 shrink-0 pl-4 border-l border-slate-700">
+                                <div>
+                                    <span className="text-[8px] uppercase tracking-wider text-emerald-400 font-bold block">Total Net Disbursed</span>
+                                    <span className="font-black italic text-emerald-300 text-sm">
+                                        ₹{locationStats.totalNet.toLocaleString()}
+                                    </span>
+                                </div>
+                                <div className="h-6 w-px bg-slate-700" />
+                                <div>
+                                    <span className="text-[8px] uppercase tracking-wider text-indigo-300 font-bold block">Avg Attendance Ratio</span>
+                                    <span className="font-bold text-white">
+                                        {locationStats.avgWorkRatio}% <span className="text-slate-400 font-normal">({locationStats.totalPayableDays}/{locationStats.totalPossibleDays}d)</span>
+                                    </span>
+                                </div>
+                                <div className="h-6 w-px bg-slate-700" />
+                                <div>
+                                    <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Presence vs Absent</span>
+                                    <span className="font-bold text-slate-200">
+                                        <span className="text-emerald-400">{locationStats.totalPresentDays}P</span> · <span className="text-rose-400">{locationStats.totalAbsentDays}A</span>
+                                    </span>
+                                </div>
                             </div>
-                        )}
+                        </>
+                    ) : (
+                        <>
+                            <div className="flex items-center gap-4 shrink-0">
+                                <div>
+                                    <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Fixed Gross</span>
+                                    <span className="font-black italic text-white">₹{fixedGross.toLocaleString()}</span>
+                                </div>
+                                <div className="h-6 w-px bg-slate-700" />
+                                <div>
+                                    <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Daily Rate</span>
+                                    <span className="font-bold text-slate-200">₹{dailyRate.toLocaleString()}<span className="text-[8px] text-slate-400 font-normal">/d</span></span>
+                                </div>
+                                <div className="h-6 w-px bg-slate-700" />
+                                <div>
+                                    <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Hourly Rate</span>
+                                    <span className="font-bold text-indigo-300">₹{hourlyRate.toLocaleString()}<span className="text-[8px] text-slate-400 font-normal">/h</span></span>
+                                </div>
+                                <div className="h-6 w-px bg-slate-700" />
+                                <div>
+                                    <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Shift & Off</span>
+                                    <span className="font-bold text-amber-300">{currentEmp?.shift_preset || "09:30-18:30"} • {Array.isArray(currentEmp?.weekly_off_days) ? currentEmp.weekly_off_days.join(",") : (currentEmp?.weekly_off_days || "Sun")}</span>
+                                </div>
+                            </div>
 
-                        {filterMode === "custom" && (
-                            <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
-                                <label className="text-[8px] font-bold text-slate-400 uppercase">From:</label>
-                                <Input
-                                    type="date"
-                                    value={customFrom}
-                                    onChange={(e) => setCustomFrom(e.target.value)}
-                                    className="h-7 w-32 text-[9px] font-bold rounded-md bg-white border-slate-200"
-                                />
-                                <label className="text-[8px] font-bold text-slate-400 uppercase">To:</label>
-                                <Input
-                                    type="date"
-                                    value={customTo}
-                                    onChange={(e) => setCustomTo(e.target.value)}
-                                    className="h-7 w-32 text-[9px] font-bold rounded-md bg-white border-slate-200"
-                                />
+                            <div className="flex items-center gap-4 shrink-0 pl-4 border-l border-slate-700">
+                                <div>
+                                    <span className="text-[8px] uppercase tracking-wider text-emerald-400 font-bold block">Period Gross Earned</span>
+                                    <span className="font-black italic text-emerald-300 text-sm">
+                                        ₹{periodAnalysis?.periodGrossEarned?.toLocaleString() || "0"}
+                                    </span>
+                                </div>
+                                <div className="h-6 w-px bg-slate-700" />
+                                <div>
+                                    <span className="text-[8px] uppercase tracking-wider text-indigo-300 font-bold block">Payable Work Ratio</span>
+                                    <span className="font-bold text-white">
+                                        {periodAnalysis?.payableDays || 0} <span className="text-slate-400 font-normal">/ {periodAnalysis?.daysCount || 0}d</span>
+                                    </span>
+                                </div>
+                                <div className="h-6 w-px bg-slate-700" />
+                                <div>
+                                    <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Attendance Breakdown</span>
+                                    <span className="font-bold text-slate-200">
+                                        <span className="text-emerald-400">{periodAnalysis?.presentDays || 0}P</span> · <span className="text-blue-300">{periodAnalysis?.weeklyOffDays || 0}Off</span> · <span className="text-amber-300">{periodAnalysis?.halfDays || 0}H</span> · <span className="text-rose-400">{periodAnalysis?.absentDays || 0}A</span>
+                                    </span>
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </div>
+
+                {/* ── 3. Unified Filter Controls Bar (Monthly Wise / Rolling / Custom / Location Roster) ── */}
+                <div className="bg-white px-6 py-2.5 border-b border-slate-200/80 shrink-0 flex flex-wrap items-center justify-between gap-3 shadow-xs">
+                    {activeTab === "location_roster" ? (
+                        <div className="flex items-center justify-between w-full gap-3 flex-wrap">
+                            <div className="flex items-center gap-2 flex-1 min-w-[240px]">
+                                <div className="relative flex-1 max-w-xs">
+                                    <Search className="h-3 w-3 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                                    <Input
+                                        type="text"
+                                        placeholder="Filter staff by Name or ID..."
+                                        value={rosterSearch}
+                                        onChange={(e) => setRosterSearch(e.target.value)}
+                                        className="h-7 pl-7 pr-7 text-[9px] font-bold rounded-lg bg-slate-50 border-slate-200 placeholder:text-slate-400"
+                                    />
+                                    {rosterSearch && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setRosterSearch("")}
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                                        >
+                                            <X className="h-2.5 w-2.5" />
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Status filter pills */}
+                                <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-[8px] font-bold uppercase">
+                                    {["ALL", "Paid", "Draft"].map((st) => (
+                                        <button
+                                            key={st}
+                                            onClick={() => setRosterStatusFilter(st)}
+                                            className={cn(
+                                                "px-2 py-0.5 rounded-md transition-all",
+                                                rosterStatusFilter === st
+                                                    ? "bg-slate-900 text-[#D9F99D] shadow-xs font-black"
+                                                    : "text-slate-600 hover:text-slate-900"
+                                            )}
+                                        >
+                                            {st}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
                                 <Button
                                     size="sm"
-                                    onClick={handleApplyCustomRange}
-                                    disabled={loading}
-                                    className="h-7 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-[8px] tracking-widest rounded-md shadow-xs"
+                                    variant="outline"
+                                    onClick={handleExportLocationCSV}
+                                    className="h-7 rounded-lg border-slate-200 text-slate-700 font-black uppercase text-[8px] tracking-widest px-2.5 hover:bg-[#D9F99D] hover:text-slate-900 shadow-xs"
                                 >
-                                    Apply
+                                    <FileSpreadsheet className="h-3 w-3 mr-1 text-emerald-600" /> Export Location CSV
+                                </Button>
+                                {selectedEmployee && (
+                                    <Button
+                                        size="sm"
+                                        variant="default"
+                                        onClick={() => setActiveTab("monthly_summary")}
+                                        className="h-7 rounded-lg bg-indigo-600 text-white font-black uppercase text-[8px] tracking-widest px-3 hover:bg-indigo-700 shadow-xs flex items-center gap-1.5"
+                                    >
+                                        <User className="h-3 w-3 text-[#D9F99D]" /> View {selectedEmployee.name} History
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                {/* Mode Switcher */}
+                                <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200">
+                                    <button
+                                        onClick={() => setFilterMode("monthly")}
+                                        className={cn(
+                                            "px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all",
+                                            filterMode === "monthly" ? "bg-slate-900 text-[#D9F99D] shadow-xs" : "text-slate-600 hover:text-slate-900"
+                                        )}
+                                    >
+                                        <CalendarDays className="h-3 w-3 inline mr-1 text-emerald-500" /> Month-Wise
+                                    </button>
+                                    <button
+                                        onClick={() => setFilterMode("rolling")}
+                                        className={cn(
+                                            "px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all",
+                                            filterMode === "rolling" ? "bg-slate-900 text-[#D9F99D] shadow-xs" : "text-slate-600 hover:text-slate-900"
+                                        )}
+                                    >
+                                        <Clock className="h-3 w-3 inline mr-1 text-indigo-400" /> Rolling Days
+                                    </button>
+                                    <button
+                                        onClick={() => setFilterMode("custom")}
+                                        className={cn(
+                                            "px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all",
+                                            filterMode === "custom" ? "bg-slate-900 text-[#D9F99D] shadow-xs" : "text-slate-600 hover:text-slate-900"
+                                        )}
+                                    >
+                                        <Calendar className="h-3 w-3 inline mr-1 text-amber-500" /> Custom Range
+                                    </button>
+                                </div>
+
+                                {/* Mode-Specific Controls */}
+                                {filterMode === "monthly" && (
+                                    <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+                                        {/* Month Dropdown */}
+                                        <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                                            <SelectTrigger className="h-8 w-28 text-[9px] font-black uppercase rounded-lg border-slate-200 bg-white">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent className="border-none shadow-xl rounded-xl">
+                                                {monthsList.map(m => (
+                                                    <SelectItem key={m} value={m} className="text-[10px] font-bold uppercase">{m}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+
+                                        {/* Year Dropdown */}
+                                        <Select value={selectedYear} onValueChange={setSelectedYear}>
+                                            <SelectTrigger className="h-8 w-20 text-[9px] font-black uppercase rounded-lg border-slate-200 bg-white">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent className="border-none shadow-xl rounded-xl">
+                                                {[2027, 2026, 2025, 2024].map(y => (
+                                                    <SelectItem key={y} value={String(y)} className="text-[10px] font-bold">{y}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+
+                                        {/* Cycle Type Toggle */}
+                                        <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-[8px] font-bold uppercase">
+                                            <button
+                                                onClick={() => setCycleType("payroll_cycle")}
+                                                className={cn(
+                                                    "px-2 py-1 rounded-md transition-all",
+                                                    cycleType === "payroll_cycle" ? "bg-indigo-600 text-white shadow-xs font-black" : "text-slate-600 hover:text-slate-900"
+                                                )}
+                                                title="Payroll Cycle (26th prev month to 25th current month)"
+                                            >
+                                                Payroll (26th-25th)
+                                            </button>
+                                            <button
+                                                onClick={() => setCycleType("calendar")}
+                                                className={cn(
+                                                    "px-2 py-1 rounded-md transition-all",
+                                                    cycleType === "calendar" ? "bg-indigo-600 text-white shadow-xs font-black" : "text-slate-600 hover:text-slate-900"
+                                                )}
+                                                title="Calendar Month (1st to Month End)"
+                                            >
+                                                Calendar (1st-End)
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {filterMode === "rolling" && (
+                                    <div className="flex items-center gap-1 pl-2 border-l border-slate-200">
+                                        {[
+                                            { id: "30", label: "30 Days" },
+                                            { id: "60", label: "60 Days" },
+                                            { id: "90", label: "90 Days" },
+                                            { id: "180", label: "180 Days" },
+                                            { id: "365", label: "1 Year" },
+                                        ].map((btn) => (
+                                            <button
+                                                key={btn.id}
+                                                onClick={() => setDurationPreset(btn.id)}
+                                                className={cn(
+                                                    "px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all",
+                                                    durationPreset === btn.id
+                                                        ? "bg-slate-900 text-[#D9F99D] shadow-xs"
+                                                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                                )}
+                                            >
+                                                {btn.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {filterMode === "custom" && (
+                                    <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+                                        <label className="text-[8px] font-bold text-slate-400 uppercase">From:</label>
+                                        <Input
+                                            type="date"
+                                            value={customFrom}
+                                            onChange={(e) => setCustomFrom(e.target.value)}
+                                            className="h-7 w-32 text-[9px] font-bold rounded-md bg-white border-slate-200"
+                                        />
+                                        <label className="text-[8px] font-bold text-slate-400 uppercase">To:</label>
+                                        <Input
+                                            type="date"
+                                            value={customTo}
+                                            onChange={(e) => setCustomTo(e.target.value)}
+                                            className="h-7 w-32 text-[9px] font-bold rounded-md bg-white border-slate-200"
+                                        />
+                                        <Button
+                                            size="sm"
+                                            onClick={handleApplyCustomRange}
+                                            disabled={loading}
+                                            className="h-7 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-[8px] tracking-widest rounded-md shadow-xs"
+                                        >
+                                            Apply
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Action buttons */}
+                            <div className="flex items-center gap-2">
+                                {periodAnalysis?.timeline?.length > 0 && (
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={handleExportCSV}
+                                        className="h-7 rounded-lg border-slate-200 text-slate-700 font-black uppercase text-[8px] tracking-widest px-2.5 hover:bg-[#D9F99D] hover:text-slate-900"
+                                    >
+                                        <FileSpreadsheet className="h-3 w-3 mr-1 text-emerald-600" /> Export CSV
+                                    </Button>
+                                )}
+                                <Button
+                                    size="sm"
+                                    variant="default"
+                                    onClick={() => handleDownload()}
+                                    className="h-7 rounded-lg bg-slate-900 text-white font-black uppercase text-[8px] tracking-widest px-3 hover:bg-slate-800 shadow-xs flex items-center gap-1.5"
+                                >
+                                    <Download className="h-3 w-3 text-[#D9F99D]" /> Download Payslip (PDF)
                                 </Button>
                             </div>
-                        )}
-                    </div>
-
-                    {/* Action buttons */}
-                    <div className="flex items-center gap-2">
-                        {periodAnalysis?.timeline?.length > 0 && (
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={handleExportCSV}
-                                className="h-7 rounded-lg border-slate-200 text-slate-700 font-black uppercase text-[8px] tracking-widest px-2.5 hover:bg-[#D9F99D] hover:text-slate-900"
-                            >
-                                <FileSpreadsheet className="h-3 w-3 mr-1 text-emerald-600" /> Export CSV
-                            </Button>
-                        )}
-                        <Button
-                            size="sm"
-                            variant="default"
-                            onClick={() => handleDownload()}
-                            className="h-7 rounded-lg bg-slate-900 text-white font-black uppercase text-[8px] tracking-widest px-3 hover:bg-slate-800 shadow-xs flex items-center gap-1.5"
-                        >
-                            <Download className="h-3 w-3 text-[#D9F99D]" /> Download Payslip (PDF)
-                        </Button>
-                    </div>
+                        </>
+                    )}
                 </div>
 
                 {/* ── 4. View Tabs Bar (Height ~38px) ── */}
                 <div className="px-6 pt-1.5 bg-white shrink-0 border-b border-slate-200/60">
                     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                        <TabsList className="bg-slate-100 p-0.5 rounded-xl h-8 w-full justify-start gap-1">
+                        <TabsList className="bg-slate-100 p-0.5 rounded-xl h-8 w-full justify-start gap-1 overflow-x-auto">
+                            <TabsTrigger
+                                value="location_roster"
+                                className="rounded-lg text-[9px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs px-3.5 h-7 shrink-0"
+                            >
+                                <Building2 className="h-3 w-3 mr-1 text-indigo-600" />
+                                Location Staff Salary Sheet ({locationEmployees.length})
+                            </TabsTrigger>
                             <TabsTrigger
                                 value="monthly_summary"
-                                className="rounded-lg text-[9px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs px-4 h-7"
+                                className="rounded-lg text-[9px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs px-3.5 h-7 shrink-0"
                             >
                                 <CalendarDays className="h-3 w-3 mr-1 text-emerald-600" />
                                 Month-Wise Overview ({periodAnalysis?.monthlyBreakdown?.length || history.length || 0})
                             </TabsTrigger>
                             <TabsTrigger
                                 value="timeline"
-                                className="rounded-lg text-[9px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs px-4 h-7"
+                                className="rounded-lg text-[9px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs px-3.5 h-7 shrink-0"
                             >
                                 <Clock className="h-3 w-3 mr-1 text-indigo-600" />
                                 Day-Wise Salary Log ({periodAnalysis?.timeline?.length || 0})
                             </TabsTrigger>
                             <TabsTrigger
                                 value="cycles"
-                                className="rounded-lg text-[9px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs px-4 h-7"
+                                className="rounded-lg text-[9px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs px-3.5 h-7 shrink-0"
                             >
                                 <CalendarCheck className="h-3 w-3 mr-1 text-blue-600" />
                                 Past Monthly Payroll Cycles ({history.length})
                             </TabsTrigger>
                             <TabsTrigger
                                 value="structure"
-                                className="rounded-lg text-[9px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs px-4 h-7"
+                                className="rounded-lg text-[9px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-xs px-3.5 h-7 shrink-0"
                             >
                                 <Wallet className="h-3 w-3 mr-1 text-amber-600" />
                                 Salary & Statutory Structure
@@ -1481,6 +1944,175 @@ export function EmployeeHistoryDialog({
                             <p className="text-[10px] uppercase font-black tracking-widest text-slate-500">
                                 Computing period salary and attendance ledger...
                             </p>
+                        </div>
+                    ) : activeTab === "location_roster" ? (
+                        /* ── Tab 0: Location Staff Salary Sheet (All Employees of Location) ── */
+                        <div className="space-y-4">
+                            {/* Location Header Banner with Branch Switcher Chips */}
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <Building2 className="h-4 w-4 text-indigo-600 shrink-0" />
+                                        <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">
+                                            {selectedLocation === "ALL" ? "All Organization Locations & Branches" : selectedLocation}
+                                        </h4>
+                                        <span className="text-[9px] px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-bold border border-indigo-100">
+                                            {filteredRosterEmployees.length} of {locationEmployees.length} Staff
+                                        </span>
+                                    </div>
+                                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1">
+                                        Consolidated branch payroll ledger • Cycle: {selectedMonth} {selectedYear}
+                                    </p>
+                                </div>
+
+                                {/* Location quick chips */}
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                    {availableLocations.map(loc => (
+                                        <button
+                                            key={loc.id}
+                                            type="button"
+                                            onClick={() => setSelectedLocation(loc.id)}
+                                            className={cn(
+                                                "px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all",
+                                                selectedLocation === loc.id
+                                                    ? "bg-slate-900 text-[#D9F99D] shadow-xs"
+                                                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                            )}
+                                        >
+                                            {loc.name.split("—").pop()?.trim() || loc.name} ({loc.count})
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Location Roster Table */}
+                            {filteredRosterEmployees.length === 0 ? (
+                                <div className="text-center py-16 bg-white rounded-2xl border border-slate-200/80">
+                                    <Building2 className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                                    <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest">
+                                        No staff records found for this location filter
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="bg-slate-50 border-b border-slate-200/80 text-[8px] font-black uppercase text-slate-500 tracking-wider">
+                                                <th className="py-2.5 px-4">Employee Details</th>
+                                                <th className="py-2.5 px-3">Location / Office</th>
+                                                <th className="py-2.5 px-3 text-right">Fixed Gross</th>
+                                                <th className="py-2.5 px-3 text-center">Payable / Muster</th>
+                                                <th className="py-2.5 px-3 text-center">Attendance Breakdown</th>
+                                                <th className="py-2.5 px-3 text-right">Earned Gross</th>
+                                                <th className="py-2.5 px-3 text-right">Deductions</th>
+                                                <th className="py-2.5 px-4 text-right">Net Take Home</th>
+                                                <th className="py-2.5 px-3 text-center">Status</th>
+                                                <th className="py-2.5 px-4 text-right">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100 text-[10px]">
+                                            {filteredRosterEmployees.map((emp: any, idx: number) => {
+                                                const c = getRowCalculations(emp);
+                                                const id = String(emp.employeeId || emp.id);
+                                                const isCurrentSelected = id === activeEmpId;
+                                                return (
+                                                    <tr
+                                                        key={idx}
+                                                        className={cn(
+                                                            "hover:bg-slate-50/80 transition-colors font-medium",
+                                                            isCurrentSelected && "bg-indigo-50/40"
+                                                        )}
+                                                    >
+                                                        <td className="py-2.5 px-4">
+                                                            <div className="flex items-center gap-2.5">
+                                                                <div className="h-7 w-7 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center font-black text-slate-700 text-[10px] shrink-0">
+                                                                    {(emp.name || "ST").substring(0, 2).toUpperCase()}
+                                                                </div>
+                                                                <div className="min-w-0">
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <span className="font-black text-slate-900 truncate">{emp.name}</span>
+                                                                        <span className="text-[8px] px-1.5 py-0.2 rounded bg-slate-100 font-mono font-bold text-slate-600">
+                                                                            {emp.employeeCode || emp.emp_code || `EMP-${id}`}
+                                                                        </span>
+                                                                    </div>
+                                                                    <p className="text-[8px] text-slate-400 font-bold uppercase truncate">
+                                                                        {emp.designation || "Staff"} • {emp.department || "General"}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-2.5 px-3">
+                                                            <span className="inline-flex items-center gap-1 text-[8px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200 truncate max-w-[150px]">
+                                                                <MapPin className="h-2.5 w-2.5 text-indigo-500 shrink-0" />
+                                                                <span className="truncate">{emp.location || emp.office?.name || "Indore HQ"}</span>
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-2.5 px-3 text-right font-black italic text-slate-800">
+                                                            ₹{Number(c.fixedGross || emp.fixedGross || 0).toLocaleString()}
+                                                        </td>
+                                                        <td className="py-2.5 px-3 text-center">
+                                                            <span className="bg-indigo-50 text-indigo-800 font-black px-2 py-0.5 rounded-md border border-indigo-100 text-[9px]">
+                                                                {c.payableDays ?? emp.payableDays ?? 0} / {emp.dynamicDays || emp.total_muster_days || 31}d
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-2.5 px-3 text-center">
+                                                            <div className="inline-flex items-center gap-1 text-[8px] font-bold">
+                                                                <span className="text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-100">
+                                                                    {emp.presentDays ?? emp.present_days ?? c.payableDays ?? 0}P
+                                                                </span>
+                                                                <span className="text-rose-700 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-100">
+                                                                    {emp.absentDays ?? emp.lwpDays ?? emp.lwp_days ?? 0}A
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-2.5 px-3 text-right font-black italic text-slate-800">
+                                                            ₹{Number(c.totalEarnings || emp.totalEarnings || 0).toLocaleString()}
+                                                        </td>
+                                                        <td className="py-2.5 px-3 text-right font-bold text-rose-600">
+                                                            ₹{Number(c.grossDeductions || emp.grossDeductions || 0).toLocaleString()}
+                                                        </td>
+                                                        <td className="py-2.5 px-4 text-right font-black italic text-emerald-700 text-[11px]">
+                                                            ₹{Number(c.net || emp.net || 0).toLocaleString()}
+                                                        </td>
+                                                        <td className="py-2.5 px-3 text-center">
+                                                            <Badge className={cn(
+                                                                "border-none text-[8px] font-black px-2 py-0.5 rounded-md uppercase",
+                                                                emp.status === "Paid" ? "bg-emerald-100 text-emerald-800" :
+                                                                emp.status === "Calculated" ? "bg-blue-100 text-blue-800" :
+                                                                "bg-amber-100 text-amber-800"
+                                                            )}>
+                                                                {emp.status || "Calculated"}
+                                                            </Badge>
+                                                        </td>
+                                                        <td className="py-2.5 px-4 text-right">
+                                                            <div className="flex items-center justify-end gap-1.5">
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    onClick={() => handleInspectEmployee(emp)}
+                                                                    className="h-6 text-[8px] font-black uppercase rounded-md px-2 border-indigo-200 bg-indigo-50/50 text-indigo-700 hover:bg-indigo-100 flex items-center gap-1"
+                                                                    title="View deep salary history for this employee"
+                                                                >
+                                                                    <Eye className="h-2.5 w-2.5 text-indigo-600" /> Inspect History
+                                                                </Button>
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    onClick={() => handleDownload(emp)}
+                                                                    className="h-6 text-[8px] font-black uppercase rounded-md px-2 border-slate-200 hover:bg-[#D9F99D] hover:text-slate-900 flex items-center gap-1"
+                                                                    title="Download payslip PDF"
+                                                                >
+                                                                    <Download className="h-2.5 w-2.5" /> PDF
+                                                                </Button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
                         </div>
                     ) : activeTab === "monthly_summary" ? (
                         /* ── Tab 1: Month-Wise Summary ── */

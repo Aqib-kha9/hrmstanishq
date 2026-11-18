@@ -1111,6 +1111,7 @@ export default function PayrollPage() {
                     selectedEmployee={selectedEmployee || ledger[0]}
                     allEmployees={ledger}
                     onSelectEmployee={setSelectedEmployee}
+                    calculateProductionNet={calculateProductionNet}
                 />
 
 
