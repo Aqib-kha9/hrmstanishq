@@ -54,7 +54,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useRole } from "@/context/RoleContext";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { apiGet, apiPost, apiPatch, apiPut, getApiErrorMessage } from "@/lib/api-client";
+import { apiGet, apiPost, apiPatch, apiPut, getApiErrorMessage, getToken } from "@/lib/api-client";
 
 const steps = ["Personal Info", "Employment Information", "Salary & Bank", "Documentation", "Review"];
 
@@ -865,6 +865,40 @@ function OnboardingForm() {
             alert(errMsg);
         } finally {
             setSendingAppointmentId(null);
+        }
+    };
+
+    const [isExportingOnboarding, setIsExportingOnboarding] = useState(false);
+
+    const handleExportOnboardingExcel = async () => {
+        setIsExportingOnboarding(true);
+        try {
+            const token = getToken();
+            const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1";
+            const res = await fetch(`${apiBase}/employees/export-onboarding-excel`, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
+
+            if (!res.ok) {
+                throw new Error("Failed to export onboarding excel");
+            }
+
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `Employee_Onboarding_Master_${new Date().toISOString().split("T")[0]}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error("Export onboarding error:", err);
+            alert("Failed to export onboarding records.");
+        } finally {
+            setIsExportingOnboarding(false);
         }
     };
 
@@ -1891,14 +1925,30 @@ function OnboardingForm() {
                                             Review details submitted by candidates and approve with 1 click to create active employees.
                                         </p>
                                     </div>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={fetchInvitations}
-                                        className="h-9 text-xs font-bold rounded-xl"
-                                    >
-                                        <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Refresh
-                                    </Button>
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={handleExportOnboardingExcel}
+                                            disabled={isExportingOnboarding}
+                                            className="h-9 text-xs font-bold rounded-xl border-emerald-200 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 cursor-pointer shadow-xs"
+                                        >
+                                            {isExportingOnboarding ? (
+                                                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin text-emerald-600" />
+                                            ) : (
+                                                <Download className="h-3.5 w-3.5 mr-1.5 text-emerald-600" />
+                                            )}
+                                            Export Onboarding Master
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={fetchInvitations}
+                                            className="h-9 text-xs font-bold rounded-xl cursor-pointer"
+                                        >
+                                            <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Refresh
+                                        </Button>
+                                    </div>
                                 </div>
 
                                 {invitationsLoading ? (

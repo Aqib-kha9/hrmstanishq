@@ -32,6 +32,7 @@ import {
     Loader2,
     CheckCircle2,
     FileSpreadsheet,
+    Download,
     Eye,
     EyeOff
 } from "lucide-react";
@@ -69,9 +70,10 @@ import {
     DialogTrigger,
     DialogFooter,
 } from "@/components/ui/dialog";
-import { apiGet, apiPatch, apiDelete, apiPut, apiPost } from "@/lib/api-client";
+import { apiGet, apiPatch, apiDelete, apiPut, apiPost, getToken } from "@/lib/api-client";
 import { toFrontendEmployee, type BackendEmployee, type FrontendEmployee } from "@/lib/transform";
 import { BulkImportModal } from "@/components/BulkImportModal";
+import * as XLSX from "xlsx";
 
 export default function EmployeesPage() {
     const { hasPermission } = useRole();
@@ -361,6 +363,70 @@ export default function EmployeesPage() {
         }
     };
 
+    const [isExporting, setIsExporting] = useState(false);
+
+    const handleExportOnboardingExcel = async () => {
+        setIsExporting(true);
+        try {
+            const token = getToken();
+            const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1";
+            const res = await fetch(`${apiBase}/employees/export-onboarding-excel`, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
+
+            if (!res.ok) {
+                throw new Error("Failed to export onboarding excel from server");
+            }
+
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `Employee_Onboarding_Master_${new Date().toISOString().split("T")[0]}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error("Server export error, falling back to local generation:", err);
+            if (personnel && personnel.length > 0) {
+                const rows = personnel.map((emp, idx) => ({
+                    "Sr No": idx + 1,
+                    "Employee ID": emp.emp_code || (emp as any).employee_code || "",
+                    "Full Name": emp.name || "",
+                    "Employment Status": (emp.status || "active").toUpperCase(),
+                    "Company": emp.company || "",
+                    "Work Location / Office": emp.location || "",
+                    "Department": emp.dept || "",
+                    "Designation": emp.jobTitle || "",
+                    "Date of Joining": (emp as any).date_of_joining || "",
+                    "Email Address": emp.email || "",
+                    "Mobile Phone": emp.phone || "",
+                    "Aadhaar Number": (emp as any).aadhaar_number || "",
+                    "PAN Card Number": (emp as any).pan_number || "",
+                    "UAN Number": (emp as any).uan || "",
+                    "PF Number": (emp as any).pf_number || "",
+                    "ESIC Number": (emp as any).esi_number || "",
+                    "Bank Name": (emp as any).bank_name || "",
+                    "Account Number": (emp as any).bank_account_number || "",
+                    "IFSC Code": (emp as any).ifsc_code || "",
+                    "Monthly Fixed Gross (₹)": (emp as any).fixed_gross || 0,
+                    "Shift Timing": (emp as any).shift_start_time ? `${(emp as any).shift_start_time} - ${(emp as any).shift_end_time}` : "09:30 - 18:30",
+                }));
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.json_to_sheet(rows);
+                XLSX.utils.book_append_sheet(wb, ws, "Employee Master");
+                XLSX.writeFile(wb, `Employee_Onboarding_Master_${new Date().toISOString().split("T")[0]}.xlsx`);
+            } else {
+                alert("No employee data available to export.");
+            }
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     return (
         <ProtectedRoute module="EMPLOYEES" action="READ">
             <div className="space-y-8 pb-20">
@@ -371,29 +437,46 @@ export default function EmployeesPage() {
                         <p className="text-[10px] font-bold text-slate-400 mt-4 uppercase tracking-[0.2em]">Manage your team members and their information.</p>
                     </div>
 
-                    {hasPermission('EMPLOYEES', 'CREATE') && (
-                        <div className="flex items-center gap-3">
-                            <Button 
-                                onClick={handleOpenRehire}
-                                variant="outline" 
-                                className="border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 font-black uppercase text-[10px] tracking-widest px-5 h-12 rounded-xl shadow-sm transition-all flex items-center gap-2"
-                            >
-                                <UserCheck className="h-4 w-4 text-amber-600" /> Re-Hire Employee
-                            </Button>
-                            <Button 
-                                onClick={() => setImportDialogOpen(true)}
-                                variant="outline" 
-                                className="border-slate-200 text-slate-600 hover:bg-slate-50 font-black uppercase text-[10px] tracking-widest px-6 h-12 rounded-xl shadow-sm transition-all flex items-center gap-2"
-                            >
-                                <FileSpreadsheet className="h-4 w-4" /> Import Excel
-                            </Button>
-                            <Link href="/onboarding">
-                                <Button className="bg-slate-900 text-white hover:bg-black font-black uppercase text-[10px] tracking-widest px-8 h-12 rounded-xl shadow-lg transition-all flex items-center gap-3">
-                                    <Plus className="h-5 w-5 stroke-[3]" /> Add New Employee
+                    <div className="flex flex-wrap items-center gap-3">
+                        <Button 
+                            onClick={handleExportOnboardingExcel}
+                            disabled={isExporting}
+                            variant="outline" 
+                            className="border-emerald-200 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 font-black uppercase text-[10px] tracking-widest px-5 h-12 rounded-xl shadow-sm transition-all flex items-center gap-2 cursor-pointer"
+                            title="Export complete employee onboarding data, KYC, banking and salary details to Excel"
+                        >
+                            {isExporting ? (
+                                <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
+                            ) : (
+                                <Download className="h-4 w-4 text-emerald-600" />
+                            )}
+                            Export Onboarding Excel
+                        </Button>
+
+                        {hasPermission('EMPLOYEES', 'CREATE') && (
+                            <>
+                                <Button 
+                                    onClick={handleOpenRehire}
+                                    variant="outline" 
+                                    className="border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 font-black uppercase text-[10px] tracking-widest px-5 h-12 rounded-xl shadow-sm transition-all flex items-center gap-2"
+                                >
+                                    <UserCheck className="h-4 w-4 text-amber-600" /> Re-Hire Employee
                                 </Button>
-                            </Link>
-                        </div>
-                    )}
+                                <Button 
+                                    onClick={() => setImportDialogOpen(true)}
+                                    variant="outline" 
+                                    className="border-slate-200 text-slate-600 hover:bg-slate-50 font-black uppercase text-[10px] tracking-widest px-6 h-12 rounded-xl shadow-sm transition-all flex items-center gap-2"
+                                >
+                                    <FileSpreadsheet className="h-4 w-4" /> Import Excel
+                                </Button>
+                                <Link href="/onboarding">
+                                    <Button className="bg-slate-900 text-white hover:bg-black font-black uppercase text-[10px] tracking-widest px-8 h-12 rounded-xl shadow-lg transition-all flex items-center gap-3">
+                                        <Plus className="h-5 w-5 stroke-[3]" /> Add New Employee
+                                    </Button>
+                                </Link>
+                            </>
+                        )}
+                    </div>
                 </div>
 
                 {/* Req 1.1: Recently Added Employees Section */}
