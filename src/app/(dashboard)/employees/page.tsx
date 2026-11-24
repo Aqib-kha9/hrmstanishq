@@ -612,10 +612,10 @@ export default function EmployeesPage() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3">
-                        <Button 
+                        <Button
                             onClick={handleExportOnboardingExcel}
                             disabled={isExporting}
-                            variant="outline" 
+                            variant="outline"
                             className="border-emerald-200 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 font-black uppercase text-[10px] tracking-widest px-5 h-12 rounded-xl shadow-sm transition-all flex items-center gap-2 cursor-pointer"
                             title="Export complete employee onboarding data, KYC, banking and salary details to Excel"
                         >
@@ -629,16 +629,16 @@ export default function EmployeesPage() {
 
                         {hasPermission('EMPLOYEES', 'CREATE') && (
                             <>
-                                <Button 
+                                <Button
                                     onClick={handleOpenRehire}
-                                    variant="outline" 
+                                    variant="outline"
                                     className="border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 font-black uppercase text-[10px] tracking-widest px-5 h-12 rounded-xl shadow-sm transition-all flex items-center gap-2"
                                 >
                                     <UserCheck className="h-4 w-4 text-amber-600" /> Re-Hire Employee
                                 </Button>
-                                <Button 
+                                <Button
                                     onClick={() => setImportDialogOpen(true)}
-                                    variant="outline" 
+                                    variant="outline"
                                     className="border-slate-200 text-slate-600 hover:bg-slate-50 font-black uppercase text-[10px] tracking-widest px-6 h-12 rounded-xl shadow-sm transition-all flex items-center gap-2"
                                 >
                                     <FileSpreadsheet className="h-4 w-4" /> Import Excel
@@ -668,7 +668,7 @@ export default function EmployeesPage() {
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                             {recentEmployees.map((emp) => (
-                                <Link 
+                                <Link
                                     href={`/employees/${emp.id}`}
                                     key={emp.id}
                                     className="group relative bg-white border border-slate-200/80 hover:border-slate-900 rounded-2xl p-4 transition-all duration-300 shadow-sm hover:shadow-md flex flex-col justify-between"
@@ -868,17 +868,17 @@ export default function EmployeesPage() {
                                                                         <DropdownMenuItem onClick={() => updateStatus(emp, 'inactive')} className="font-bold text-[9px] uppercase tracking-widest p-2.5 rounded-xl cursor-pointer text-amber-600">
                                                                             Deactivate Employee
                                                                         </DropdownMenuItem>
-        
+
                                                                         <DropdownMenuItem onClick={() => updateStatus(emp, 'resigned')} className="font-bold text-[9px] uppercase tracking-widest p-2.5 rounded-xl cursor-pointer text-rose-600">
                                                                             Mark as Resigned
                                                                         </DropdownMenuItem>
-        
+
                                                                     </>
                                                                 ) : (
                                                                     <DropdownMenuItem onClick={() => updateStatus(emp, 'active')} className="font-bold text-[9px] uppercase tracking-widest p-2.5 rounded-xl cursor-pointer text-emerald-600">
                                                                         Activate Employee
                                                                     </DropdownMenuItem>
-    
+
                                                                 )
 
 
@@ -1215,12 +1215,12 @@ export default function EmployeesPage() {
 
             {/* Bulk Import Modal */}
             {hasPermission('EMPLOYEES', 'CREATE') && (
-                <BulkImportModal 
-                    open={importDialogOpen} 
-                    onOpenChange={setImportDialogOpen} 
-                    companies={companies} 
-                    offices={offices} 
-                    onSuccess={() => { fetchEmployees(); fetchRecentEmployees(); }} 
+                <BulkImportModal
+                    open={importDialogOpen}
+                    onOpenChange={setImportDialogOpen}
+                    companies={companies}
+                    offices={offices}
+                    onSuccess={() => { fetchEmployees(); fetchRecentEmployees(); }}
                 />
             )}
 
