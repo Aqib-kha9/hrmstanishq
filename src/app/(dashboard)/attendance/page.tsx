@@ -1626,20 +1626,38 @@ export default function AttendancePage() {
                                         >
                                             Prev
                                         </Button>
-                                        {[...Array(livePagination.totalPages || 1)].map((_, i) => (
-                                            <Button
-                                                key={i}
-                                                variant={currentPage === i + 1 ? "default" : "outline"}
-                                                size="sm"
-                                                onClick={() => setCurrentPage(i + 1)}
-                                                className={cn(
-                                                    "h-9 w-9 rounded-xl font-black text-[9px] border-slate-200",
-                                                    currentPage === i + 1 ? "bg-slate-900 text-white" : "text-slate-400 hover:bg-white"
-                                                )}
-                                            >
-                                                {i + 1}
-                                            </Button>
-                                        ))}
+                                        {(() => {
+                                            const totalPages = livePagination.totalPages || 1;
+                                            const current = currentPage;
+                                            const pages: (number | string)[] = [];
+                                            if (totalPages <= 7) {
+                                                for (let i = 1; i <= totalPages; i++) pages.push(i);
+                                            } else {
+                                                pages.push(1);
+                                                if (current > 3) pages.push("...");
+                                                for (let i = Math.max(2, current - 1); i <= Math.min(totalPages - 1, current + 1); i++) pages.push(i);
+                                                if (current < totalPages - 2) pages.push("...");
+                                                pages.push(totalPages);
+                                            }
+                                            return pages.map((p, i) =>
+                                                p === "..." ? (
+                                                    <span key={`live-ellipsis-${i}`} className="px-1 text-[9px] font-black text-slate-300">...</span>
+                                                ) : (
+                                                    <Button
+                                                        key={p}
+                                                        variant={currentPage === p ? "default" : "outline"}
+                                                        size="sm"
+                                                        onClick={() => setCurrentPage(p as number)}
+                                                        className={cn(
+                                                            "h-9 w-9 rounded-xl font-black text-[9px] border-slate-200",
+                                                            currentPage === p ? "bg-slate-900 text-white" : "text-slate-400 hover:bg-white"
+                                                        )}
+                                                    >
+                                                        {p}
+                                                    </Button>
+                                                )
+                                            );
+                                        })()}
                                         <Button
                                             variant="outline"
                                             size="sm"

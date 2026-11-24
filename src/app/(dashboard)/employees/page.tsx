@@ -33,6 +33,10 @@ import {
     CheckCircle2,
     FileSpreadsheet,
     Download,
+    ChevronLeft,
+    ChevronRight,
+    ChevronsLeft,
+    ChevronsRight,
     Eye,
     EyeOff
 } from "lucide-react";
@@ -88,7 +92,12 @@ export default function EmployeesPage() {
     const [selectedOfficeId, setSelectedOfficeId] = useState("");
     const [departments, setDepartments] = useState<string[]>([]);
     const [selectedDepartment, setSelectedDepartment] = useState("");
-    const itemsPerPage = 8;
+    const [itemsPerPage, setItemsPerPage] = useState<number>(10);
+
+    // Reset to page 1 on search, filter, or page size change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, selectedCompanyId, selectedOfficeId, selectedDepartment, itemsPerPage]);
 
     // Admin password reset state
     const [resetDialogOpen, setResetDialogOpen] = useState(false);
@@ -230,10 +239,24 @@ export default function EmployeesPage() {
         return matchesSearch && matchesDept;
     });
 
-    // Pagination Logic
-    const totalPages = Math.ceil(filteredPersonnel.length / itemsPerPage);
-    const startIndex = (currentPage - 1) * itemsPerPage;
+    // Scalable Pagination Logic
+    const totalPages = Math.max(1, Math.ceil(filteredPersonnel.length / itemsPerPage));
+    const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+    const startIndex = (safeCurrentPage - 1) * itemsPerPage;
     const paginatedPersonnel = filteredPersonnel.slice(startIndex, startIndex + itemsPerPage);
+
+    const getPaginationRange = (current: number, total: number): (number | string)[] => {
+        if (total <= 7) {
+            return Array.from({ length: total }, (_, i) => i + 1);
+        }
+        if (current <= 3) {
+            return [1, 2, 3, 4, "...", total];
+        }
+        if (current >= total - 2) {
+            return [1, "...", total - 3, total - 2, total - 1, total];
+        }
+        return [1, "...", current - 1, current, current + 1, "...", total];
+    };
 
     const updateStatus = async (emp: FrontendEmployee, newStatus: 'active' | 'inactive' | 'resigned') => {
         try {
@@ -747,45 +770,124 @@ export default function EmployeesPage() {
                                 </table>
                             </div>
 
-                            {/* Pagination Controls */}
-                            <div className="bg-slate-50/50 px-8 py-4 border-t border-slate-100 flex items-center justify-between">
-                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                    Showing <span className="text-slate-900">{startIndex + 1}</span> to <span className="text-slate-900">{Math.min(startIndex + itemsPerPage, filteredPersonnel.length)}</span> of <span className="text-slate-900">{filteredPersonnel.length}</span> Employees
-                                </p>
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={currentPage === 1}
-                                        onClick={() => setCurrentPage(currentPage - 1)}
-                                        className="h-9 px-4 rounded-xl border-slate-200 font-black text-[9px] uppercase tracking-widest hover:bg-white disabled:opacity-30 transition-all"
-                                    >
-                                        Previous
-                                    </Button>
-                                    <div className="flex items-center gap-1">
-                                        {[...Array(totalPages)].map((_, i) => (
-                                            <Button
-                                                key={i}
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => setCurrentPage(i + 1)}
-                                                className={cn(
-                                                    "h-9 w-9 rounded-xl font-black text-[9px] transition-all",
-                                                    currentPage === i + 1 ? "bg-slate-900 text-white hover:bg-black" : "text-slate-400 hover:bg-white"
-                                                )}
-                                            >
-                                                {i + 1}
-                                            </Button>
-                                        ))}
+                            {/* Scalable Enterprise Pagination Controls */}
+                            <div className="bg-slate-50/70 px-4 sm:px-8 py-4 border-t border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                {/* Left: Counts and Page Size Selector */}
+                                <div className="flex flex-wrap items-center gap-4 text-[11px] font-bold text-slate-500">
+                                    <p className="uppercase tracking-wider">
+                                        Showing{" "}
+                                        <span className="font-black text-slate-900">
+                                            {filteredPersonnel.length === 0 ? 0 : startIndex + 1}
+                                        </span>{" "}
+                                        to{" "}
+                                        <span className="font-black text-slate-900">
+                                            {Math.min(startIndex + itemsPerPage, filteredPersonnel.length)}
+                                        </span>{" "}
+                                        of{" "}
+                                        <span className="font-black text-slate-900">
+                                            {filteredPersonnel.length}
+                                        </span>{" "}
+                                        Employees
+                                    </p>
+
+                                    <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                            Rows per page:
+                                        </span>
+                                        <select
+                                            value={itemsPerPage}
+                                            onChange={(e) => {
+                                                setItemsPerPage(Number(e.target.value));
+                                                setCurrentPage(1);
+                                            }}
+                                            className="h-8 px-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 text-xs font-black shadow-2xs focus:outline-none focus:ring-2 focus:ring-slate-900 cursor-pointer"
+                                        >
+                                            <option value={8}>8</option>
+                                            <option value={15}>15</option>
+                                            <option value={25}>25</option>
+                                            <option value={50}>50</option>
+                                            <option value={100}>100</option>
+                                        </select>
                                     </div>
+                                </div>
+
+                                {/* Right: Sliding Window Page Controls with First/Last and Ellipsis */}
+                                <div className="flex items-center gap-1.5 self-center md:self-auto">
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        disabled={safeCurrentPage === 1}
+                                        onClick={() => setCurrentPage(1)}
+                                        title="First Page"
+                                        className="h-8 w-8 rounded-xl border-slate-200 hover:bg-white text-slate-600 disabled:opacity-30 transition-all cursor-pointer"
+                                    >
+                                        <ChevronsLeft className="h-4 w-4" />
+                                    </Button>
+
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        disabled={currentPage === totalPages}
-                                        onClick={() => setCurrentPage(currentPage + 1)}
-                                        className="h-9 px-4 rounded-xl border-slate-200 font-black text-[9px] uppercase tracking-widest hover:bg-white disabled:opacity-30 transition-all"
+                                        disabled={safeCurrentPage === 1}
+                                        onClick={() => setCurrentPage(safeCurrentPage - 1)}
+                                        className="h-8 px-3 rounded-xl border-slate-200 font-black text-[10px] uppercase tracking-wider text-slate-700 hover:bg-white disabled:opacity-30 transition-all flex items-center gap-1 cursor-pointer"
                                     >
-                                        Next
+                                        <ChevronLeft className="h-3.5 w-3.5" />
+                                        <span className="hidden sm:inline">Prev</span>
+                                    </Button>
+
+                                    <div className="flex items-center gap-1">
+                                        {getPaginationRange(safeCurrentPage, totalPages).map((p, idx) => {
+                                            if (p === "...") {
+                                                return (
+                                                    <span
+                                                        key={`dots-${idx}`}
+                                                        className="h-8 px-1 flex items-center justify-center text-slate-400 font-bold select-none text-xs tracking-widest"
+                                                    >
+                                                        •••
+                                                    </span>
+                                                );
+                                            }
+                                            const pageNum = Number(p);
+                                            const isActive = safeCurrentPage === pageNum;
+                                            return (
+                                                <Button
+                                                    key={pageNum}
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => setCurrentPage(pageNum)}
+                                                    className={cn(
+                                                        "h-8 min-w-[32px] px-2 rounded-xl font-black text-[11px] transition-all cursor-pointer",
+                                                        isActive
+                                                            ? "bg-slate-900 text-white hover:bg-black shadow-sm"
+                                                            : "text-slate-600 hover:bg-white hover:text-slate-900 border border-transparent hover:border-slate-200"
+                                                    )}
+                                                >
+                                                    {pageNum}
+                                                </Button>
+                                            );
+                                        })}
+                                    </div>
+
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={safeCurrentPage >= totalPages}
+                                        onClick={() => setCurrentPage(safeCurrentPage + 1)}
+                                        className="h-8 px-3 rounded-xl border-slate-200 font-black text-[10px] uppercase tracking-wider text-slate-700 hover:bg-white disabled:opacity-30 transition-all flex items-center gap-1 cursor-pointer"
+                                    >
+                                        <span className="hidden sm:inline">Next</span>
+                                        <ChevronRight className="h-3.5 w-3.5" />
+                                    </Button>
+
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        disabled={safeCurrentPage >= totalPages}
+                                        onClick={() => setCurrentPage(totalPages)}
+                                        title="Last Page"
+                                        className="h-8 w-8 rounded-xl border-slate-200 hover:bg-white text-slate-600 disabled:opacity-30 transition-all cursor-pointer"
+                                    >
+                                        <ChevronsRight className="h-4 w-4" />
                                     </Button>
                                 </div>
                             </div>
