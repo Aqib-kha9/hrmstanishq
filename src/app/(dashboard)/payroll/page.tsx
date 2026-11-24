@@ -93,6 +93,9 @@ import {
     EmployeeHistoryDialog,
     PayrollPolicyDialog
 } from "@/components/payroll/PayrollModals";
+import { CTCStructureCalculator } from "@/components/payroll/CTCStructureCalculator";
+import { SalaryStructureRoster } from "@/components/payroll/SalaryStructureRoster";
+import { MinimumWagesMaster } from "@/components/payroll/MinimumWagesMaster";
 
 const getInitials = (name: string) => {
     return name
@@ -105,6 +108,7 @@ const getInitials = (name: string) => {
 };
 
 export default function PayrollPage() {
+    const [activePayrollTab, setActivePayrollTab] = useState<"ledger" | "roster" | "calculator" | "statutory">("ledger");
     const [isConfigOpen, setIsConfigOpen] = useState(false);
 
     const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
@@ -669,56 +673,132 @@ export default function PayrollPage() {
                             )}
                         </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                        <Button
-                            onClick={() => {
-                                if (!selectedEmployee && ledger.length > 0) {
-                                    setSelectedEmployee(ledger[0]);
-                                }
-                                setIsHistoryOpen(true);
-                            }}
-                            variant="outline"
-                            className="h-10 px-5 rounded-xl border-2 border-indigo-100 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 font-black uppercase text-[9px] tracking-widest transition-all shadow-xs"
-                        >
-                            <User className="h-4 w-4 mr-2 text-indigo-600" /> Staff Salary Lookup
-                        </Button>
+                    {activePayrollTab === "ledger" && (
+                        <div className="flex items-center gap-3">
+                            <Button
+                                onClick={() => {
+                                    if (!selectedEmployee && ledger.length > 0) {
+                                        setSelectedEmployee(ledger[0]);
+                                    }
+                                    setIsHistoryOpen(true);
+                                }}
+                                variant="outline"
+                                className="h-10 px-5 rounded-xl border-2 border-indigo-100 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 font-black uppercase text-[9px] tracking-widest transition-all shadow-xs"
+                            >
+                                <User className="h-4 w-4 mr-2 text-indigo-600" /> Staff Salary Lookup
+                            </Button>
 
-                        <Link href="/payroll/analytics">
+                            <Link href="/payroll/analytics">
+                                <Button
+                                    variant="outline"
+                                    className="h-10 px-6 rounded-xl border-2 border-slate-50 font-black uppercase text-[9px] tracking-widest text-slate-400 transition-all hover:bg-slate-50"
+                                >
+                                    <PieChart className="h-4 w-4 mr-2" /> Analytics
+                                </Button>
+                            </Link>
+                            <Link href="/payroll/history">
+                                <Button
+                                    variant="outline"
+                                    className="h-10 px-6 rounded-xl border-2 border-slate-50 font-black uppercase text-[9px] tracking-widest text-slate-400 transition-all hover:bg-slate-50"
+                                >
+                                    <History className="h-4 w-4 mr-2" /> Global History
+                                </Button>
+                            </Link>
                             <Button
+                                onClick={handleSendAllPayslips}
+                                disabled={sendingBulkEmail}
                                 variant="outline"
-                                className="h-10 px-6 rounded-xl border-2 border-slate-50 font-black uppercase text-[9px] tracking-widest text-slate-400 transition-all hover:bg-slate-50"
+                                className="h-11 px-6 rounded-2xl border-2 border-slate-100 font-black uppercase text-[9px] tracking-widest text-slate-800 transition-all hover:bg-slate-50"
                             >
-                                <PieChart className="h-4 w-4 mr-2" /> Analytics
+                                {sendingBulkEmail ? (
+                                    <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 animate-spin text-indigo-600" /> Sending...</span>
+                                ) : (
+                                    <span className="flex items-center gap-1.5"><Mail className="h-4 w-4 text-indigo-600" /> Email All Payslips</span>
+                                )}
                             </Button>
-                        </Link>
-                        <Link href="/payroll/history">
                             <Button
-                                variant="outline"
-                                className="h-10 px-6 rounded-xl border-2 border-slate-50 font-black uppercase text-[9px] tracking-widest text-slate-400 transition-all hover:bg-slate-50"
+                                onClick={() => setIsSendDialogOpen(true)}
+                                className="bg-[#D9F99D] text-slate-900 hover:bg-[#c8ea8a] font-black uppercase text-[9px] tracking-[0.3em] px-8 h-11 rounded-2xl  hover:translate-y-[-2px] transition-all"
                             >
-                                <History className="h-4 w-4 mr-2" /> Global History
+                                Finalize Disbursement <ArrowUpRight className="h-4 w-4 ml-2" />
                             </Button>
-                        </Link>
-                        <Button
-                            onClick={handleSendAllPayslips}
-                            disabled={sendingBulkEmail}
-                            variant="outline"
-                            className="h-11 px-6 rounded-2xl border-2 border-slate-100 font-black uppercase text-[9px] tracking-widest text-slate-800 transition-all hover:bg-slate-50"
-                        >
-                            {sendingBulkEmail ? (
-                                <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 animate-spin text-indigo-600" /> Sending...</span>
-                            ) : (
-                                <span className="flex items-center gap-1.5"><Mail className="h-4 w-4 text-indigo-600" /> Email All Payslips</span>
-                            )}
-                        </Button>
-                        <Button
-                            onClick={() => setIsSendDialogOpen(true)}
-                            className="bg-[#D9F99D] text-slate-900 hover:bg-[#c8ea8a] font-black uppercase text-[9px] tracking-[0.3em] px-8 h-11 rounded-2xl  hover:translate-y-[-2px] transition-all"
-                        >
-                            Finalize Disbursement <ArrowUpRight className="h-4 w-4 ml-2" />
-                        </Button>
-                    </div>
+                        </div>
+                    )}
                 </div>
+
+                {/* ── TOP LEVEL NAVIGATION TABS ── */}
+                <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-100/90 border border-slate-200 rounded-2xl w-fit shadow-xs">
+                    <button
+                        type="button"
+                        onClick={() => setActivePayrollTab("ledger")}
+                        className={cn(
+                            "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer",
+                            activePayrollTab === "ledger"
+                                ? "bg-white text-slate-900 shadow-sm border border-slate-200"
+                                : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+                        )}
+                    >
+                        <LayoutList className="h-4 w-4 text-indigo-600" />
+                        Monthly Payroll Ledger
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActivePayrollTab("roster")}
+                        className={cn(
+                            "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer",
+                            activePayrollTab === "roster"
+                                ? "bg-white text-slate-900 shadow-sm border border-slate-200"
+                                : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+                        )}
+                    >
+                        <Briefcase className="h-4 w-4 text-emerald-600" />
+                        Salary Structure Roster
+                        <span className="ml-1 px-1.5 py-0.5 rounded-full text-[9px] bg-emerald-100 text-emerald-700 font-black">
+                            162+ Live
+                        </span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActivePayrollTab("calculator")}
+                        className={cn(
+                            "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer",
+                            activePayrollTab === "calculator"
+                                ? "bg-white text-slate-900 shadow-sm border border-slate-200"
+                                : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+                        )}
+                    >
+                        <TrendingUp className="h-4 w-4 text-amber-500" />
+                        CTC Structure Calculator
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActivePayrollTab("statutory")}
+                        className={cn(
+                            "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer",
+                            activePayrollTab === "statutory"
+                                ? "bg-white text-slate-900 shadow-sm border border-slate-200"
+                                : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+                        )}
+                    >
+                        <ShieldCheck className="h-4 w-4 text-blue-600" />
+                        Minimum Wages & PT Master
+                    </button>
+                </div>
+
+                {activePayrollTab === "roster" && (
+                    <SalaryStructureRoster />
+                )}
+
+                {activePayrollTab === "calculator" && (
+                    <CTCStructureCalculator />
+                )}
+
+                {activePayrollTab === "statutory" && (
+                    <MinimumWagesMaster />
+                )}
+
+                {activePayrollTab === "ledger" && (
+                    <>
 
 
 
@@ -1146,6 +1226,8 @@ export default function PayrollPage() {
                             </div>
                         </div>
                     </div>
+                )}
+                    </>
                 )}
             </div>
         </ProtectedRoute>
