@@ -151,11 +151,11 @@ const TYPE_BADGE_STYLE: Record<string, string> = {
 };
 
 const variantMeta = [
-  { id: 1, label: "Standard Corporate", desc: "Navy bar · Serif · Two-col header" },
-  { id: 2, label: "Modern Minimalist", desc: "Centered logo · Light gray · Sans" },
-  { id: 3, label: "Premium Executive", desc: "Dark navy bleed · Accent title band" },
-  { id: 4, label: "Creative Edge", desc: "Bold side bar · Big type treatment" },
-  { id: 5, label: "Classic Formal", desc: "Double-border frame · Old-world look" },
+  { id: 1, label: "Standard Corporate", desc: "Navy bar Â· Serif Â· Two-col header" },
+  { id: 2, label: "Modern Minimalist", desc: "Centered logo Â· Light gray Â· Sans" },
+  { id: 3, label: "Premium Executive", desc: "Dark navy bleed Â· Accent title band" },
+  { id: 4, label: "Creative Edge", desc: "Bold side bar Â· Big type treatment" },
+  { id: 5, label: "Classic Formal", desc: "Double-border frame Â· Old-world look" },
 ];
 
 const AVAILABLE_PLACEHOLDERS = [
@@ -280,7 +280,7 @@ export default function LettersPage() {
   const [companies, setCompanies] = useState<any[]>([]);
   const [offices, setOffices] = useState<any[]>([]);
 
-  // ── Seed Templates Handler ──
+  // â”€â”€ Seed Templates Handler â”€â”€
   const handleSeedTemplates = async (force: boolean = false) => {
     setSeeding(true);
     setIssueError("");
@@ -297,7 +297,7 @@ export default function LettersPage() {
     }
   };
 
-  // ── Fetch Templates ──
+  // â”€â”€ Fetch Templates â”€â”€
   const fetchTemplates = useCallback(async () => {
     try {
       const data = await apiGet<any>("/letters/templates/all");
@@ -310,7 +310,7 @@ export default function LettersPage() {
     }
   }, []);
 
-  // ── Fetch Letters ──
+  // â”€â”€ Fetch Letters â”€â”€
   const fetchLetters = useCallback(async () => {
     setLettersLoading(true);
     try {
@@ -324,7 +324,7 @@ export default function LettersPage() {
     }
   }, []);
 
-  // ── Fetch Employees ──
+  // â”€â”€ Fetch Employees â”€â”€
   const fetchEmployees = useCallback(async () => {
     try {
       const data = await apiGet<any>("/employees", { limit: "200" });
@@ -342,7 +342,7 @@ export default function LettersPage() {
     }
   }, []);
 
-  // ── Fetch Companies and Offices ──
+  // â”€â”€ Fetch Companies and Offices â”€â”€
   const fetchCompaniesAndOffices = useCallback(async () => {
     try {
       const compData = await apiGet<any>("/companies");
@@ -355,7 +355,7 @@ export default function LettersPage() {
     }
   }, []);
 
-  // ── Fetch Signatories (Req 12.3) ──
+  // â”€â”€ Fetch Signatories (Req 12.3) â”€â”€
   const fetchSignatories = useCallback(async () => {
     try {
       const data = await apiGet<any>("/signatories", { active: "true" });
@@ -378,7 +378,7 @@ export default function LettersPage() {
     fetchSignatories();
   }, [fetchTemplates, fetchLetters, fetchEmployees, fetchCompaniesAndOffices, fetchSignatories]);
 
-  // ── Auto-select from URL params ──
+  // â”€â”€ Auto-select from URL params â”€â”€
   useEffect(() => {
     if (typeof window !== "undefined" && employees.length > 0 && templates.length > 0) {
       const params = new URLSearchParams(window.location.search);
@@ -398,7 +398,7 @@ export default function LettersPage() {
     }
   }, [employees, templates, selectedEmployee, selectedTemplate]);
 
-  // ── Fetch Preview when template + employee/candidate/signatory changes ──
+  // â”€â”€ Fetch Preview when template + employee/candidate/signatory changes â”€â”€
   useEffect(() => {
     if (!selectedTemplate) {
       setPreviewData(null);
@@ -450,7 +450,7 @@ export default function LettersPage() {
     return () => { cancelled = true; clearTimeout(timer); };
   }, [selectedTemplate, selectedEmployee, candidateMode, candidateData, selectedSignatory]);
 
-  // ── Filtered templates ──
+  // â”€â”€ Filtered templates â”€â”€
   const filteredTemplates = templates.filter(t => {
     const matchesSearch = t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (t.category && t.category.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -460,7 +460,7 @@ export default function LettersPage() {
     return matchesSearch && matchesCategory;
   });
 
-  // ── Filtered History ──
+  // â”€â”€ Filtered History â”€â”€
   const filteredHistory = letters.filter(l => {
     const query = historySearch.toLowerCase();
     const matchesSearch = !query ||
@@ -486,7 +486,7 @@ export default function LettersPage() {
     ? (typeAccentMap[selectedTemplate.type] || "#1e293b")
     : "#1e293b";
 
-  // ── Handle PDF Generation & Download (with optional official record) ──
+  // â”€â”€ Handle PDF Generation & Download (with optional official record) â”€â”€
   const handleDownloadPDF = async (record: boolean = false) => {
     if (!selectedTemplate) {
       setIssueError("Please select a template.");
@@ -509,7 +509,7 @@ export default function LettersPage() {
       const employeeId = !candidateMode ? parseInt(selectedEmployee, 10) : undefined;
       const content = editedContent || previewData?.content || "";
       const token = typeof window !== "undefined" ? localStorage.getItem("hrms_auth_token") : null;
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.apaarpulse.com/api/v1";
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://hrmsbackend-z7do.onrender.com/api/v1";
 
       const previewContainer = document.getElementById("pdf-preview-container");
       let fullHtml = previewContainer ? previewContainer.outerHTML : "";
@@ -576,7 +576,7 @@ export default function LettersPage() {
     }
   };
 
-  // ── Handle Email Send & Record (Req 12.1 & 12.4) ──
+  // â”€â”€ Handle Email Send & Record (Req 12.1 & 12.4) â”€â”€
   const handleSendEmail = async () => {
     if (!selectedTemplate) {
       setIssueError("Please select a template.");
@@ -632,7 +632,7 @@ export default function LettersPage() {
     }
   };
 
-  // ── Delete Issued Letter Handler ──
+  // â”€â”€ Delete Issued Letter Handler â”€â”€
   const handleDeleteLetter = async (id: number) => {
     if (!window.confirm("Are you sure you want to delete this issued letter record?")) return;
     try {
@@ -643,7 +643,7 @@ export default function LettersPage() {
     }
   };
 
-  // ── Dispatch Email for Existing Letter in History (Req 2.10) ──
+  // â”€â”€ Dispatch Email for Existing Letter in History (Req 2.10) â”€â”€
   const handleSendExistingEmail = async (letter: IssuedLetter) => {
     const targetEmail = letter.issuedTo?.email || letter.candidate_email;
     const targetName = letter.issuedTo?.name || letter.candidate_name || "Employee";
@@ -672,12 +672,12 @@ export default function LettersPage() {
     }
   };
 
-  // ── Download PDF for Existing Letter in History ──
+  // â”€â”€ Download PDF for Existing Letter in History â”€â”€
   const handleDownloadHistoryPDF = async (letter: IssuedLetter) => {
     setDownloadingLetterId(letter.id);
     try {
       const token = typeof window !== "undefined" ? localStorage.getItem("hrms_auth_token") : null;
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.apaarpulse.com/api/v1";
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://hrmsbackend-z7do.onrender.com/api/v1";
       const recipientCode = letter.issuedTo?.emp_code || (letter.candidate_name ? letter.candidate_name.replace(/\s+/g, "_") : "recipient");
 
       const response = await fetch(`${baseUrl}/letters/${letter.id}/pdf`, {
@@ -705,7 +705,7 @@ export default function LettersPage() {
     }
   };
 
-  // ── 1-Click Send Onboarding Portal Invitation Handler ──
+  // â”€â”€ 1-Click Send Onboarding Portal Invitation Handler â”€â”€
   const handleSendOnboardingInvite = async (letter: IssuedLetter) => {
     const candidateName = letter.candidate_name || letter.issuedTo?.name || "Candidate";
     const candidateEmail = letter.candidate_email || letter.issuedTo?.email || "";
@@ -736,7 +736,7 @@ export default function LettersPage() {
     }
   };
 
-  // ── Open Template Editor (Req 12.3) ──
+  // â”€â”€ Open Template Editor (Req 12.3) â”€â”€
   const handleOpenEditor = (template?: TemplateItem) => {
     if (template) {
       setEditingTemplateId(template.id);
@@ -763,7 +763,7 @@ export default function LettersPage() {
     setEditorOpen(true);
   };
 
-  // ── Save Template (Create or Update) ──
+  // â”€â”€ Save Template (Create or Update) â”€â”€
   const handleSaveTemplate = async () => {
     if (!templateForm.name.trim()) {
       setTemplateSaveError("Template name is required.");
@@ -786,7 +786,7 @@ export default function LettersPage() {
     }
   };
 
-  // ── Insert Placeholder in Template Editor ──
+  // â”€â”€ Insert Placeholder in Template Editor â”€â”€
   const handleInsertPlaceholder = (tag: string) => {
     setTemplateForm(prev => ({
       ...prev,
@@ -794,7 +794,7 @@ export default function LettersPage() {
     }));
   };
 
-  // ── Build preview props for Live Preview ──
+  // â”€â”€ Build preview props for Live Preview â”€â”€
   const activeSignatoryObj = selectedSignatory ? signatories.find(s => String(s.id) === selectedSignatory) : null;
 
   const employeeForPreview = previewData?.employee ? {
@@ -826,7 +826,7 @@ export default function LettersPage() {
     <ProtectedRoute module="LETTERS" action="READ">
       <div className="space-y-8 pb-20">
 
-        {/* ── Page Header ── */}
+        {/* â”€â”€ Page Header â”€â”€ */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-2">
           <div>
             <h1 className="text-xl font-black text-slate-900 flex items-center gap-3 italic uppercase tracking-tighter underline underline-offset-4 decoration-[#D9F99D] decoration-2">
@@ -870,14 +870,14 @@ export default function LettersPage() {
                     : "bg-slate-900 text-white"
                 )}>
                   {letters.length}
-                  {pendingAcceptedOffers.length > 0 && ` • ${pendingAcceptedOffers.length} Ready`}
+                  {pendingAcceptedOffers.length > 0 && ` â€¢ ${pendingAcceptedOffers.length} Ready`}
                 </span>
               )}
             </button>
           </div>
         </div>
 
-        {/* ── ACTION REQUIRED BANNER: DIGITALLY ACCEPTED OFFERS WAITING FOR ONBOARDING ── */}
+        {/* â”€â”€ ACTION REQUIRED BANNER: DIGITALLY ACCEPTED OFFERS WAITING FOR ONBOARDING â”€â”€ */}
         {pendingAcceptedOffers.length > 0 && (
           <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white rounded-2xl p-5 shadow-lg shadow-emerald-600/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border border-emerald-400/30">
             <div className="flex items-center gap-3.5">
@@ -887,7 +887,7 @@ export default function LettersPage() {
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-black text-sm uppercase tracking-wide">
-                    🎉 {pendingAcceptedOffers.length} Candidate Offer{pendingAcceptedOffers.length > 1 ? "s" : ""} Digitally Signed &amp; Accepted!
+                    ðŸŽ‰ {pendingAcceptedOffers.length} Candidate Offer{pendingAcceptedOffers.length > 1 ? "s" : ""} Digitally Signed &amp; Accepted!
                   </span>
                   <span className="bg-white/25 text-white text-[8px] font-black uppercase px-2 py-0.5 rounded-full border border-white/30">
                     Ready for Onboarding
@@ -914,7 +914,7 @@ export default function LettersPage() {
           </div>
         )}
 
-        {/* ── Stats Overview ── */}
+        {/* â”€â”€ Stats Overview â”€â”€ */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { label: "Active Templates", value: `${templates.filter(t => t.is_active).length} Templates`, icon: FileSignature, bg: "bg-white", clickable: false },
@@ -942,7 +942,7 @@ export default function LettersPage() {
           ))}
         </div>
 
-        {/* ── TAB 1: DOCUMENT TEMPLATES ── */}
+        {/* â”€â”€ TAB 1: DOCUMENT TEMPLATES â”€â”€ */}
         {activeTab === "templates" && (
           <Card className="border-none shadow-sm rounded-2xl bg-white overflow-hidden p-2">
             <CardHeader className="p-6 pb-4 border-none">
@@ -1133,7 +1133,7 @@ export default function LettersPage() {
           </Card>
         )}
 
-        {/* ── TAB 2: ISSUED LETTERS HISTORY ── */}
+        {/* â”€â”€ TAB 2: ISSUED LETTERS HISTORY â”€â”€ */}
         {activeTab === "history" && (
           <Card className="border-none shadow-sm rounded-2xl bg-white overflow-hidden p-2">
             <CardHeader className="p-6 pb-4 border-none">
@@ -1249,7 +1249,7 @@ export default function LettersPage() {
                                       </Badge>
                                     </div>
                                     <p className="text-[9px] text-slate-400">
-                                      {item.issuedTo?.designation || "Staff"} · {item.issuedTo?.department || "General"}
+                                      {item.issuedTo?.designation || "Staff"} Â· {item.issuedTo?.department || "General"}
                                     </p>
                                   </div>
                                 )}
@@ -1436,7 +1436,7 @@ export default function LettersPage() {
           </Card>
         )}
 
-        {/* ── VIEW ISSUED LETTER MODAL (Req 2.10) ── */}
+        {/* â”€â”€ VIEW ISSUED LETTER MODAL (Req 2.10) â”€â”€ */}
         <Dialog open={!!viewingLetter} onOpenChange={(val) => { if (!val) setViewingLetter(null); }}>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl p-6 bg-white shadow-2xl border-none">
             {viewingLetter && (
@@ -1532,11 +1532,11 @@ export default function LettersPage() {
                               >
                                 {sendingOnboardingId === viewingLetter.id ? (
                                   <>
-                                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Dispatching Link…
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Dispatching Linkâ€¦
                                   </>
                                 ) : (
                                   <>
-                                    <Rocket className="h-4 w-4" /> 🚀 Send Onboarding Link (1-Click)
+                                    <Rocket className="h-4 w-4" /> ðŸš€ Send Onboarding Link (1-Click)
                                   </>
                                 )}
                               </Button>
@@ -1684,7 +1684,7 @@ export default function LettersPage() {
           </DialogContent>
         </Dialog>
 
-        {/* ── GENERATE & CUSTOMIZE LETTER DIALOG ── */}
+        {/* â”€â”€ GENERATE & CUSTOMIZE LETTER DIALOG â”€â”€ */}
         <Dialog open={!!selectedTemplate} onOpenChange={(val) => { if (!val) { setSelectedTemplate(null); setPreviewData(null); setIsEditing(false); } }}>
           <DialogContent
             className="rounded-2xl p-0 overflow-hidden border-none shadow-2xl [&>button]:text-white [&>button]:top-5 [&>button]:right-5 [&>button]:z-50 [&>button]:bg-white/10 [&>button]:rounded-full [&>button]:p-1"
@@ -1695,7 +1695,7 @@ export default function LettersPage() {
             </DialogTitle>
             <div className="flex h-full w-full overflow-hidden">
 
-              {/* ── A4 Preview Area ── */}
+              {/* â”€â”€ A4 Preview Area â”€â”€ */}
               <div className="flex-1 min-w-0 bg-slate-300 overflow-auto flex items-start justify-center p-8">
                 <div id="pdf-preview-container" className="shrink-0 shadow-2xl" style={{ width: 794 }}>
                   {previewLoading ? (
@@ -1718,7 +1718,7 @@ export default function LettersPage() {
                 </div>
               </div>
 
-              {/* ── Right Control Panel ── */}
+              {/* â”€â”€ Right Control Panel â”€â”€ */}
               <div style={{ width: 340, minWidth: 340, background: "#0f172a", display: "flex", flexDirection: "column", borderLeft: "1px solid rgba(255,255,255,0.06)", overflow: "hidden" }}>
                 <div style={{ flex: 1, overflowY: "auto", padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
 
@@ -1728,7 +1728,7 @@ export default function LettersPage() {
                       {selectedTemplate?.name}
                     </h3>
                     <p style={{ fontSize: 8, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "2px", marginTop: 4 }}>
-                      {TYPE_LABEL_MAP[selectedTemplate?.type || ""] || selectedTemplate?.type} · {selectedTemplate?.category || "General"}
+                      {TYPE_LABEL_MAP[selectedTemplate?.type || ""] || selectedTemplate?.type} Â· {selectedTemplate?.category || "General"}
                     </p>
                   </div>
 
@@ -1818,10 +1818,10 @@ export default function LettersPage() {
                         value={selectedEmployee}
                         onChange={(e) => { setSelectedEmployee(e.target.value); setIssueError(""); setIssueSuccess(""); setIsEditing(false); }}
                       >
-                        <option value="" style={{ background: "#1e293b", color: "#64748b" }}>Choose an employee…</option>
+                        <option value="" style={{ background: "#1e293b", color: "#64748b" }}>Choose an employeeâ€¦</option>
                         {employees.map((emp) => (
                           <option key={emp.id} value={emp.id} style={{ background: "#1e293b", color: "#e2e8f0" }}>
-                            {emp.name} ({emp.emp_code}){emp.department ? ` – ${emp.department}` : ""}
+                            {emp.name} ({emp.emp_code}){emp.department ? ` â€“ ${emp.department}` : ""}
                           </option>
                         ))}
                       </select>
@@ -1887,7 +1887,7 @@ export default function LettersPage() {
                             }}
                             style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "7px 10px", fontSize: 10, color: "#fff", outline: "none" }}
                           >
-                            <option value="" style={{ background: "#1e293b", color: "#64748b" }}>Select Company…</option>
+                            <option value="" style={{ background: "#1e293b", color: "#64748b" }}>Select Companyâ€¦</option>
                             {companies.map(c => <option key={c.id} value={c.name} style={{ background: "#1e293b", color: "#e2e8f0" }}>{c.name}</option>)}
                           </select>
                           <select
@@ -1903,14 +1903,14 @@ export default function LettersPage() {
                             }}
                             style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "7px 10px", fontSize: 10, color: "#fff", outline: "none" }}
                           >
-                            <option value="" style={{ background: "#1e293b", color: "#64748b" }}>Select Office…</option>
+                            <option value="" style={{ background: "#1e293b", color: "#64748b" }}>Select Officeâ€¦</option>
                             {offices.filter(o => !candidateData.company || companies.find(c => c.name === candidateData.company)?.id === o.company_id).map(o => <option key={o.id} value={o.name} style={{ background: "#1e293b", color: "#e2e8f0" }}>{o.name}</option>)}
                           </select>
                         </div>
                         <div style={{ display: "flex", gap: 6 }}>
                           <input
                             type="number"
-                            placeholder="Monthly Gross CTC (₹)"
+                            placeholder="Monthly Gross CTC (â‚¹)"
                             value={candidateData.fixed_gross}
                             onChange={(e) => setCandidateData({...candidateData, fixed_gross: e.target.value})}
                             style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "7px 10px", fontSize: 10, color: "#fff", outline: "none" }}
@@ -1931,7 +1931,7 @@ export default function LettersPage() {
                           </label>
                           {candidateData.pf_applicable && (
                             <label style={{ fontSize: 8.5, color: "#94a3b8", display: "flex", alignItems: "center", gap: 4 }}>
-                              <input type="checkbox" checked={candidateData.pf_ceiling} onChange={e => setCandidateData({...candidateData, pf_ceiling: e.target.checked})} /> ₹15k Cap
+                              <input type="checkbox" checked={candidateData.pf_ceiling} onChange={e => setCandidateData({...candidateData, pf_ceiling: e.target.checked})} /> â‚¹15k Cap
                             </label>
                           )}
                           <label style={{ fontSize: 8.5, color: "#94a3b8", display: "flex", alignItems: "center", gap: 4 }}>
@@ -1958,7 +1958,7 @@ export default function LettersPage() {
                             <div style={{ flex: 1 }}>
                               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
                                 <span style={{ fontSize: 9.5, fontWeight: 800, color: "#93c5fd", display: "flex", alignItems: "center", gap: 5 }}>
-                                  ✍️ Digital Offer Acceptance &amp; E-Sign
+                                  âœï¸ Digital Offer Acceptance &amp; E-Sign
                                 </span>
                                 <span style={{
                                   fontSize: 7.5,
@@ -1978,7 +1978,7 @@ export default function LettersPage() {
                                 Candidate receives Offer Letter PDF with a link to review &amp; digitally sign online. Once accepted, you can dispatch their Onboarding Portal link with 1-click!
                               </p>
                               <p style={{ margin: "4px 0 0", fontSize: 7.5, color: "#86efac", fontWeight: 700 }}>
-                                ✓ Step 1: Candidate Signs &rarr; Step 2: HR 1-Click Send Onboarding
+                                âœ“ Step 1: Candidate Signs &rarr; Step 2: HR 1-Click Send Onboarding
                               </p>
                             </div>
                           </div>
@@ -2000,7 +2000,7 @@ export default function LettersPage() {
                       value={selectedSignatory}
                       onChange={(e) => setSelectedSignatory(e.target.value)}
                     >
-                      <option value="" style={{ background: "#1e293b", color: "#64748b" }}>Default Signatory Block…</option>
+                      <option value="" style={{ background: "#1e293b", color: "#64748b" }}>Default Signatory Blockâ€¦</option>
                       {signatories.map((sig) => (
                         <option key={sig.id} value={sig.id} style={{ background: "#1e293b", color: "#e2e8f0" }}>
                           {sig.name} ({sig.designation})
@@ -2147,7 +2147,7 @@ export default function LettersPage() {
                     }}
                   >
                     {sending ? (
-                      <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Sending Email…</>
+                      <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Sending Emailâ€¦</>
                     ) : candidateMode ? (
                       <><Send style={{ width: 13, height: 13 }} /> Email Offer For Digital Signature</>
                     ) : (
@@ -2193,7 +2193,7 @@ export default function LettersPage() {
           </DialogContent>
         </Dialog>
 
-        {/* ── TEMPLATE EDITOR MODAL (Req 12.3: Admin template editing) ── */}
+        {/* â”€â”€ TEMPLATE EDITOR MODAL (Req 12.3: Admin template editing) â”€â”€ */}
         <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
           <DialogContent className="max-w-2xl rounded-2xl p-6 bg-white shadow-2xl border-none">
             <DialogHeader>

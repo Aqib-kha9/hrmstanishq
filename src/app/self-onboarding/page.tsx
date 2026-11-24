@@ -37,7 +37,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://api.apaarpulse.com/api/v1";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://hrmsbackend-z7do.onrender.com/api/v1";
 
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
 const AADHAAR_RE = /^\d{12}$/;
@@ -328,7 +328,7 @@ function CandidateOnboardingContent() {
     const validateStep = (step: number): boolean => {
         const errors: Record<string, string> = {};
 
-        // ── STEP 0: Personal Information (Page 1) ──
+        // â”€â”€ STEP 0: Personal Information (Page 1) â”€â”€
         if (step === 0) {
             if (!formData.name.trim()) errors.name = "Full name as per Aadhaar is required";
             if (!formData.dob) errors.dob = "Date of birth is required";
@@ -363,7 +363,7 @@ function CandidateOnboardingContent() {
             }
         }
 
-        // ── STEP 1: Bank Details & Statutory Declarations (Page 2) ──
+        // â”€â”€ STEP 1: Bank Details & Statutory Declarations (Page 2) â”€â”€
         if (step === 1) {
             // Section 1: Bank Details
             if (!formData.account_holder_name.trim()) errors.account_holder_name = "Account holder name as per bank record is required";
@@ -386,7 +386,7 @@ function CandidateOnboardingContent() {
             // ESIC IP number is completely optional
         }
 
-        // ── STEP 2: Mandatory Document Uploads (Page 3) ──
+        // â”€â”€ STEP 2: Mandatory Document Uploads (Page 3) â”€â”€
         if (step === 2) {
             if (!uploadedDocs.aadhaar_card) {
                 errors.docs = "Please upload your Aadhaar Card (mandatory verification document)";
@@ -563,7 +563,7 @@ function CandidateOnboardingContent() {
                         <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
                             <span className="text-slate-400 font-bold uppercase text-[10px]">Salary Bank A/C</span>
                             <span className="font-mono font-bold text-slate-800">
-                                {formData.bank_name} (••••{formData.bank_account_number.slice(-4)})
+                                {formData.bank_name} (â€¢â€¢â€¢â€¢{formData.bank_account_number.slice(-4)})
                             </span>
                         </div>
                         <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
@@ -686,9 +686,9 @@ function CandidateOnboardingContent() {
                         className="hidden"
                         accept=".pdf,.png,.jpg,.jpeg"
                     />
-                    {/* ════════════════════════════════════════════════════════ */}
+                    {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
                     {/* STEP 0 (PAGE A): PERSONAL INFORMATION */}
-                    {/* ════════════════════════════════════════════════════════ */}
+                    {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
                     {currentStep === 0 && (
                         <div className="space-y-6">
                             <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
@@ -941,9 +941,9 @@ function CandidateOnboardingContent() {
                         </div>
                     )}
 
-                    {/* ════════════════════════════════════════════════════════ */}
+                    {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
                     {/* STEP 1 (PAGE B): BANK DETAILS & STATUTORY DECLARATIONS */}
-                    {/* ════════════════════════════════════════════════════════ */}
+                    {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
                     {currentStep === 1 && (
                         <div className="space-y-6">
                             <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
@@ -970,7 +970,7 @@ function CandidateOnboardingContent() {
                                 </Button>
                             </div>
 
-                            {/* ── Compensation Overview (Locked / Read-Only Offer Confirmation) ── */}
+                            {/* â”€â”€ Compensation Overview (Locked / Read-Only Offer Confirmation) â”€â”€ */}
                             {Number(invitation?.fixed_gross) > 0 ? (
                                 <div className="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
                                     <div className="space-y-0.5">
@@ -978,7 +978,7 @@ function CandidateOnboardingContent() {
                                             <Sparkles className="h-3.5 w-3.5 text-emerald-600" /> Offered Monthly Gross Compensation
                                         </span>
                                         <p className="text-2xl font-black text-slate-900">
-                                            ₹{Number(invitation.fixed_gross).toLocaleString("en-IN")}{" "}
+                                            â‚¹{Number(invitation.fixed_gross).toLocaleString("en-IN")}{" "}
                                             <span className="text-xs font-bold text-slate-500">/ month</span>
                                         </p>
                                         <p className="text-[11px] text-slate-600">
@@ -1008,7 +1008,7 @@ function CandidateOnboardingContent() {
                                 </div>
                             )}
 
-                            {/* ── Section 1: Salary & Bank Details ── */}
+                            {/* â”€â”€ Section 1: Salary & Bank Details â”€â”€ */}
                             <div className="space-y-4 p-5 rounded-2xl bg-white border border-slate-200 shadow-xs">
                                 <div className="flex items-center justify-between">
                                     <span className="text-[11px] font-black uppercase tracking-wider text-emerald-800 flex items-center gap-1.5">
@@ -1026,7 +1026,7 @@ function CandidateOnboardingContent() {
                                             <ShieldAlert className="h-4 w-4" />
                                         </div>
                                         <h4 className="text-xs font-black uppercase tracking-wider text-amber-950">
-                                            Important Disclaimer • Please Fill Bank Details With Utmost Care
+                                            Important Disclaimer â€¢ Please Fill Bank Details With Utmost Care
                                         </h4>
                                     </div>
                                     <p className="text-[11px] leading-relaxed text-amber-950/90 font-medium">
@@ -1128,7 +1128,7 @@ function CandidateOnboardingContent() {
                                 </div>
                             </div>
 
-                            {/* ── Section 2: Statutory Information (EPFO & ESIC Declarations) ── */}
+                            {/* â”€â”€ Section 2: Statutory Information (EPFO & ESIC Declarations) â”€â”€ */}
                             <div className="space-y-4 p-5 rounded-2xl bg-white border border-slate-200 shadow-xs">
                                 <div className="flex items-center justify-between pb-1 border-b border-slate-100">
                                     <span className="text-[11px] font-black uppercase tracking-wider text-blue-700 flex items-center gap-1.5">
@@ -1242,7 +1242,7 @@ function CandidateOnboardingContent() {
                                         <div className="p-3 rounded-xl bg-blue-50/60 border border-blue-100 text-[11px] text-blue-900 leading-relaxed flex items-start gap-2">
                                             <Info className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
                                             <span>
-                                                <strong>First-Time Member Enrollment:</strong> A fresh Universal Account Number (UAN) and Member ID will be generated by Apaar Logistics upon onboarding registration. Company statutory PF calculations comply with the standard ₹15,000 ceiling.
+                                                <strong>First-Time Member Enrollment:</strong> A fresh Universal Account Number (UAN) and Member ID will be generated by Apaar Logistics upon onboarding registration. Company statutory PF calculations comply with the standard â‚¹15,000 ceiling.
                                             </span>
                                         </div>
                                     )}
@@ -1327,7 +1327,7 @@ function CandidateOnboardingContent() {
                                         <div className="p-3 rounded-xl bg-slate-100/70 border border-slate-200 text-[11px] text-slate-600 leading-relaxed flex items-start gap-2">
                                             <Info className="h-4 w-4 text-slate-500 shrink-0 mt-0.5" />
                                             <span>
-                                                If your monthly gross salary falls within the statutory eligibility threshold (≤ ₹21,000/month), you will be newly registered and allocated an ESIC IP Number.
+                                                If your monthly gross salary falls within the statutory eligibility threshold (â‰¤ â‚¹21,000/month), you will be newly registered and allocated an ESIC IP Number.
                                             </span>
                                         </div>
                                     )}
@@ -1336,9 +1336,9 @@ function CandidateOnboardingContent() {
                         </div>
                     )}
 
-                    {/* ════════════════════════════════════════════════════════ */}
+                    {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
                     {/* STEP 2 (PAGE C): MANDATORY DOCUMENT UPLOADS */}
-                    {/* ════════════════════════════════════════════════════════ */}
+                    {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
                     {currentStep === 2 && (
                         <div className="space-y-6">
                             <div className="border-b border-slate-100 pb-4">
@@ -1481,9 +1481,9 @@ function CandidateOnboardingContent() {
                         </div>
                     )}
 
-                    {/* ════════════════════════════════════════════════════════ */}
+                    {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
                     {/* STEP 3 (PAGE D): REVIEW & SUBMISSION */}
-                    {/* ════════════════════════════════════════════════════════ */}
+                    {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
                     {currentStep === 3 && (
                         <div className="space-y-6">
                             <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
@@ -1534,18 +1534,18 @@ function CandidateOnboardingContent() {
                                     <div>
                                         <span className="text-slate-400 font-bold uppercase text-[9px] block">DOB / Gender</span>
                                         <span className="font-bold text-slate-800">
-                                            {formData.dob} • {formData.gender.toUpperCase()}
+                                            {formData.dob} â€¢ {formData.gender.toUpperCase()}
                                         </span>
                                     </div>
                                     <div>
                                         <span className="text-slate-400 font-bold uppercase text-[9px] block">Marital Status & Guardian</span>
                                         <span className="font-bold text-slate-800">
-                                            {formData.marital_status.toUpperCase()} • Guardian: {formData.father_or_husband_name}
+                                            {formData.marital_status.toUpperCase()} â€¢ Guardian: {formData.father_or_husband_name}
                                         </span>
                                     </div>
                                     <div>
                                         <span className="text-slate-400 font-bold uppercase text-[9px] block">Mobile & Registered Email</span>
-                                        <span className="font-bold text-slate-800">{formData.phone} • {invitation?.email}</span>
+                                        <span className="font-bold text-slate-800">{formData.phone} â€¢ {invitation?.email}</span>
                                     </div>
                                     <div className="sm:col-span-2">
                                         <span className="text-slate-400 font-bold uppercase text-[9px] block">Address (as per Aadhaar)</span>
@@ -1554,13 +1554,13 @@ function CandidateOnboardingContent() {
                                     <div>
                                         <span className="text-slate-400 font-bold uppercase text-[9px] block">Aadhaar & PAN</span>
                                         <span className="font-bold text-slate-800">
-                                            UID: {formData.aadhaar} • PAN: {formData.pan || "N/A (Optional)"}
+                                            UID: {formData.aadhaar} â€¢ PAN: {formData.pan || "N/A (Optional)"}
                                         </span>
                                     </div>
                                     <div>
                                         <span className="text-slate-400 font-bold uppercase text-[9px] block">Emergency Contact</span>
                                         <span className="font-bold text-slate-800">
-                                            {formData.emergency_contact_name} ({formData.emergency_contact_relation}) • {formData.emergency_contact_phone}
+                                            {formData.emergency_contact_name} ({formData.emergency_contact_relation}) â€¢ {formData.emergency_contact_phone}
                                         </span>
                                     </div>
                                 </div>
@@ -1586,7 +1586,7 @@ function CandidateOnboardingContent() {
                                     <div>
                                         <span className="text-slate-400 font-bold uppercase text-[9px] block">Offered Monthly CTC</span>
                                         <span className="font-black text-emerald-700 text-sm">
-                                            {Number(invitation?.fixed_gross) > 0 ? `₹${Number(invitation.fixed_gross).toLocaleString("en-IN")} / month` : "As per approved Offer Letter"}
+                                            {Number(invitation?.fixed_gross) > 0 ? `â‚¹${Number(invitation.fixed_gross).toLocaleString("en-IN")} / month` : "As per approved Offer Letter"}
                                         </span>
                                     </div>
                                     <div>
@@ -1598,7 +1598,7 @@ function CandidateOnboardingContent() {
                                     <div>
                                         <span className="text-slate-400 font-bold uppercase text-[9px] block">Account Holder & Number</span>
                                         <span className="font-mono font-bold text-slate-800">
-                                            {formData.account_holder_name} • ••••••••{formData.bank_account_number.slice(-4)}
+                                            {formData.account_holder_name} â€¢ â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢{formData.bank_account_number.slice(-4)}
                                         </span>
                                     </div>
                                     <div>

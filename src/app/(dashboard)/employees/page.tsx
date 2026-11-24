@@ -392,7 +392,7 @@ export default function EmployeesPage() {
         setIsExporting(true);
         try {
             const token = getToken();
-            const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1";
+            const apiBase = process.env.NEXT_PUBLIC_API_URL || "https://hrmsbackend-z7do.onrender.com/api/v1";
             const res = await fetch(`${apiBase}/employees/export-onboarding-excel`, {
                 headers: {
                     Authorization: `Bearer ${token}`
@@ -400,7 +400,7 @@ export default function EmployeesPage() {
             });
 
             if (!res.ok) {
-                throw new Error("Failed to export onboarding excel from server");
+                throw new Error(`Server returned ${res.status}: ${res.statusText}`);
             }
 
             const blob = await res.blob();
@@ -413,37 +413,188 @@ export default function EmployeesPage() {
             document.body.removeChild(a);
             window.URL.revokeObjectURL(url);
         } catch (err) {
-            console.error("Server export error, falling back to local generation:", err);
-            if (personnel && personnel.length > 0) {
-                const rows = personnel.map((emp, idx) => ({
-                    "Sr No": idx + 1,
-                    "Employee ID": emp.emp_code || (emp as any).employee_code || "",
-                    "Full Name": emp.name || "",
-                    "Employment Status": (emp.status || "active").toUpperCase(),
-                    "Company": emp.company || "",
-                    "Work Location / Office": emp.location || "",
-                    "Department": emp.dept || "",
-                    "Designation": emp.jobTitle || "",
-                    "Date of Joining": (emp as any).date_of_joining || "",
-                    "Email Address": emp.email || "",
-                    "Mobile Phone": emp.phone || "",
-                    "Aadhaar Number": (emp as any).aadhaar_number || "",
-                    "PAN Card Number": (emp as any).pan_number || "",
-                    "UAN Number": (emp as any).uan || "",
-                    "PF Number": (emp as any).pf_number || "",
-                    "ESIC Number": (emp as any).esi_number || "",
-                    "Bank Name": (emp as any).bank_name || "",
-                    "Account Number": (emp as any).bank_account_number || "",
-                    "IFSC Code": (emp as any).ifsc_code || "",
-                    "Monthly Fixed Gross (₹)": (emp as any).fixed_gross || 0,
-                    "Shift Timing": (emp as any).shift_start_time ? `${(emp as any).shift_start_time} - ${(emp as any).shift_end_time}` : "09:30 - 18:30",
-                }));
+            console.error("Server export error, generating comprehensive multi-sheet master locally:", err);
+            try {
+                // Fetch full raw employees and invitations with KYC details
+                const [rawEmployees, invitations] = await Promise.all([
+                    apiGet<any[]>("/employees", { limit: 1000 }).catch(() => personnel as any[]),
+                    apiGet<any[]>("/onboarding/invitations", { limit: 500 }).catch(() => []),
+                ]);
+
+                // Map invitations by email/phone for merging submitted onboarding data
+                const invMap: Record<string, any> = {};
+                if (Array.isArray(invitations)) {
+                    invitations.forEach((inv) => {
+                        if (inv.email) invMap[inv.email.trim().toLowerCase()] = inv;
+                        if (inv.phone) invMap[inv.phone.trim()] = inv;
+                    });
+                }
+
+                // Sheet 1: Employee Onboarding Master (Complete Profile, KYC & Statutory Details)
+                const empRows = (rawEmployees || []).map((emp: any, idx: number) => {
+                    const matchedInv = invMap[emp.email?.trim().toLowerCase()] || invMap[emp.phone?.trim()] || {};
+                    const sub = (matchedInv.submitted_data && typeof matchedInv.submitted_data === 'object') ? matchedInv.submitted_data : {};
+                    
+                    const fixedGross = Number(emp.fixed_gross) || Number(sub.fixed_gross) || Number(matchedInv.fixed_gross) || 0;
+                    const basicSalary = Math.round(fixedGross * 0.50);
+                    const hra = Math.round(basicSalary * 0.40);
+                    const specialAllowance = Math.max(0, fixedGross - basicSalary - hra);
+                    const annualCtc = fixedGross * 12;
+
+                    return {
+                        "Sr No": idx + 1,
+                        "Employee ID": emp.emp_code || emp.id || "",
+                        "Full Name": emp.name || sub.name || matchedInv.candidate_name || "",
+                        "Employment Status": (emp.status || "active").toUpperCase(),
+                        "Company": emp.company?.name || emp.company || emp.company_name || matchedInv.company?.name || "BP Marketing",
+                        "Work Location / Office": emp.office?.name || emp.location || matchedInv.office?.name || "Indore HQ",
+                        "Department": emp.department || emp.dept || sub.department || matchedInv.department || "Operations",
+                        "Designation": emp.designation || emp.jobTitle || sub.designation || matchedInv.designation || "Staff",
+                        "Role / Access Group": emp.role || "Staff",
+                        "Date of Joining": emp.date_of_joining || sub.date_of_joining || "",
+                        "Work Email": emp.email || matchedInv.email || "",
+                        "Mobile Phone": emp.phone || sub.phone || matchedInv.phone || "",
+                        "Date of Birth": emp.date_of_birth || emp.dob || sub.date_of_birth || sub.dob || "",
+                        "Gender": (emp.gender || sub.gender || "male").toUpperCase(),
+                        "Marital Status": (emp.marital_status || sub.marital_status || "unmarried").toUpperCase(),
+                        "Blood Group": emp.blood_group || sub.blood_group || "",
+                        "Father / Husband Name": emp.father_or_husband_name || sub.father_or_husband_name || sub.father_husband_name || "",
+                        "Present Address": emp.address || sub.present_address || sub.address || "",
+                        "Permanent Address": sub.permanent_address || emp.address || sub.address || "",
+                        "Aadhaar Number": emp.aadhaar_number || sub.aadhaar_number || sub.aadhaar || "",
+                        "PAN Card Number": emp.pan_number || sub.pan_number || sub.pan || "",
+                        "UAN Number": emp.uan || sub.uan || "",
+                        "PF Number": emp.pf_number || sub.pf_number || "",
+                        "ESIC Number": emp.esic_number || emp.esi_number || sub.esic_number || sub.esi_number || "",
+                        "PF Applicable": (emp.pf_applicable !== false) ? "Yes" : "No",
+                        "ESIC Applicable": (emp.esic_applicable !== false) ? "Yes" : "No",
+                        "Bank Name": emp.bank_name || sub.bank_name || "",
+                        "Account Number": emp.bank_account_number ? String(emp.bank_account_number) : (sub.bank_account_number ? String(sub.bank_account_number) : ""),
+                        "IFSC Code": emp.ifsc_code || sub.ifsc_code || "",
+                        "Payment Mode": emp.payment_mode || sub.payment_mode || "Bank Transfer",
+                        "Emergency Contact Person": emp.emergency_contact_name || sub.emergency_contact_name || "",
+                        "Emergency Contact Relation": emp.emergency_contact_relation || sub.emergency_contact_relation || "",
+                        "Emergency Contact Phone": emp.emergency_contact_phone || sub.emergency_contact_phone || sub.emergency_phone || "",
+                        "Nominee Name": sub.nominee_name || "",
+                        "Nominee Relation": sub.nominee_relation || "",
+                        "Nominee DOB": sub.nominee_dob || "",
+                        "Monthly Fixed Gross (₹)": fixedGross,
+                        "Annual CTC (₹)": annualCtc,
+                        "Basic Salary Monthly (₹)": basicSalary,
+                        "HRA Monthly (₹)": hra,
+                        "Special Allowance Monthly (₹)": specialAllowance,
+                        "Employer PF (13%) Monthly (₹)": Math.round(basicSalary * 0.13),
+                        "Employer ESIC (3.25%) Monthly (₹)": fixedGross <= 21000 ? Math.round(fixedGross * 0.0325) : 0,
+                        "Gratuity Monthly (₹)": Math.round(basicSalary * 0.0481),
+                        "Statutory Bonus Monthly (₹)": Math.round(basicSalary * 0.0833),
+                        "Employee PF (12%) Monthly (₹)": Math.round(basicSalary * 0.12),
+                        "Employee ESIC (0.75%) Monthly (₹)": fixedGross <= 21000 ? Math.round(fixedGross * 0.0075) : 0,
+                        "Professional Tax (₹)": 208,
+                        "Net Take Home Monthly (₹)": fixedGross - Math.round(basicSalary * 0.12) - (fixedGross <= 21000 ? Math.round(fixedGross * 0.0075) : 0) - 208,
+                        "Shift Timing": emp.shift_start_time ? `${emp.shift_start_time} - ${emp.shift_end_time || '18:30'}` : "09:30 - 18:30",
+                        "Onboarding Verification Status": matchedInv.status ? matchedInv.status.toUpperCase() : (emp.aadhaar_number ? "VERIFIED" : "PENDING_SUBMISSION"),
+                    };
+                });
+
+                // Sheet 2: Candidate Onboarding Submissions
+                const invRows = (Array.isArray(invitations) ? invitations : []).map((inv: any, idx: number) => {
+                    const sub = (inv.submitted_data && typeof inv.submitted_data === 'object') ? inv.submitted_data : {};
+                    return {
+                        "Sr No": idx + 1,
+                        "Candidate Name": inv.candidate_name || sub.name || "",
+                        "Email Address": inv.email || "",
+                        "Mobile Phone": inv.phone || sub.phone || "",
+                        "Company": inv.company?.name || "BP Marketing",
+                        "Office / Location": inv.office?.name || sub.location || "Indore HQ",
+                        "Designation": inv.designation || sub.designation || "Executive",
+                        "Department": inv.department || sub.department || "Operations",
+                        "Offered Monthly Gross (₹)": Number(inv.fixed_gross) || Number(sub.fixed_gross) || 0,
+                        "Onboarding Status": (inv.status || "pending").toUpperCase(),
+                        "Invitation Sent Date": inv.createdAt ? new Date(inv.createdAt).toISOString().split("T")[0] : "",
+                        "Invitation Expires Date": inv.expires_at ? new Date(inv.expires_at).toISOString().split("T")[0] : "",
+                        "Approval Date": inv.approved_at ? new Date(inv.approved_at).toISOString().split("T")[0] : "Pending",
+                        "Aadhaar Submitted": sub.aadhaar_number || sub.aadhaar || "Pending",
+                        "PAN Submitted": sub.pan_number || sub.pan || "Pending",
+                        "UAN Submitted": sub.uan || "Pending",
+                        "PF Number Submitted": sub.pf_number || "Pending",
+                        "ESIC Submitted": sub.esic_number || sub.esi_number || "Pending",
+                        "Bank Name Submitted": sub.bank_name || "Pending",
+                        "Account No Submitted": sub.bank_account_number ? String(sub.bank_account_number) : "Pending",
+                        "IFSC Submitted": sub.ifsc_code || "Pending",
+                        "Father / Husband Name": sub.father_or_husband_name || sub.father_husband_name || "Pending",
+                        "Address Submitted": sub.address || sub.present_address || "Pending",
+                        "Emergency Contact Person": sub.emergency_contact_name || "Pending",
+                        "Emergency Contact Phone": sub.emergency_contact_phone || sub.emergency_phone || "Pending",
+                        "Nominee Name": sub.nominee_name || "Pending",
+                        "Nominee Relation": sub.nominee_relation || "Pending",
+                        "Appointment Letter Status": sub.appointment_status || "Not Issued",
+                        "Appointment Signed At": sub.appointment_signed_at ? new Date(sub.appointment_signed_at).toLocaleString("en-IN") : "Pending",
+                        "Rejection Reason": inv.rejection_reason || "N/A",
+                    };
+                });
+
+                // Sheet 3: Salary & Statutory Structure Master
+                const salaryRows = (rawEmployees || []).map((emp: any, idx: number) => {
+                    const gross = Number(emp.fixed_gross) || 0;
+                    const basic = Math.round(gross * 0.50);
+                    const hra = Math.round(basic * 0.40);
+                    const special = Math.max(0, gross - basic - hra);
+                    const ctc = gross * 12;
+                    const erPf = Math.round(basic * 0.13);
+                    const erEsic = gross <= 21000 ? Math.round(gross * 0.0325) : 0;
+                    const gratuity = Math.round(basic * 0.0481);
+                    const bonus = Math.round(basic * 0.0833);
+                    const eePf = Math.round(basic * 0.12);
+                    const eeEsic = gross <= 21000 ? Math.round(gross * 0.0075) : 0;
+                    const pt = 208;
+                    const netTakeHome = gross - eePf - eeEsic - pt;
+
+                    return {
+                        "Sr No": idx + 1,
+                        "Employee ID": emp.emp_code || emp.id || "",
+                        "Employee Name": emp.name || "",
+                        "Designation": emp.designation || emp.jobTitle || "",
+                        "Department": emp.department || emp.dept || "",
+                        "Location": emp.office?.name || emp.location || "",
+                        "Annual CTC (₹)": ctc,
+                        "Monthly Fixed Gross (₹)": gross,
+                        "Basic Salary (50%)": basic,
+                        "HRA (40% of Basic)": hra,
+                        "Special Allowance": special,
+                        "Employer PF (13%)": erPf,
+                        "Employer ESIC (3.25%)": erEsic,
+                        "Gratuity (4.81%)": gratuity,
+                        "Statutory Bonus (8.33%)": bonus,
+                        "Total Employer Statutory": erPf + erEsic + gratuity + bonus,
+                        "Employee PF (12%)": eePf,
+                        "Employee ESIC (0.75%)": eeEsic,
+                        "Professional Tax (PT)": pt,
+                        "Total Employee Deductions": eePf + eeEsic + pt,
+                        "Net Monthly Take Home": netTakeHome,
+                        "Wage Code Compliance": "100% Compliant (Basic >= 50%)",
+                    };
+                });
+
                 const wb = XLSX.utils.book_new();
-                const ws = XLSX.utils.json_to_sheet(rows);
-                XLSX.utils.book_append_sheet(wb, ws, "Employee Master");
+
+                const ws1 = XLSX.utils.json_to_sheet(empRows);
+                ws1['!cols'] = Object.keys(empRows[0] || {}).map(key => ({ wch: Math.max(key.length, 16) }));
+                XLSX.utils.book_append_sheet(wb, ws1, "Employee Onboarding Master");
+
+                if (invRows.length > 0) {
+                    const ws2 = XLSX.utils.json_to_sheet(invRows);
+                    ws2['!cols'] = Object.keys(invRows[0] || {}).map(key => ({ wch: Math.max(key.length, 16) }));
+                    XLSX.utils.book_append_sheet(wb, ws2, "Candidate Submissions");
+                }
+
+                const ws3 = XLSX.utils.json_to_sheet(salaryRows);
+                ws3['!cols'] = Object.keys(salaryRows[0] || {}).map(key => ({ wch: Math.max(key.length, 16) }));
+                XLSX.utils.book_append_sheet(wb, ws3, "Salary & Statutory Master");
+
                 XLSX.writeFile(wb, `Employee_Onboarding_Master_${new Date().toISOString().split("T")[0]}.xlsx`);
-            } else {
-                alert("No employee data available to export.");
+            } catch (fallbackErr) {
+                console.error("Local export error:", fallbackErr);
+                alert("Failed to export onboarding excel: " + String(fallbackErr));
             }
         } finally {
             setIsExporting(false);
@@ -770,124 +921,45 @@ export default function EmployeesPage() {
                                 </table>
                             </div>
 
-                            {/* Scalable Enterprise Pagination Controls */}
-                            <div className="bg-slate-50/70 px-4 sm:px-8 py-4 border-t border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                {/* Left: Counts and Page Size Selector */}
-                                <div className="flex flex-wrap items-center gap-4 text-[11px] font-bold text-slate-500">
-                                    <p className="uppercase tracking-wider">
-                                        Showing{" "}
-                                        <span className="font-black text-slate-900">
-                                            {filteredPersonnel.length === 0 ? 0 : startIndex + 1}
-                                        </span>{" "}
-                                        to{" "}
-                                        <span className="font-black text-slate-900">
-                                            {Math.min(startIndex + itemsPerPage, filteredPersonnel.length)}
-                                        </span>{" "}
-                                        of{" "}
-                                        <span className="font-black text-slate-900">
-                                            {filteredPersonnel.length}
-                                        </span>{" "}
-                                        Employees
-                                    </p>
-
-                                    <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
-                                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                                            Rows per page:
-                                        </span>
-                                        <select
-                                            value={itemsPerPage}
-                                            onChange={(e) => {
-                                                setItemsPerPage(Number(e.target.value));
-                                                setCurrentPage(1);
-                                            }}
-                                            className="h-8 px-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 text-xs font-black shadow-2xs focus:outline-none focus:ring-2 focus:ring-slate-900 cursor-pointer"
-                                        >
-                                            <option value={8}>8</option>
-                                            <option value={15}>15</option>
-                                            <option value={25}>25</option>
-                                            <option value={50}>50</option>
-                                            <option value={100}>100</option>
-                                        </select>
-                                    </div>
-                                </div>
-
-                                {/* Right: Sliding Window Page Controls with First/Last and Ellipsis */}
-                                <div className="flex items-center gap-1.5 self-center md:self-auto">
-                                    <Button
-                                        variant="outline"
-                                        size="icon"
-                                        disabled={safeCurrentPage === 1}
-                                        onClick={() => setCurrentPage(1)}
-                                        title="First Page"
-                                        className="h-8 w-8 rounded-xl border-slate-200 hover:bg-white text-slate-600 disabled:opacity-30 transition-all cursor-pointer"
-                                    >
-                                        <ChevronsLeft className="h-4 w-4" />
-                                    </Button>
-
+                            {/* Pagination Controls */}
+                            <div className="bg-slate-50/50 px-8 py-4 border-t border-slate-100 flex items-center justify-between">
+                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                    Showing <span className="text-slate-900">{startIndex + 1}</span> to <span className="text-slate-900">{Math.min(startIndex + itemsPerPage, filteredPersonnel.length)}</span> of <span className="text-slate-900">{filteredPersonnel.length}</span> Employees
+                                </p>
+                                <div className="flex items-center gap-2">
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        disabled={safeCurrentPage === 1}
-                                        onClick={() => setCurrentPage(safeCurrentPage - 1)}
-                                        className="h-8 px-3 rounded-xl border-slate-200 font-black text-[10px] uppercase tracking-wider text-slate-700 hover:bg-white disabled:opacity-30 transition-all flex items-center gap-1 cursor-pointer"
+                                        disabled={currentPage === 1}
+                                        onClick={() => setCurrentPage(currentPage - 1)}
+                                        className="h-9 px-4 rounded-xl border-slate-200 font-black text-[9px] uppercase tracking-widest hover:bg-white disabled:opacity-30 transition-all"
                                     >
-                                        <ChevronLeft className="h-3.5 w-3.5" />
-                                        <span className="hidden sm:inline">Prev</span>
+                                        Previous
                                     </Button>
-
                                     <div className="flex items-center gap-1">
-                                        {getPaginationRange(safeCurrentPage, totalPages).map((p, idx) => {
-                                            if (p === "...") {
-                                                return (
-                                                    <span
-                                                        key={`dots-${idx}`}
-                                                        className="h-8 px-1 flex items-center justify-center text-slate-400 font-bold select-none text-xs tracking-widest"
-                                                    >
-                                                        •••
-                                                    </span>
-                                                );
-                                            }
-                                            const pageNum = Number(p);
-                                            const isActive = safeCurrentPage === pageNum;
-                                            return (
-                                                <Button
-                                                    key={pageNum}
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => setCurrentPage(pageNum)}
-                                                    className={cn(
-                                                        "h-8 min-w-[32px] px-2 rounded-xl font-black text-[11px] transition-all cursor-pointer",
-                                                        isActive
-                                                            ? "bg-slate-900 text-white hover:bg-black shadow-sm"
-                                                            : "text-slate-600 hover:bg-white hover:text-slate-900 border border-transparent hover:border-slate-200"
-                                                    )}
-                                                >
-                                                    {pageNum}
-                                                </Button>
-                                            );
-                                        })}
+                                        {[...Array(totalPages)].map((_, i) => (
+                                            <Button
+                                                key={i}
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setCurrentPage(i + 1)}
+                                                className={cn(
+                                                    "h-9 w-9 rounded-xl font-black text-[9px] transition-all",
+                                                    currentPage === i + 1 ? "bg-slate-900 text-white hover:bg-black" : "text-slate-400 hover:bg-white"
+                                                )}
+                                            >
+                                                {i + 1}
+                                            </Button>
+                                        ))}
                                     </div>
-
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        disabled={safeCurrentPage >= totalPages}
-                                        onClick={() => setCurrentPage(safeCurrentPage + 1)}
-                                        className="h-8 px-3 rounded-xl border-slate-200 font-black text-[10px] uppercase tracking-wider text-slate-700 hover:bg-white disabled:opacity-30 transition-all flex items-center gap-1 cursor-pointer"
+                                        disabled={currentPage === totalPages}
+                                        onClick={() => setCurrentPage(currentPage + 1)}
+                                        className="h-9 px-4 rounded-xl border-slate-200 font-black text-[9px] uppercase tracking-widest hover:bg-white disabled:opacity-30 transition-all"
                                     >
-                                        <span className="hidden sm:inline">Next</span>
-                                        <ChevronRight className="h-3.5 w-3.5" />
-                                    </Button>
-
-                                    <Button
-                                        variant="outline"
-                                        size="icon"
-                                        disabled={safeCurrentPage >= totalPages}
-                                        onClick={() => setCurrentPage(totalPages)}
-                                        title="Last Page"
-                                        className="h-8 w-8 rounded-xl border-slate-200 hover:bg-white text-slate-600 disabled:opacity-30 transition-all cursor-pointer"
-                                    >
-                                        <ChevronsRight className="h-4 w-4" />
+                                        Next
                                     </Button>
                                 </div>
                             </div>

@@ -58,7 +58,7 @@ import { apiGet, apiPost, apiPatch, apiPut, getApiErrorMessage, getToken } from 
 
 const steps = ["Personal Info", "Employment Information", "Salary & Bank", "Documentation", "Review"];
 
-// ── Verification Documents & Resume per SOW Req 2.3 D ──
+// â”€â”€ Verification Documents & Resume per SOW Req 2.3 D â”€â”€
 const SOW_ONBOARDING_DOCUMENTS = [
     {
         key: "aadhaar",
@@ -152,7 +152,7 @@ const SOW_ONBOARDING_DOCUMENTS = [
     },
 ];
 
-// ── Types for dynamically fetched data ──
+// â”€â”€ Types for dynamically fetched data â”€â”€
 interface OfficeItem {
     id: number;
     name: string;
@@ -171,9 +171,9 @@ interface CompanyItem {
     is_active: boolean;
 }
 
-// ═══════════════════════════════════════════════════════════════
-// DUMMY DATA — one-click fill for development
-// ═══════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// DUMMY DATA â€” one-click fill for development
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 const DUMMY_DATA = {
     name: "Rahul Sharma",
     email: "rahul.sharma@apaarlogistics.com",
@@ -223,9 +223,9 @@ const DUMMY_DATA = {
     licDetails: "ESIC/1012345678",
 };
 
-// ═══════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // VALIDATION
-// ═══════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 type FieldErrors = Record<string, string>;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -239,7 +239,7 @@ const ACCOUNT_NO_RE = /^\d{9,18}$/;
 const validateField = (id: string, value: string): string | null => {
     const v = value.trim();
     switch (id) {
-        // ── Step 0: Personal Info (Req 2.3 A) ──
+        // â”€â”€ Step 0: Personal Info (Req 2.3 A) â”€â”€
         case "name":
             if (!v) return "Full name (as per Aadhaar) is required";
             if (v.length < 2) return "Name must be at least 2 characters";
@@ -303,7 +303,7 @@ const validateField = (id: string, value: string): string | null => {
             if (v.length > 500) return "Address must be under 500 characters";
             return null;
 
-        // ── Step 1: Employment Information (Req 2.3 B) ──
+        // â”€â”€ Step 1: Employment Information (Req 2.3 B) â”€â”€
         case "company":
             if (!v) return "Company Entity is required";
             return null;
@@ -330,13 +330,13 @@ const validateField = (id: string, value: string): string | null => {
             if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(v)) return "Must be HH:MM format (e.g., 18:30)";
             return null;
         case "halfDayLateMinutes":
-            if (!v || isNaN(Number(v)) || Number(v) < 1 || Number(v) > 480) return "Must be 1–480 minutes";
+            if (!v || isNaN(Number(v)) || Number(v) < 1 || Number(v) > 480) return "Must be 1â€“480 minutes";
             return null;
 
-        // ── Step 2: Salary & Bank (Req 2.4) ──
+        // â”€â”€ Step 2: Salary & Bank (Req 2.4) â”€â”€
         case "fixedGross":
             if (!v || isNaN(Number(v)) || Number(v) <= 0) return "Monthly CTC is required";
-            if (Number(v) < 5000) return "CTC must be at least ₹5,000";
+            if (Number(v) < 5000) return "CTC must be at least â‚¹5,000";
             if (Number(v) > 10000000) return "CTC seems too high";
             return null;
         case "bankName":
@@ -345,7 +345,7 @@ const validateField = (id: string, value: string): string | null => {
             return null;
         case "accountNo":
             if (!v) return "Account number is required";
-            if (!ACCOUNT_NO_RE.test(v)) return "Account number must be 9–18 digits";
+            if (!ACCOUNT_NO_RE.test(v)) return "Account number must be 9â€“18 digits";
             return null;
         case "ifsc":
             if (!v) return "IFSC code is required";
@@ -423,9 +423,9 @@ const validateStep = (step: number, formData: Record<string, string>): FieldErro
     return errors;
 };
 
-// ═══════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // COMPONENT
-// ═══════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
@@ -445,14 +445,14 @@ function OnboardingForm() {
     const [targetSingleDoc, setTargetSingleDoc] = useState<string | null>(null);
     const [uploadedFiles, setUploadedFiles] = useState<{ file: File; docType: string }[]>([]);
 
-    // ── Post-creation offer letter state ──
+    // â”€â”€ Post-creation offer letter state â”€â”€
     const [createdEmployee, setCreatedEmployee] = useState<{ id: number; emp_code: string; name: string; email: string } | null>(null);
     const [offerLetterPreviewing, setOfferLetterPreviewing] = useState(false);
     const [offerLetterSending, setOfferLetterSending] = useState(false);
     const [offerLetterSent, setOfferLetterSent] = useState(false);
     const [offerLetterSendingError, setOfferLetterSendingError] = useState<string | null>(null);
 
-    // ── Dynamic companies & offices (fetched from DB) ──
+    // â”€â”€ Dynamic companies & offices (fetched from DB) â”€â”€
     const [companies, setCompanies] = useState<CompanyItem[]>([]);
     const [offices, setOffices] = useState<OfficeItem[]>([]);
     const [departmentList, setDepartmentList] = useState<string[]>([
@@ -559,11 +559,11 @@ function OnboardingForm() {
         return () => { cancelled = true; };
     }, [editId]);
 
-    // ── Sequential Employee ID State (Req 1.2) ──
+    // â”€â”€ Sequential Employee ID State (Req 1.2) â”€â”€
     const [suggestedEmpCode, setSuggestedEmpCode] = useState<string>("");
     const [customEmpCode, setCustomEmpCode] = useState<string>("");
 
-    // ── Self-Onboarding Tabs & Invitations State (Req 2) ──
+    // â”€â”€ Self-Onboarding Tabs & Invitations State (Req 2) â”€â”€
     const [activeTab, setActiveTab] = useState<"direct" | "submissions">("direct");
     const [invitations, setInvitations] = useState<any[]>([]);
     const safeInvitations = Array.isArray(invitations) ? invitations : [];
@@ -583,7 +583,7 @@ function OnboardingForm() {
         notes: "",
     });
 
-    // ── Review & 1-Click Approve Candidate State (Req 2.2) ──
+    // â”€â”€ Review & 1-Click Approve Candidate State (Req 2.2) â”€â”€
     const [reviewCandidate, setReviewCandidate] = useState<any | null>(null);
     const [approveLoading, setApproveLoading] = useState(false);
     const [sendingAppointmentId, setSendingAppointmentId] = useState<number | null>(null);
@@ -643,7 +643,7 @@ function OnboardingForm() {
         half_day_late_minutes: "60",
     });
 
-    // ── Candidate Document Preview Modal State ──
+    // â”€â”€ Candidate Document Preview Modal State â”€â”€
     const [previewDoc, setPreviewDoc] = useState<{
         type: string;
         filename: string;
@@ -671,7 +671,7 @@ function OnboardingForm() {
         return `${backendBase}${cleanPath}`;
     };
 
-    // ── Resigned Conflict Warning State (Req 23) ──
+    // â”€â”€ Resigned Conflict Warning State (Req 23) â”€â”€
     const [isResignedError, setIsResignedError] = useState(false);
 
     // Fetch next sequential code according to company-specific format (Req 2.2)
@@ -874,7 +874,7 @@ function OnboardingForm() {
         setIsExportingOnboarding(true);
         try {
             const token = getToken();
-            const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1";
+            const apiBase = process.env.NEXT_PUBLIC_API_URL || "https://hrmsbackend-z7do.onrender.com/api/v1";
             const res = await fetch(`${apiBase}/employees/export-onboarding-excel`, {
                 headers: {
                     Authorization: `Bearer ${token}`
@@ -964,7 +964,7 @@ function OnboardingForm() {
         loadNextCode(formData.company);
     }, [formData.company, loadNextCode]);
 
-    // ── Field helpers ──
+    // â”€â”€ Field helpers â”€â”€
     const updateField = (id: string, value: string) => {
         setFormData((prev) => ({ ...prev, [id]: value }));
         setError(null);
@@ -977,7 +977,7 @@ function OnboardingForm() {
         });
     };
 
-    /** Validate on blur — shows error immediately but doesn't block navigation */
+    /** Validate on blur â€” shows error immediately but doesn't block navigation */
     const handleBlur = (id: string) => {
         const err = validateField(id, (formData as Record<string, string>)[id] || "");
         setFieldErrors((prev) => {
@@ -1073,11 +1073,11 @@ function OnboardingForm() {
         setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
     };
 
-    /** Shared input className builder — adds red ring on error */
+    /** Shared input className builder â€” adds red ring on error */
     const inputClass = (id: string, base: string) =>
         cn(base, fieldErrors[id] && "ring-2 ring-red-200 bg-red-50/30");
 
-    /** Shared select className builder — adds red ring on error */
+    /** Shared select className builder â€” adds red ring on error */
     const selectClass = (id: string, base: string) =>
         cn(base, fieldErrors[id] && "ring-2 ring-red-200 bg-red-50/30");
 
@@ -1092,7 +1092,7 @@ function OnboardingForm() {
         );
     };
 
-    // ── Submission helpers ──
+    // â”€â”€ Submission helpers â”€â”€
     const selectedCompany = companies.find((c) => c.id.toString() === formData.company);
     const currentPrefix = selectedCompany?.code || (suggestedEmpCode ? suggestedEmpCode.replace(/\d+$/, "") : "EMP");
 
@@ -1209,7 +1209,7 @@ function OnboardingForm() {
                 result = await apiPost<{ emp_code: string; name: string; email: string; id: number }>("/auth/register", payload);
             }
 
-            // Upload selected documents to backend → Cloudinary
+            // Upload selected documents to backend â†’ Cloudinary
             if (uploadedFiles.length > 0 && result.id) {
                 const token = localStorage.getItem("hrms_auth_token");
                 const formDataUpload = new FormData();
@@ -1240,7 +1240,7 @@ function OnboardingForm() {
                 formDataUpload.append("types", JSON.stringify(types));
 
                 try {
-                    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.apaarpulse.com/api/v1";
+                    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://hrmsbackend-z7do.onrender.com/api/v1";
                     const uploadRes = await fetch(`${baseUrl}/documents/upload/multiple/${result.id}`, {
                         method: "POST",
                         headers: { Authorization: `Bearer ${token}` },
@@ -1286,13 +1286,13 @@ function OnboardingForm() {
         }
     };
 
-    // ── Offer Letter Actions ──
+    // â”€â”€ Offer Letter Actions â”€â”€
     const handlePreviewOfferLetter = async () => {
         if (!createdEmployee) return;
         setOfferLetterPreviewing(true);
         try {
             const token = localStorage.getItem("hrms_auth_token");
-            const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.apaarpulse.com/api/v1";
+            const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://hrmsbackend-z7do.onrender.com/api/v1";
             const res = await fetch(`${baseUrl}/letters/offer-letter/${createdEmployee.id}/preview`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
@@ -1317,7 +1317,7 @@ function OnboardingForm() {
         setOfferLetterSendingError(null);
         try {
             const token = localStorage.getItem("hrms_auth_token");
-            const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.apaarpulse.com/api/v1";
+            const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://hrmsbackend-z7do.onrender.com/api/v1";
             const res = await fetch(`${baseUrl}/letters/offer-letter/${createdEmployee.id}/send`, {
                 method: "POST",
                 headers: {
@@ -1420,81 +1420,81 @@ function OnboardingForm() {
                     </Badge>
                 </div>
 
-                {/* ── Summary Metrics Grid (Req 2.4 Mandatory 6) ── */}
+                {/* â”€â”€ Summary Metrics Grid (Req 2.4 Mandatory 6) â”€â”€ */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
                     <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60">
                         <p className="text-[8px] font-black text-amber-400 uppercase tracking-widest mb-0.5">Monthly CTC</p>
-                        <p className="text-sm font-black text-white">₹{monthlyCTC.toLocaleString('en-IN')}</p>
+                        <p className="text-sm font-black text-white">â‚¹{monthlyCTC.toLocaleString('en-IN')}</p>
                     </div>
                     <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60">
                         <p className="text-[8px] font-black text-amber-400 uppercase tracking-widest mb-0.5">Annual CTC</p>
-                        <p className="text-sm font-black text-white">₹{annualCTC.toLocaleString('en-IN')}</p>
+                        <p className="text-sm font-black text-white">â‚¹{annualCTC.toLocaleString('en-IN')}</p>
                     </div>
                     <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60">
                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Basic (50%)</p>
-                        <p className="text-sm font-black text-white">₹{basic.toLocaleString('en-IN')}</p>
+                        <p className="text-sm font-black text-white">â‚¹{basic.toLocaleString('en-IN')}</p>
                     </div>
                     <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60">
                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Gross Salary</p>
-                        <p className="text-sm font-black text-white">₹{grossSalary.toLocaleString('en-IN')}</p>
+                        <p className="text-sm font-black text-white">â‚¹{grossSalary.toLocaleString('en-IN')}</p>
                     </div>
                     <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60">
                         <p className="text-[8px] font-black text-rose-400 uppercase tracking-widest mb-0.5">Total Deductions</p>
-                        <p className="text-sm font-black text-rose-300">-₹{totalDeductions.toLocaleString('en-IN')}</p>
+                        <p className="text-sm font-black text-rose-300">-â‚¹{totalDeductions.toLocaleString('en-IN')}</p>
                     </div>
                     <div className="bg-[#D9F99D]/15 p-3 rounded-xl border border-[#D9F99D]/30">
                         <p className="text-[8px] font-black text-[#D9F99D] uppercase tracking-widest mb-0.5">Net Take Home</p>
-                        <p className="text-sm font-black text-[#D9F99D]">₹{netSalary.toLocaleString('en-IN')}</p>
+                        <p className="text-sm font-black text-[#D9F99D]">â‚¹{netSalary.toLocaleString('en-IN')}</p>
                     </div>
                 </div>
 
-                {/* ── Component Breakdown Columns ── */}
+                {/* â”€â”€ Component Breakdown Columns â”€â”€ */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-slate-800 text-xs">
                     {/* Left: Earnings Components */}
                     <div className="bg-slate-800/40 p-3.5 rounded-xl border border-slate-700/50 space-y-2">
                         <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-2 flex items-center justify-between">
                             <span>Earnings Breakdown</span>
-                            <span className="text-white/60 font-mono">Gross: ₹{grossSalary.toLocaleString('en-IN')}</span>
+                            <span className="text-white/60 font-mono">Gross: â‚¹{grossSalary.toLocaleString('en-IN')}</span>
                         </p>
                         <div className="space-y-1.5 font-bold text-white/90 text-[11px]">
                             <div className="flex justify-between items-center bg-slate-800/60 px-2.5 py-1.5 rounded-lg">
                                 <span className="text-white/70">Basic Salary (50% of CTC)</span>
-                                <span className="font-mono text-white">₹{basic.toLocaleString('en-IN')}</span>
+                                <span className="font-mono text-white">â‚¹{basic.toLocaleString('en-IN')}</span>
                             </div>
                             <div className="flex justify-between items-center bg-slate-800/60 px-2.5 py-1.5 rounded-lg">
                                 <span className="text-white/70 flex items-center gap-1.5">
                                     <span>HRA</span>
                                     {!hraApplicable && <span className="text-[8px] text-amber-400 px-1 py-0.2 bg-amber-400/10 rounded">Opted Out</span>}
                                 </span>
-                                <span className="font-mono text-white">₹{hra.toLocaleString('en-IN')}</span>
+                                <span className="font-mono text-white">â‚¹{hra.toLocaleString('en-IN')}</span>
                             </div>
                             {conveyance > 0 && (
                                 <div className="flex justify-between items-center bg-slate-800/60 px-2.5 py-1.5 rounded-lg">
                                     <span className="text-white/70">Conveyance Allowance</span>
-                                    <span className="font-mono text-white">₹{conveyance.toLocaleString('en-IN')}</span>
+                                    <span className="font-mono text-white">â‚¹{conveyance.toLocaleString('en-IN')}</span>
                                 </div>
                             )}
                             {medicalAllowance > 0 && (
                                 <div className="flex justify-between items-center bg-slate-800/60 px-2.5 py-1.5 rounded-lg">
                                     <span className="text-white/70">Medical Allowance</span>
-                                    <span className="font-mono text-white">₹{medicalAllowance.toLocaleString('en-IN')}</span>
+                                    <span className="font-mono text-white">â‚¹{medicalAllowance.toLocaleString('en-IN')}</span>
                                 </div>
                             )}
                             {specialAllowance > 0 && (
                                 <div className="flex justify-between items-center bg-slate-800/60 px-2.5 py-1.5 rounded-lg">
                                     <span className="text-white/70">Special Allowance</span>
-                                    <span className="font-mono text-white">₹{specialAllowance.toLocaleString('en-IN')}</span>
+                                    <span className="font-mono text-white">â‚¹{specialAllowance.toLocaleString('en-IN')}</span>
                                 </div>
                             )}
                             {performanceAllowance > 0 && (
                                 <div className="flex justify-between items-center bg-slate-800/60 px-2.5 py-1.5 rounded-lg">
                                     <span className="text-white/70">Performance Allowance</span>
-                                    <span className="font-mono text-white">₹{performanceAllowance.toLocaleString('en-IN')}</span>
+                                    <span className="font-mono text-white">â‚¹{performanceAllowance.toLocaleString('en-IN')}</span>
                                 </div>
                             )}
                             <div className="flex justify-between items-center bg-slate-800/60 px-2.5 py-1.5 rounded-lg">
                                 <span className="text-white/70">Other Allowance (Balancing)</span>
-                                <span className="font-mono text-white">₹{other.toLocaleString('en-IN')}</span>
+                                <span className="font-mono text-white">â‚¹{other.toLocaleString('en-IN')}</span>
                             </div>
                         </div>
                     </div>
@@ -1504,13 +1504,13 @@ function OnboardingForm() {
                         <div className="bg-slate-800/40 p-3.5 rounded-xl border border-slate-700/50 space-y-2">
                             <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest mb-2 flex items-center justify-between">
                                 <span>Employee Deductions</span>
-                                <span className="text-rose-400 font-mono">Total: -₹{totalDeductions.toLocaleString('en-IN')}</span>
+                                <span className="text-rose-400 font-mono">Total: -â‚¹{totalDeductions.toLocaleString('en-IN')}</span>
                             </p>
                             <div className="space-y-1.5 font-bold text-[11px]">
                                 {pfEmployee > 0 ? (
                                     <div className="flex justify-between items-center bg-slate-800/60 px-2.5 py-1.5 rounded-lg">
                                         <span className="text-white/70">PF Contribution</span>
-                                        <span className="text-rose-400 font-mono">-₹{pfEmployee.toLocaleString('en-IN')}</span>
+                                        <span className="text-rose-400 font-mono">-â‚¹{pfEmployee.toLocaleString('en-IN')}</span>
                                     </div>
                                 ) : (
                                     <div className="flex justify-between items-center bg-slate-800/30 px-2.5 py-1.5 rounded-lg text-slate-500">
@@ -1521,7 +1521,7 @@ function OnboardingForm() {
                                 {esiEmployee > 0 ? (
                                     <div className="flex justify-between items-center bg-slate-800/60 px-2.5 py-1.5 rounded-lg">
                                         <span className="text-white/70">ESIC Contribution</span>
-                                        <span className="text-rose-400 font-mono">-₹{esiEmployee.toLocaleString('en-IN')}</span>
+                                        <span className="text-rose-400 font-mono">-â‚¹{esiEmployee.toLocaleString('en-IN')}</span>
                                     </div>
                                 ) : (
                                     <div className="flex justify-between items-center bg-slate-800/30 px-2.5 py-1.5 rounded-lg text-slate-500">
@@ -1532,7 +1532,7 @@ function OnboardingForm() {
                                 {professionalTax > 0 && (
                                     <div className="flex justify-between items-center bg-slate-800/60 px-2.5 py-1.5 rounded-lg">
                                         <span className="text-white/70">Professional Tax (PT)</span>
-                                        <span className="text-rose-400 font-mono">-₹{professionalTax.toLocaleString('en-IN')}</span>
+                                        <span className="text-rose-400 font-mono">-â‚¹{professionalTax.toLocaleString('en-IN')}</span>
                                     </div>
                                 )}
                             </div>
@@ -1546,13 +1546,13 @@ function OnboardingForm() {
                                 {pfEmployer > 0 && (
                                     <div className="flex justify-between items-center bg-slate-800/60 px-2.5 py-1.5 rounded-lg">
                                         <span className="text-white/70">Employer PF Contribution</span>
-                                        <span className="text-emerald-400 font-mono">+₹{pfEmployer.toLocaleString('en-IN')}</span>
+                                        <span className="text-emerald-400 font-mono">+â‚¹{pfEmployer.toLocaleString('en-IN')}</span>
                                     </div>
                                 )}
                                 {esiEmployer > 0 && (
                                     <div className="flex justify-between items-center bg-slate-800/60 px-2.5 py-1.5 rounded-lg">
                                         <span className="text-white/70">Employer ESIC Contribution</span>
-                                        <span className="text-emerald-400 font-mono">+₹{esiEmployer.toLocaleString('en-IN')}</span>
+                                        <span className="text-emerald-400 font-mono">+â‚¹{esiEmployer.toLocaleString('en-IN')}</span>
                                     </div>
                                 )}
                             </div>
@@ -1640,81 +1640,81 @@ function OnboardingForm() {
                     </Badge>
                 </div>
 
-                {/* ── Summary Metrics Grid (Req 2.4 Mandatory 6) ── */}
+                {/* â”€â”€ Summary Metrics Grid (Req 2.4 Mandatory 6) â”€â”€ */}
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                     <div className="bg-slate-800/80 p-4 rounded-2xl border border-slate-700/60">
                         <p className="text-[9px] font-black text-amber-400 uppercase tracking-widest mb-1">Monthly CTC</p>
-                        <p className="text-base font-black text-white">₹{monthlyCTC.toLocaleString('en-IN')}</p>
+                        <p className="text-base font-black text-white">â‚¹{monthlyCTC.toLocaleString('en-IN')}</p>
                     </div>
                     <div className="bg-slate-800/80 p-4 rounded-2xl border border-slate-700/60">
                         <p className="text-[9px] font-black text-amber-400 uppercase tracking-widest mb-1">Annual CTC</p>
-                        <p className="text-base font-black text-white">₹{annualCTC.toLocaleString('en-IN')}</p>
+                        <p className="text-base font-black text-white">â‚¹{annualCTC.toLocaleString('en-IN')}</p>
                     </div>
                     <div className="bg-slate-800/80 p-4 rounded-2xl border border-slate-700/60">
                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Basic (50%)</p>
-                        <p className="text-base font-black text-white">₹{basic.toLocaleString('en-IN')}</p>
+                        <p className="text-base font-black text-white">â‚¹{basic.toLocaleString('en-IN')}</p>
                     </div>
                     <div className="bg-slate-800/80 p-4 rounded-2xl border border-slate-700/60">
                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Gross Salary</p>
-                        <p className="text-base font-black text-white">₹{grossSalary.toLocaleString('en-IN')}</p>
+                        <p className="text-base font-black text-white">â‚¹{grossSalary.toLocaleString('en-IN')}</p>
                     </div>
                     <div className="bg-slate-800/80 p-4 rounded-2xl border border-slate-700/60">
                         <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest mb-1">Total Deductions</p>
-                        <p className="text-base font-black text-rose-300">-₹{totalDeductions.toLocaleString('en-IN')}</p>
+                        <p className="text-base font-black text-rose-300">-â‚¹{totalDeductions.toLocaleString('en-IN')}</p>
                     </div>
                     <div className="bg-[#D9F99D]/15 p-4 rounded-2xl border border-[#D9F99D]/30">
                         <p className="text-[9px] font-black text-[#D9F99D] uppercase tracking-widest mb-1">Net Take Home</p>
-                        <p className="text-base font-black text-[#D9F99D]">₹{netSalary.toLocaleString('en-IN')}</p>
+                        <p className="text-base font-black text-[#D9F99D]">â‚¹{netSalary.toLocaleString('en-IN')}</p>
                     </div>
                 </div>
 
-                {/* ── Component Breakdown Columns ── */}
+                {/* â”€â”€ Component Breakdown Columns â”€â”€ */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-800">
                     {/* Left: Earnings Components */}
                     <div className="bg-slate-800/40 p-4 rounded-2xl border border-slate-700/50 space-y-3">
                         <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-2 flex items-center justify-between">
                             <span>Earnings Breakdown</span>
-                            <span className="text-white/60 font-mono text-xs">Gross: ₹{grossSalary.toLocaleString('en-IN')}</span>
+                            <span className="text-white/60 font-mono text-xs">Gross: â‚¹{grossSalary.toLocaleString('en-IN')}</span>
                         </p>
                         <div className="space-y-2 font-bold text-white/90 text-xs">
                             <div className="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
                                 <span className="text-white/80">Basic Salary (50% of CTC)</span>
-                                <span className="font-mono text-white">₹{basic.toLocaleString('en-IN')}</span>
+                                <span className="font-mono text-white">â‚¹{basic.toLocaleString('en-IN')}</span>
                             </div>
                             <div className="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
                                 <span className="text-white/80 flex items-center gap-2">
                                     <span>House Rent Allowance (HRA)</span>
                                     {!hraApplicable && <span className="text-[9px] text-amber-400 px-1.5 py-0.5 bg-amber-400/10 rounded">Disabled</span>}
                                 </span>
-                                <span className="font-mono text-white">₹{hra.toLocaleString('en-IN')}</span>
+                                <span className="font-mono text-white">â‚¹{hra.toLocaleString('en-IN')}</span>
                             </div>
                             {conveyance > 0 && (
                                 <div className="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
                                     <span className="text-white/80">Conveyance Allowance</span>
-                                    <span className="font-mono text-white">₹{conveyance.toLocaleString('en-IN')}</span>
+                                    <span className="font-mono text-white">â‚¹{conveyance.toLocaleString('en-IN')}</span>
                                 </div>
                             )}
                             {medicalAllowance > 0 && (
                                 <div className="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
                                     <span className="text-white/80">Medical Allowance</span>
-                                    <span className="font-mono text-white">₹{medicalAllowance.toLocaleString('en-IN')}</span>
+                                    <span className="font-mono text-white">â‚¹{medicalAllowance.toLocaleString('en-IN')}</span>
                                 </div>
                             )}
                             {specialAllowance > 0 && (
                                 <div className="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
                                     <span className="text-white/80">Special Allowance</span>
-                                    <span className="font-mono text-white">₹{specialAllowance.toLocaleString('en-IN')}</span>
+                                    <span className="font-mono text-white">â‚¹{specialAllowance.toLocaleString('en-IN')}</span>
                                 </div>
                             )}
                             {performanceAllowance > 0 && (
                                 <div className="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
                                     <span className="text-white/80">Performance Allowance</span>
-                                    <span className="font-mono text-white">₹{performanceAllowance.toLocaleString('en-IN')}</span>
+                                    <span className="font-mono text-white">â‚¹{performanceAllowance.toLocaleString('en-IN')}</span>
                                 </div>
                             )}
                             <div className="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
                                 <span className="text-white/80">Other Allowance (Balancing)</span>
-                                <span className="font-mono text-white">₹{other.toLocaleString('en-IN')}</span>
+                                <span className="font-mono text-white">â‚¹{other.toLocaleString('en-IN')}</span>
                             </div>
                         </div>
                     </div>
@@ -1724,13 +1724,13 @@ function OnboardingForm() {
                         <div className="bg-slate-800/40 p-4 rounded-2xl border border-slate-700/50 space-y-3">
                             <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-2 flex items-center justify-between">
                                 <span>Employee Deductions</span>
-                                <span className="text-rose-400 font-mono text-xs">Total: -₹{totalDeductions.toLocaleString('en-IN')}</span>
+                                <span className="text-rose-400 font-mono text-xs">Total: -â‚¹{totalDeductions.toLocaleString('en-IN')}</span>
                             </p>
                             <div className="space-y-2 font-bold text-xs">
                                 {pfEmployee > 0 ? (
                                     <div className="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
                                         <span className="text-white/80">PF Contribution</span>
-                                        <span className="text-rose-400 font-mono">-₹{pfEmployee.toLocaleString('en-IN')}</span>
+                                        <span className="text-rose-400 font-mono">-â‚¹{pfEmployee.toLocaleString('en-IN')}</span>
                                     </div>
                                 ) : (
                                     <div className="flex justify-between items-center bg-slate-800/30 p-2.5 rounded-xl text-slate-500">
@@ -1741,7 +1741,7 @@ function OnboardingForm() {
                                 {esiEmployee > 0 ? (
                                     <div className="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
                                         <span className="text-white/80">ESIC Contribution</span>
-                                        <span className="text-rose-400 font-mono">-₹{esiEmployee.toLocaleString('en-IN')}</span>
+                                        <span className="text-rose-400 font-mono">-â‚¹{esiEmployee.toLocaleString('en-IN')}</span>
                                     </div>
                                 ) : (
                                     <div className="flex justify-between items-center bg-slate-800/30 p-2.5 rounded-xl text-slate-500">
@@ -1752,7 +1752,7 @@ function OnboardingForm() {
                                 {professionalTax > 0 && (
                                     <div className="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
                                         <span className="text-white/80">Professional Tax (PT)</span>
-                                        <span className="text-rose-400 font-mono">-₹{professionalTax.toLocaleString('en-IN')}</span>
+                                        <span className="text-rose-400 font-mono">-â‚¹{professionalTax.toLocaleString('en-IN')}</span>
                                     </div>
                                 )}
                             </div>
@@ -1766,13 +1766,13 @@ function OnboardingForm() {
                                 {pfEmployer > 0 && (
                                     <div className="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
                                         <span className="text-white/80">Employer PF Contribution</span>
-                                        <span className="text-emerald-400 font-mono">+₹{pfEmployer.toLocaleString('en-IN')}</span>
+                                        <span className="text-emerald-400 font-mono">+â‚¹{pfEmployer.toLocaleString('en-IN')}</span>
                                     </div>
                                 )}
                                 {esiEmployer > 0 && (
                                     <div className="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
                                         <span className="text-white/80">Employer ESIC Contribution</span>
-                                        <span className="text-emerald-400 font-mono">+₹{esiEmployer.toLocaleString('en-IN')}</span>
+                                        <span className="text-emerald-400 font-mono">+â‚¹{esiEmployer.toLocaleString('en-IN')}</span>
                                     </div>
                                 )}
                             </div>
@@ -1787,7 +1787,7 @@ function OnboardingForm() {
         <ProtectedRoute module="EMPLOYEES" action="CREATE">
             <div className="max-w-4xl mx-auto space-y-12 pb-20 px-4 md:px-0">
                 {createdEmployee ? (
-                    /* ── SUCCESS SCREEN ── */
+                    /* â”€â”€ SUCCESS SCREEN â”€â”€ */
                     <div className="flex flex-col items-center justify-center space-y-10 pt-10 animate-in fade-in zoom-in-95">
                         <div className="h-20 w-20 bg-emerald-100 rounded-[2rem] flex items-center justify-center shadow-xl shadow-emerald-100/30">
                             <CheckCircle className="h-10 w-10 text-emerald-600" />
@@ -1992,7 +1992,7 @@ function OnboardingForm() {
                                                                     {inv.status}
                                                                 </Badge>
                                                             </div>
-                                                            <p className="text-xs text-slate-500 font-medium mt-0.5">{inv.email} {inv.phone && `• ${inv.phone}`} {inv.department && `• Dept: ${inv.department}`}</p>
+                                                            <p className="text-xs text-slate-500 font-medium mt-0.5">{inv.email} {inv.phone && `â€¢ ${inv.phone}`} {inv.department && `â€¢ Dept: ${inv.department}`}</p>
                                                             <p className="text-[10px] text-slate-400 mt-0.5">
                                                                 Expires: {new Date(inv.expires_at).toLocaleDateString()}
                                                             </p>
@@ -2089,7 +2089,7 @@ function OnboardingForm() {
                                                             const apptStatus = sub.appointment_status;
                                                             const apptToken = sub.appointment_token;
                                                             const apptLetterId = sub.appointment_letter_id;
-                                                            const apiBase = process.env.NEXT_PUBLIC_API_URL || "https://api.apaarpulse.com/api/v1";
+                                                            const apiBase = process.env.NEXT_PUBLIC_API_URL || "https://hrmsbackend-z7do.onrender.com/api/v1";
 
                                                             if (apptStatus === "accepted") {
                                                                 return (
@@ -2254,7 +2254,7 @@ function OnboardingForm() {
                                         </CardDescription>
                                     </div>
                                     <div className="flex items-center gap-3">
-                                        {/* ── Fill Dummy Data Button (dev only) ── */}
+                                        {/* â”€â”€ Fill Dummy Data Button (dev only) â”€â”€ */}
                                         <Button
                                             type="button"
                                             variant="outline"
@@ -2289,7 +2289,7 @@ function OnboardingForm() {
                                     </div>
                                 )}
 
-                                {/* ── STEP 0: Personal Info (Req 2.3 A) ── */}
+                                {/* â”€â”€ STEP 0: Personal Info (Req 2.3 A) â”€â”€ */}
                                 {currentStep === 0 && (
                                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
                                         {/* Req 1.2: Automatic Sequential Employee ID */}
@@ -2540,7 +2540,7 @@ function OnboardingForm() {
                                     </div>
                                 )}
 
-                                {/* ── STEP 1: Employment Information (Req 2.3 B) ── */}
+                                {/* â”€â”€ STEP 1: Employment Information (Req 2.3 B) â”€â”€ */}
                                 {currentStep === 1 && (
                                     <div className="space-y-8 animate-in fade-in slide-in-from-right-4">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-7">
@@ -2676,7 +2676,7 @@ function OnboardingForm() {
                                             </div>
                                         </div>
 
-                                        {/* ── Shift Configuration & Rotational Shift (Req 2.3 B) ── */}
+                                        {/* â”€â”€ Shift Configuration & Rotational Shift (Req 2.3 B) â”€â”€ */}
                                         <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-200/80 space-y-5">
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-2">
@@ -2759,7 +2759,7 @@ function OnboardingForm() {
                                     </div>
                                 )}
 
-                                {/* ── STEP 2: Salary & Bank ── */}
+                                {/* â”€â”€ STEP 2: Salary & Bank â”€â”€ */}
                                 {currentStep === 2 && (
                                     <>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8 animate-in fade-in slide-in-from-right-4">
@@ -2795,7 +2795,7 @@ function OnboardingForm() {
                                             </div>
                                             <div className="space-y-3">
                                                 <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                                                    Conveyance Allowance (₹)
+                                                    Conveyance Allowance (â‚¹)
                                                 </Label>
                                                 <Input
                                                     type="number"
@@ -2807,7 +2807,7 @@ function OnboardingForm() {
                                             </div>
                                             <div className="space-y-3">
                                                 <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                                                    Medical Allowance (₹)
+                                                    Medical Allowance (â‚¹)
                                                 </Label>
                                                 <Input
                                                     type="number"
@@ -2819,7 +2819,7 @@ function OnboardingForm() {
                                             </div>
                                             <div className="space-y-3">
                                                 <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                                                    Special Allowance (₹)
+                                                    Special Allowance (â‚¹)
                                                 </Label>
                                                 <Input
                                                     type="number"
@@ -2832,7 +2832,7 @@ function OnboardingForm() {
                                             <div className="space-y-3">
                                                 <div className="flex items-center justify-between">
                                                     <Label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">
-                                                        Performance Allowance (₹)
+                                                        Performance Allowance (â‚¹)
                                                     </Label>
                                                     <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-wider">Req 2.4</span>
                                                 </div>
@@ -2918,7 +2918,7 @@ function OnboardingForm() {
                                                     value={formData.pfCeiling}
                                                     onChange={(e) => updateField("pfCeiling", e.target.value)}
                                                 >
-                                                    <option value="Yes">Yes (₹15,000 cap)</option>
+                                                    <option value="Yes">Yes (â‚¹15,000 cap)</option>
                                                     <option value="No">No (Actual Basic)</option>
                                                 </select>
                                             </div>
@@ -3112,7 +3112,7 @@ function OnboardingForm() {
                                     </>
                                 )}
 
-                                {/* ── STEP 3: Documentation (Req 2.3 D: 8 Documents) ── */}
+                                {/* â”€â”€ STEP 3: Documentation (Req 2.3 D: 8 Documents) â”€â”€ */}
                                 {currentStep === 3 && (
                                     <div className="space-y-8 animate-in fade-in slide-in-from-right-4">
                                         {/* Hidden bulk file input */}
@@ -3141,7 +3141,7 @@ function OnboardingForm() {
                                                     Employee Verification Documents (Req 2.3 D)
                                                 </h3>
                                                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                                                    8 Document Categories per Client SOW • Mandatory & Statutory Verification
+                                                    8 Document Categories per Client SOW â€¢ Mandatory & Statutory Verification
                                                 </p>
                                             </div>
                                             <div className="flex items-center gap-2">
@@ -3205,7 +3205,7 @@ function OnboardingForm() {
                                                                         {entry.file.name}
                                                                     </p>
                                                                     <p className="text-[8px] font-bold text-slate-400">
-                                                                        {(entry.file.size / 1024).toFixed(1)} KB • Assigned: <span className="text-emerald-700 font-bold">{entry.docType}</span>
+                                                                        {(entry.file.size / 1024).toFixed(1)} KB â€¢ Assigned: <span className="text-emerald-700 font-bold">{entry.docType}</span>
                                                                     </p>
                                                                 </div>
                                                             </div>
@@ -3361,7 +3361,7 @@ function OnboardingForm() {
                                     </div>
                                 )}
 
-                                {/* ── STEP 4: Review ── */}
+                                {/* â”€â”€ STEP 4: Review â”€â”€ */}
                                 {currentStep === 4 && (
                                     <div className="flex flex-col items-center justify-center space-y-10 text-center py-10 animate-in fade-in zoom-in-95">
                                         <div className="h-20 w-20 bg-[#D9F99D] rounded-[2rem] flex items-center justify-center shadow-xl shadow-[#D9F99D]/20 animate-bounce">
@@ -3376,7 +3376,7 @@ function OnboardingForm() {
                                             </p>
                                         </div>
                                         <div className="w-full max-w-4xl space-y-6 text-left">
-                                            {/* ── CARD 1: Personal Details (Req 2.3 A) ── */}
+                                            {/* â”€â”€ CARD 1: Personal Details (Req 2.3 A) â”€â”€ */}
                                             <div className="p-6 md:p-8 bg-slate-50/90 rounded-[2rem] border border-slate-200/80 shadow-xs space-y-5">
                                                 <div className="flex items-center justify-between border-b border-slate-200 pb-3">
                                                     <span className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-700 flex items-center gap-2">
@@ -3414,7 +3414,7 @@ function OnboardingForm() {
                                                     <div>
                                                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Gender & Marital Status</p>
                                                         <p className="text-xs font-bold text-slate-900 uppercase mt-0.5">
-                                                            {formData.gender} • {formData.maritalStatus}
+                                                            {formData.gender} â€¢ {formData.maritalStatus}
                                                         </p>
                                                     </div>
                                                     <div>
@@ -3450,7 +3450,7 @@ function OnboardingForm() {
                                                     <div className="col-span-2 md:col-span-4 pt-2 border-t border-slate-200/60">
                                                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Emergency Contact Particulars</p>
                                                         <p className="text-xs font-bold text-slate-900 mt-0.5">
-                                                            {formData.emergencyName || "N/A"} {formData.emergencyRelation && `(${formData.emergencyRelation})`} {formData.emergencyPhone && `• Phone: ${formData.emergencyPhone}`}
+                                                            {formData.emergencyName || "N/A"} {formData.emergencyRelation && `(${formData.emergencyRelation})`} {formData.emergencyPhone && `â€¢ Phone: ${formData.emergencyPhone}`}
                                                         </p>
                                                     </div>
                                                     <div className="col-span-2 md:col-span-4">
@@ -3462,7 +3462,7 @@ function OnboardingForm() {
                                                 </div>
                                             </div>
 
-                                            {/* ── CARD 2: Employment Information (Req 2.3 B) ── */}
+                                            {/* â”€â”€ CARD 2: Employment Information (Req 2.3 B) â”€â”€ */}
                                             <div className="p-6 md:p-8 bg-slate-50/90 rounded-[2rem] border border-slate-200/80 shadow-xs space-y-5">
                                                 <div className="flex items-center justify-between border-b border-slate-200 pb-3">
                                                     <span className="text-[11px] font-black uppercase tracking-[0.2em] text-indigo-700 flex items-center gap-2">
@@ -3530,7 +3530,7 @@ function OnboardingForm() {
                                                 </div>
                                             </div>
 
-                                            {/* ── CARD 3: Compensation & Banking Details (Req 2.4) ── */}
+                                            {/* â”€â”€ CARD 3: Compensation & Banking Details (Req 2.4) â”€â”€ */}
                                             <div className="p-6 md:p-8 bg-slate-50/90 rounded-[2rem] border border-slate-200/80 shadow-xs space-y-5">
                                                 <div className="flex items-center justify-between border-b border-slate-200 pb-3">
                                                     <span className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-700 flex items-center gap-2">
@@ -3550,7 +3550,7 @@ function OnboardingForm() {
                                                     <div>
                                                         <p className="text-[8px] font-black text-emerald-600 uppercase tracking-wider">Monthly Fixed CTC</p>
                                                         <p className="text-base font-black text-emerald-700 uppercase mt-0.5">
-                                                            ₹{formData.fixedGross ? Number(formData.fixedGross).toLocaleString("en-IN") : "0"}
+                                                            â‚¹{formData.fixedGross ? Number(formData.fixedGross).toLocaleString("en-IN") : "0"}
                                                         </p>
                                                     </div>
                                                     <div>
@@ -3589,50 +3589,50 @@ function OnboardingForm() {
                                                         <div>
                                                             <span className="text-[9px] font-bold text-emerald-700 block uppercase">Basic Salary (50%)</span>
                                                             <span className="font-mono font-bold text-emerald-900">
-                                                                ₹{Math.round(Number(formData.fixedGross || 0) * 0.5).toLocaleString("en-IN")}
+                                                                â‚¹{Math.round(Number(formData.fixedGross || 0) * 0.5).toLocaleString("en-IN")}
                                                             </span>
                                                         </div>
                                                         <div>
                                                             <span className="text-[9px] font-bold text-emerald-700 block uppercase">HRA (40% of Basic)</span>
                                                             <span className="font-mono font-bold text-emerald-900">
-                                                                ₹{formData.hraApplicable === "Yes" ? Math.round(Number(formData.fixedGross || 0) * 0.5 * 0.4).toLocaleString("en-IN") : "0"}
+                                                                â‚¹{formData.hraApplicable === "Yes" ? Math.round(Number(formData.fixedGross || 0) * 0.5 * 0.4).toLocaleString("en-IN") : "0"}
                                                             </span>
                                                         </div>
                                                         <div>
                                                             <span className="text-[9px] font-bold text-emerald-700 block uppercase">Conveyance Allowance</span>
                                                             <span className="font-mono font-bold text-emerald-900">
-                                                                ₹{Number(formData.conveyance || 0).toLocaleString("en-IN")}
+                                                                â‚¹{Number(formData.conveyance || 0).toLocaleString("en-IN")}
                                                             </span>
                                                         </div>
                                                         <div>
                                                             <span className="text-[9px] font-bold text-emerald-700 block uppercase">Medical Allowance</span>
                                                             <span className="font-mono font-bold text-emerald-900">
-                                                                ₹{Number(formData.medicalAllowance || 0).toLocaleString("en-IN")}
+                                                                â‚¹{Number(formData.medicalAllowance || 0).toLocaleString("en-IN")}
                                                             </span>
                                                         </div>
                                                         <div>
                                                             <span className="text-[9px] font-bold text-emerald-700 block uppercase">Special Allowance</span>
                                                             <span className="font-mono font-bold text-emerald-900">
-                                                                ₹{Number(formData.specialAllowance || 0).toLocaleString("en-IN")}
+                                                                â‚¹{Number(formData.specialAllowance || 0).toLocaleString("en-IN")}
                                                             </span>
                                                         </div>
                                                         <div>
                                                             <span className="text-[9px] font-bold text-emerald-700 block uppercase">Performance Allowance</span>
                                                             <span className="font-mono font-bold text-emerald-900">
-                                                                ₹{Number(formData.performanceAllowance || 0).toLocaleString("en-IN")}
+                                                                â‚¹{Number(formData.performanceAllowance || 0).toLocaleString("en-IN")}
                                                             </span>
                                                         </div>
                                                         <div className="col-span-2">
                                                             <span className="text-[9px] font-bold text-emerald-700 block uppercase">Annual Fixed Gross</span>
                                                             <span className="font-mono font-black text-emerald-900">
-                                                                ₹{(Number(formData.fixedGross || 0) * 12).toLocaleString("en-IN")} / year
+                                                                â‚¹{(Number(formData.fixedGross || 0) * 12).toLocaleString("en-IN")} / year
                                                             </span>
                                                         </div>
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            {/* ── CARD 4: Statutory & Compliance Setup ── */}
+                                            {/* â”€â”€ CARD 4: Statutory & Compliance Setup â”€â”€ */}
                                             <div className="p-6 md:p-8 bg-slate-50/90 rounded-[2rem] border border-slate-200/80 shadow-xs space-y-5">
                                                 <div className="flex items-center justify-between border-b border-slate-200 pb-3">
                                                     <span className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-700 flex items-center gap-2">
@@ -3658,7 +3658,7 @@ function OnboardingForm() {
                                                     <div>
                                                         <p className="text-[8px] font-black text-indigo-600 uppercase tracking-wider">PF Ceiling Limit</p>
                                                         <p className="text-xs font-bold text-slate-900 uppercase mt-0.5">
-                                                            {formData.pfCeiling === "Yes" ? "₹15,000 Cap" : "Actual Basic"}
+                                                            {formData.pfCeiling === "Yes" ? "â‚¹15,000 Cap" : "Actual Basic"}
                                                         </p>
                                                     </div>
                                                     <div>
@@ -3718,7 +3718,7 @@ function OnboardingForm() {
                                                 </div>
                                             </div>
 
-                                            {/* ── CARD 5: Attached Verification Documents (Req 2.3 D) ── */}
+                                            {/* â”€â”€ CARD 5: Attached Verification Documents (Req 2.3 D) â”€â”€ */}
                                             <div className="p-6 md:p-8 bg-slate-50/90 rounded-[2rem] border border-slate-200/80 shadow-xs space-y-5">
                                                 <div className="flex items-center justify-between border-b border-slate-200 pb-3">
                                                     <div className="flex items-center gap-2">
@@ -3903,7 +3903,7 @@ function OnboardingForm() {
                                         className="text-red-400 hover:text-red-700 font-bold ml-1 text-base leading-none"
                                         aria-label="Dismiss error"
                                     >
-                                        ×
+                                        Ã—
                                     </button>
                                 </div>
                             )}
@@ -4034,7 +4034,7 @@ function OnboardingForm() {
 
                     {reviewCandidate && (
                         <div className="space-y-6 py-3">
-                            {/* ── CARD 1: Candidate Verification & Documents ── */}
+                            {/* â”€â”€ CARD 1: Candidate Verification & Documents â”€â”€ */}
                             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/70 space-y-3">
                                 <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
                                     <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
@@ -4053,12 +4053,12 @@ function OnboardingForm() {
                                     <div>
                                         <span className="text-slate-400 font-bold uppercase text-[9px] block">Marital Status & Guardian</span>
                                         <span className="font-bold text-slate-800">
-                                            {approvalOverrides.marital_status?.toUpperCase() || "UNMARRIED"} {approvalOverrides.father_or_husband_name && `• ${approvalOverrides.father_or_husband_name}`}
+                                            {approvalOverrides.marital_status?.toUpperCase() || "UNMARRIED"} {approvalOverrides.father_or_husband_name && `â€¢ ${approvalOverrides.father_or_husband_name}`}
                                         </span>
                                     </div>
                                     <div>
                                         <span className="text-slate-400 font-bold uppercase text-[9px] block">Email & Phone</span>
-                                        <span className="font-bold text-slate-800">{approvalOverrides.email} • {approvalOverrides.phone || "N/A"}</span>
+                                        <span className="font-bold text-slate-800">{approvalOverrides.email} â€¢ {approvalOverrides.phone || "N/A"}</span>
                                     </div>
                                     <div>
                                         <span className="text-slate-400 font-bold uppercase text-[9px] block">Date of Birth</span>
@@ -4066,7 +4066,7 @@ function OnboardingForm() {
                                     </div>
                                     <div>
                                         <span className="text-slate-400 font-bold uppercase text-[9px] block">PAN & Aadhaar</span>
-                                        <span className="font-bold text-slate-800">{approvalOverrides.pan || "N/A (Optional)"} • Aadhaar: {approvalOverrides.aadhaar || "N/A"}</span>
+                                        <span className="font-bold text-slate-800">{approvalOverrides.pan || "N/A (Optional)"} â€¢ Aadhaar: {approvalOverrides.aadhaar || "N/A"}</span>
                                     </div>
                                     <div>
                                         <span className="text-slate-400 font-bold uppercase text-[9px] block">Candidate Working Location</span>
@@ -4080,7 +4080,7 @@ function OnboardingForm() {
                                         <span className="text-slate-400 font-bold uppercase text-[9px] block">Emergency Contact</span>
                                         <span className="font-bold text-slate-800">
                                             {approvalOverrides.emergencyName || "N/A"} ({approvalOverrides.emergencyRelation || "N/A"})
-                                            {approvalOverrides.emergencyPhone && ` • Phone: ${approvalOverrides.emergencyPhone}`}
+                                            {approvalOverrides.emergencyPhone && ` â€¢ Phone: ${approvalOverrides.emergencyPhone}`}
                                         </span>
                                     </div>
                                 </div>
@@ -4156,7 +4156,7 @@ function OnboardingForm() {
                                 </div>
                             </div>
 
-                            {/* ── CARD 2: Employment Information (Req 2.3 B) ── */}
+                            {/* â”€â”€ CARD 2: Employment Information (Req 2.3 B) â”€â”€ */}
                             <div className="space-y-3 p-4 rounded-2xl bg-white border border-slate-200 shadow-sm">
                                 <span className="text-[11px] font-black uppercase tracking-wider text-indigo-700 flex items-center gap-1.5">
                                     <Briefcase className="h-4 w-4 text-indigo-600" /> 1. Employment Information
@@ -4238,7 +4238,7 @@ function OnboardingForm() {
                                 </div>
                             </div>
 
-                            {/* ── CARD 3: Salary & Banking Details (Editable) ── */}
+                            {/* â”€â”€ CARD 3: Salary & Banking Details (Editable) â”€â”€ */}
                             <div className="space-y-3 p-4 rounded-2xl bg-white border border-slate-200 shadow-sm">
                                 <span className="text-[11px] font-black uppercase tracking-wider text-emerald-700 flex items-center gap-1.5">
                                     <Banknote className="h-4 w-4 text-emerald-600" /> 2. Compensation & Banking
@@ -4246,7 +4246,7 @@ function OnboardingForm() {
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     <div>
-                                        <Label className="text-[10px] font-bold text-emerald-700 mb-1 block">Monthly Fixed Gross CTC (₹) *</Label>
+                                        <Label className="text-[10px] font-bold text-emerald-700 mb-1 block">Monthly Fixed Gross CTC (â‚¹) *</Label>
                                         <Input
                                             type="number"
                                             value={approvalOverrides.fixed_gross}
@@ -4281,7 +4281,7 @@ function OnboardingForm() {
                                         </select>
                                     </div>
                                     <div>
-                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Performance (₹)</Label>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Performance (â‚¹)</Label>
                                         <Input
                                             type="number"
                                             value={approvalOverrides.performance_allowance}
@@ -4291,7 +4291,7 @@ function OnboardingForm() {
                                         />
                                     </div>
                                     <div>
-                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Conveyance (₹)</Label>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Conveyance (â‚¹)</Label>
                                         <Input
                                             type="number"
                                             value={approvalOverrides.conveyance}
@@ -4301,7 +4301,7 @@ function OnboardingForm() {
                                         />
                                     </div>
                                     <div>
-                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Medical (₹)</Label>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Medical (â‚¹)</Label>
                                         <Input
                                             type="number"
                                             value={approvalOverrides.medical_allowance}
@@ -4311,7 +4311,7 @@ function OnboardingForm() {
                                         />
                                     </div>
                                     <div>
-                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Special (₹)</Label>
+                                        <Label className="text-[10px] font-bold text-slate-600 mb-1 block">Special (â‚¹)</Label>
                                         <Input
                                             type="number"
                                             value={approvalOverrides.special_allowance}
@@ -4353,7 +4353,7 @@ function OnboardingForm() {
                                 </div>
                             </div>
 
-                            {/* ── CARD 4: Statutory & Compliance Controls (matching Direct HR Step 2) ── */}
+                            {/* â”€â”€ CARD 4: Statutory & Compliance Controls (matching Direct HR Step 2) â”€â”€ */}
                             <div className="space-y-3 p-4 rounded-2xl bg-white border border-slate-200 shadow-sm">
                                 <span className="text-[11px] font-black uppercase tracking-wider text-blue-700 flex items-center gap-1.5">
                                     <ShieldCheck className="h-4 w-4 text-blue-600" /> 3. Statutory & Compliance Setup
@@ -4378,7 +4378,7 @@ function OnboardingForm() {
                                             onChange={(e) => setApprovalOverrides(a => ({ ...a, pf_ceiling: e.target.value }))}
                                             className="w-full h-10 rounded-xl bg-indigo-50/60 border border-indigo-200 px-3 text-xs font-bold text-indigo-900 outline-none"
                                         >
-                                            <option value="Yes">Yes (₹15,000 cap)</option>
+                                            <option value="Yes">Yes (â‚¹15,000 cap)</option>
                                             <option value="No">No (Actual Basic)</option>
                                         </select>
                                     </div>
@@ -4502,10 +4502,10 @@ function OnboardingForm() {
                                 </div>
                             </div>
 
-                            {/* ── CARD 5: Live Salary Preview ── */}
+                            {/* â”€â”€ CARD 5: Live Salary Preview â”€â”€ */}
                             {renderApprovalSalaryPreview()}
 
-                            {/* ── CARD 6: Shift Configuration ── */}
+                            {/* â”€â”€ CARD 6: Shift Configuration â”€â”€ */}
                             <div className="p-4 bg-amber-50/50 rounded-2xl border border-amber-200 space-y-3">
                                 <span className="text-[11px] font-black uppercase tracking-wider text-amber-700 flex items-center gap-1.5">
                                     <Clock className="h-4 w-4 text-amber-600" /> 4. Shift Configuration
@@ -4573,7 +4573,7 @@ function OnboardingForm() {
                 </DialogContent>
             </Dialog>
 
-            {/* ── Document Preview Dialog (Req 2.2 Document Verification) ── */}
+            {/* â”€â”€ Document Preview Dialog (Req 2.2 Document Verification) â”€â”€ */}
             <Dialog open={!!previewDoc} onOpenChange={(open) => !open && setPreviewDoc(null)}>
                 <DialogContent className="sm:max-w-[760px] max-h-[90vh] overflow-y-auto p-6 rounded-3xl bg-white border-none shadow-2xl">
                     <DialogHeader className="space-y-1.5 text-left pb-3 border-b border-slate-100">
@@ -4699,7 +4699,7 @@ function OnboardingForm() {
                                     <div className="grid grid-cols-2 gap-3 text-xs bg-white p-4 rounded-xl border border-slate-200">
                                         <div>
                                             <span className="text-[10px] uppercase font-bold text-slate-400 block">Candidate</span>
-                                            <span className="font-bold text-slate-800">{previewDoc.candidate_name || "—"}</span>
+                                            <span className="font-bold text-slate-800">{previewDoc.candidate_name || "â€”"}</span>
                                         </div>
                                         <div>
                                             <span className="text-[10px] uppercase font-bold text-slate-400 block">Document Type</span>
@@ -4731,7 +4731,7 @@ function OnboardingForm() {
                                             <div className="col-span-2 pt-2 border-t border-slate-100">
                                                 <span className="text-[10px] uppercase font-bold text-slate-400 block">Declared Bank Account</span>
                                                 <span className="font-mono font-bold text-slate-900">
-                                                    {previewDoc.bank_name?.toUpperCase()} — A/C: {previewDoc.bank_account_number} (IFSC: {previewDoc.ifsc_code})
+                                                    {previewDoc.bank_name?.toUpperCase()} â€” A/C: {previewDoc.bank_account_number} (IFSC: {previewDoc.ifsc_code})
                                                 </span>
                                             </div>
                                         )}

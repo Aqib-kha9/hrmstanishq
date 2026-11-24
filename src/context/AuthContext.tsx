@@ -20,7 +20,7 @@ import {
 } from "@/lib/api-client";
 
 // ---------------------------------------------------------------------------
-// Shared User type — mirrors RoleContext.User exactly.
+// Shared User type â€” mirrors RoleContext.User exactly.
 // Defined here (not imported) to avoid circular dependency since
 // RoleContext imports useAuth from here.
 // ---------------------------------------------------------------------------
@@ -124,7 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         setState({ user: mappedUser, isAuthenticated: true, isLoading: false });
       } catch {
-        // Token invalid/expired — clear and proceed as unauthenticated
+        // Token invalid/expired â€” clear and proceed as unauthenticated
         clearAuth();
         setState({ user: null, isAuthenticated: false, isLoading: false });
       }
@@ -134,11 +134,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // --------------------------------------------------
-  // login — calls the backend, stores tokens, fetches /me
+  // login â€” calls the backend, stores tokens, fetches /me
   // --------------------------------------------------
   const login = useCallback(async (email: string, password: string) => {
     // Use bare fetch to avoid the interceptor (which needs auth to exist)
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.apaarpulse.com/api/v1";
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://hrmsbackend-z7do.onrender.com/api/v1";
 
     const res = await fetch(`${API_URL}/auth/login`, {
       method: "POST",
@@ -181,10 +181,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // --------------------------------------------------
-  // logout — tells backend, clears local state
+  // logout â€” tells backend, clears local state
   // --------------------------------------------------
   const logout = useCallback(async () => {
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.apaarpulse.com/api/v1";
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://hrmsbackend-z7do.onrender.com/api/v1";
     const token = getToken();
     try {
       // Fire-and-forget to backend; bare fetch to avoid interceptor
@@ -204,7 +204,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // --------------------------------------------------
-  // refreshUser — re-fetch /me (e.g. after profile update)
+  // refreshUser â€” re-fetch /me (e.g. after profile update)
   // --------------------------------------------------
   const refreshUser = useCallback(async () => {
     try {
