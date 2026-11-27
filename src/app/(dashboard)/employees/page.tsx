@@ -930,33 +930,39 @@ export default function EmployeesPage() {
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        disabled={currentPage === 1}
-                                        onClick={() => setCurrentPage(currentPage - 1)}
+                                        disabled={safeCurrentPage <= 1}
+                                        onClick={() => setCurrentPage(Math.max(1, safeCurrentPage - 1))}
                                         className="h-9 px-4 rounded-xl border-slate-200 font-black text-[9px] uppercase tracking-widest hover:bg-white disabled:opacity-30 transition-all"
                                     >
                                         Previous
                                     </Button>
                                     <div className="flex items-center gap-1">
-                                        {[...Array(totalPages)].map((_, i) => (
-                                            <Button
-                                                key={i}
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => setCurrentPage(i + 1)}
-                                                className={cn(
-                                                    "h-9 w-9 rounded-xl font-black text-[9px] transition-all",
-                                                    currentPage === i + 1 ? "bg-slate-900 text-white hover:bg-black" : "text-slate-400 hover:bg-white"
-                                                )}
-                                            >
-                                                {i + 1}
-                                            </Button>
+                                        {getPaginationRange(safeCurrentPage, totalPages).map((p, i) => (
+                                            typeof p === "number" ? (
+                                                <Button
+                                                    key={`page-${p}`}
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => setCurrentPage(p)}
+                                                    className={cn(
+                                                        "h-9 w-9 rounded-xl font-black text-[9px] transition-all",
+                                                        safeCurrentPage === p ? "bg-slate-900 text-white hover:bg-black shadow-sm" : "text-slate-400 hover:bg-white"
+                                                    )}
+                                                >
+                                                    {p}
+                                                </Button>
+                                            ) : (
+                                                <span key={`ellipsis-${i}`} className="h-9 w-6 flex items-center justify-center text-slate-400 font-black text-xs select-none">
+                                                    ...
+                                                </span>
+                                            )
                                         ))}
                                     </div>
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        disabled={currentPage === totalPages}
-                                        onClick={() => setCurrentPage(currentPage + 1)}
+                                        disabled={safeCurrentPage >= totalPages}
+                                        onClick={() => setCurrentPage(Math.min(totalPages, safeCurrentPage + 1))}
                                         className="h-9 px-4 rounded-xl border-slate-200 font-black text-[9px] uppercase tracking-widest hover:bg-white disabled:opacity-30 transition-all"
                                     >
                                         Next

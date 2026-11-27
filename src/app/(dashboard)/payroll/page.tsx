@@ -96,6 +96,7 @@ import {
 import { CTCStructureCalculator } from "@/components/payroll/CTCStructureCalculator";
 import { SalaryStructureRoster } from "@/components/payroll/SalaryStructureRoster";
 import { MinimumWagesMaster } from "@/components/payroll/MinimumWagesMaster";
+import { exportPayrollWithFormulas } from "@/lib/payroll-export-excel";
 
 const getInitials = (name: string) => {
     return name
@@ -397,55 +398,17 @@ export default function PayrollPage() {
     const totalFilteredDeductions = filteredLedger.reduce((sum, emp) => sum + (calculateProductionNet(emp).grossDeductions || 0), 0);
     const totalFilteredEmployees = filteredLedger.length;
 
-    const handleExportExcel = () => {
+    const handleExportExcel = async () => {
         const targetList = filteredLedger.length > 0 ? filteredLedger : ledger;
-        const rows = targetList.map(emp => {
-            const res = calculateProductionNet(emp);
-            const daysInMonth = Number(emp.dynamicDays) || 30;
-            const payable = res.payableDays;
-            return {
-                "Employee Code": emp.employeeCode,
-                "Employee Name": emp.name,
-                "Company": emp.company || "Apaar Logistics & Cold Supply Chain Pvt Ltd",
-                "Location": emp.location,
-                "Designation": emp.designation,
-                "Gross Salary": emp.fixedGross,
-                "Basic": res.basic,
-                "HRA": res.hra,
-                "Conveyance": res.conveyance,
-                "Medical Allowance": res.medicalAllowance,
-                "Special Allowance": res.specialAllowance,
-                "Performance Allowance": res.performanceAllowance,
-                "Other Allowance": res.other,
-                "Previous Month Arrears": emp.previousArrears,
-                "Bonus": emp.bonus,
-                "Incentive": emp.incentive,
-                "Gross Earnings": res.totalEarnings,
-                "Days In Month": daysInMonth,
-                "Payable Days": payable,
-                "Absent / LWP Days": res.effectiveAbsentDays,
-                "PF Applicable": emp.pfApplicable ? "Yes" : "No",
-                "PF Ceiling": emp.pfCeiling ? "Yes" : "No",
-                "ESIC Applicable": emp.esicApplicable ? "Yes" : "No",
-                "Provident Fund (PF)": res.pf,
-                "ESIC": res.esi,
-                "Professional Tax (PT)": res.pt,
-                "Advance/Loan EMI": emp.loanDeduction || 0,
-                "Other Deduction": emp.otherDeduction || 0,
-                "Gross Deductions": res.grossDeductions,
-                "Net Salary": res.net,
-                "PF Employer": res.pfEmployer,
-                "ESIC Employer": res.esiEmployer,
-                "Total Monthly CTC": res.totalMonthlyCTC,
-                "Annual CTC": res.annualCTC
-            };
-        });
-
-        const worksheet = XLSX.utils.json_to_sheet(rows);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Payroll Data");
-        const companyTag = selectedCompany !== "All Companies" ? `_${selectedCompany.replace(/[^a-zA-Z0-9]/g, '_')}` : "";
-        XLSX.writeFile(workbook, `Payroll_Export_${globalRules.cycle.replace(" ", "_")}${companyTag}.xlsx`);
+        try {
+            await exportPayrollWithFormulas({
+                targetEmployees: targetList,
+                cycleName: globalRules.cycle,
+                selectedCompany: selectedCompany,
+            });
+        } catch (err) {
+            console.error("Failed to export full calculation payroll excel:", err);
+        }
     };
 
     const totalPages = Math.ceil(filteredLedger.length / itemsPerPage);
