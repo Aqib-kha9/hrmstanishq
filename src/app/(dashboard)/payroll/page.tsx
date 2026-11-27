@@ -9,6 +9,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { salaryToWords } from "@/lib/amount-to-words";
+import { EnterprisePagination } from "@/components/ui/enterprise-pagination";
 import {
     Wallet,
     ArrowUpRight,
@@ -122,7 +123,7 @@ export default function PayrollPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const [loading, setLoading] = useState(true);
     const [cycleId, setCycleId] = useState<number | null>(null);
-    const itemsPerPage = 10;
+    const [itemsPerPage, setItemsPerPage] = useState<number>(10);
 
     const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
     const [disbursementStep, setDisbursementStep] = useState(1);
@@ -1088,36 +1089,19 @@ export default function PayrollPage() {
                             </TableBody>
                         </Table>
 
-                        {/* Pagination Controls */}
-                        {totalPages > 1 && (
-                            <div className="flex items-center justify-between mt-6 px-6 py-4 border-t border-slate-100 bg-slate-50/30">
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                    Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredLedger.length)} of {filteredLedger.length} Employees
-                                </p>
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                                        disabled={currentPage === 1}
-                                        className="h-8 w-8 rounded-lg border-slate-100 p-0 hover:bg-slate-50 disabled:opacity-40"
-                                    >
-                                        <ChevronLeft className="h-4 w-4 text-slate-600" />
-                                    </Button>
-                                    <span className="text-[10px] font-black text-slate-900 mx-2 uppercase tracking-widest">
-                                        Page {currentPage} of {totalPages}
-                                    </span>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                                        disabled={currentPage === totalPages}
-                                        className="h-8 w-8 rounded-lg border-slate-100 p-0 hover:bg-slate-50 disabled:opacity-40"
-                                    >
-                                        <ChevronRight className="h-4 w-4 text-slate-600" />
-                                    </Button>
-                                </div>
-                            </div>
+                        {/* Enterprise Pagination Controls */}
+                        {filteredLedger.length > 0 && (
+                            <EnterprisePagination
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                totalItems={filteredLedger.length}
+                                itemsPerPage={itemsPerPage}
+                                pageSizeOptions={[10, 25, 50, 100]}
+                                onPageChange={setCurrentPage}
+                                onPageSizeChange={setItemsPerPage}
+                                itemName="Employees"
+                                className="mt-6 rounded-b-2xl border-t border-slate-100"
+                            />
                         )}
                     </CardContent>
                 </Card>

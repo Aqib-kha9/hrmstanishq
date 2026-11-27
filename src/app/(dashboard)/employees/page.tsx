@@ -77,6 +77,7 @@ import {
 import { apiGet, apiPatch, apiDelete, apiPut, apiPost, getToken } from "@/lib/api-client";
 import { toFrontendEmployee, type BackendEmployee, type FrontendEmployee } from "@/lib/transform";
 import { BulkImportModal } from "@/components/BulkImportModal";
+import { EnterprisePagination } from "@/components/ui/enterprise-pagination";
 import * as XLSX from "xlsx";
 
 export default function EmployeesPage() {
@@ -244,19 +245,6 @@ export default function EmployeesPage() {
     const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
     const startIndex = (safeCurrentPage - 1) * itemsPerPage;
     const paginatedPersonnel = filteredPersonnel.slice(startIndex, startIndex + itemsPerPage);
-
-    const getPaginationRange = (current: number, total: number): (number | string)[] => {
-        if (total <= 7) {
-            return Array.from({ length: total }, (_, i) => i + 1);
-        }
-        if (current <= 3) {
-            return [1, 2, 3, 4, "...", total];
-        }
-        if (current >= total - 2) {
-            return [1, "...", total - 3, total - 2, total - 1, total];
-        }
-        return [1, "...", current - 1, current, current + 1, "...", total];
-    };
 
     const updateStatus = async (emp: FrontendEmployee, newStatus: 'active' | 'inactive' | 'resigned') => {
         try {
@@ -786,8 +774,8 @@ export default function EmployeesPage() {
                         </div>
                     ) : (
                         <>
-                            <div className="overflow-x-auto">
-                                <table className="w-full border-collapse min-w-[800px]">
+                            <div className="overflow-x-auto [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-200 hover:[&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-track]:bg-transparent">
+                                <table className="w-full border-collapse">
                                     <thead>
                                         <tr className="bg-slate-50/50 border-b border-slate-100">
                                             <th className="text-left py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest">Employee</th>
@@ -921,54 +909,17 @@ export default function EmployeesPage() {
                                 </table>
                             </div>
 
-                            {/* Pagination Controls */}
-                            <div className="bg-slate-50/50 px-8 py-4 border-t border-slate-100 flex items-center justify-between">
-                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                    Showing <span className="text-slate-900">{startIndex + 1}</span> to <span className="text-slate-900">{Math.min(startIndex + itemsPerPage, filteredPersonnel.length)}</span> of <span className="text-slate-900">{filteredPersonnel.length}</span> Employees
-                                </p>
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={safeCurrentPage <= 1}
-                                        onClick={() => setCurrentPage(Math.max(1, safeCurrentPage - 1))}
-                                        className="h-9 px-4 rounded-xl border-slate-200 font-black text-[9px] uppercase tracking-widest hover:bg-white disabled:opacity-30 transition-all"
-                                    >
-                                        Previous
-                                    </Button>
-                                    <div className="flex items-center gap-1">
-                                        {getPaginationRange(safeCurrentPage, totalPages).map((p, i) => (
-                                            typeof p === "number" ? (
-                                                <Button
-                                                    key={`page-${p}`}
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => setCurrentPage(p)}
-                                                    className={cn(
-                                                        "h-9 w-9 rounded-xl font-black text-[9px] transition-all",
-                                                        safeCurrentPage === p ? "bg-slate-900 text-white hover:bg-black shadow-sm" : "text-slate-400 hover:bg-white"
-                                                    )}
-                                                >
-                                                    {p}
-                                                </Button>
-                                            ) : (
-                                                <span key={`ellipsis-${i}`} className="h-9 w-6 flex items-center justify-center text-slate-400 font-black text-xs select-none">
-                                                    ...
-                                                </span>
-                                            )
-                                        ))}
-                                    </div>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={safeCurrentPage >= totalPages}
-                                        onClick={() => setCurrentPage(Math.min(totalPages, safeCurrentPage + 1))}
-                                        className="h-9 px-4 rounded-xl border-slate-200 font-black text-[9px] uppercase tracking-widest hover:bg-white disabled:opacity-30 transition-all"
-                                    >
-                                        Next
-                                    </Button>
-                                </div>
-                            </div>
+                            {/* Enterprise Pagination Controls */}
+                            <EnterprisePagination
+                                currentPage={safeCurrentPage}
+                                totalPages={totalPages}
+                                totalItems={filteredPersonnel.length}
+                                itemsPerPage={itemsPerPage}
+                                pageSizeOptions={[10, 25, 50, 100]}
+                                onPageChange={setCurrentPage}
+                                onPageSizeChange={setItemsPerPage}
+                                itemName="Employees"
+                            />
                         </>
                     )}
                 </div>
