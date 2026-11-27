@@ -286,7 +286,7 @@ function AppointmentAcceptanceContent() {
     }
 
     const fullReason = rejectRemarks.trim()
-      ? `${rejectReason} â€” Notes: ${rejectRemarks.trim()}`
+      ? `${rejectReason} — Notes: ${rejectRemarks.trim()}`
       : rejectReason;
 
     try {
@@ -381,7 +381,7 @@ function AppointmentAcceptanceContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-100 via-slate-50 to-slate-100 py-6 px-3 sm:px-6 lg:px-8">
-      {/* â”€â”€ TOP HEADER / BRANDING â”€â”€ */}
+      {/* ── TOP HEADER / BRANDING ── */}
       <header className="max-w-4xl mx-auto mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex items-center gap-3">
           <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-[#124479] to-[#0d3159] text-white flex items-center justify-center font-black text-sm tracking-wider shadow-sm">
@@ -396,7 +396,7 @@ function AppointmentAcceptanceContent() {
             </h1>
             <p className="text-xs text-slate-500 font-medium flex items-center gap-1.5 mt-0.5">
               <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-              Confidential Employment Document â€¢ Digital Signature Verified
+              Confidential Employment Document • Digital Signature Verified
             </p>
           </div>
         </div>
@@ -416,7 +416,7 @@ function AppointmentAcceptanceContent() {
         </div>
       </header>
 
-      {/* â”€â”€ STATUS BANNERS â”€â”€ */}
+      {/* ── STATUS BANNERS ── */}
       <div className="max-w-4xl mx-auto mb-6">
         {isAccepted && (
           <div className="bg-emerald-500 text-white p-4 sm:p-5 rounded-2xl shadow-lg border border-emerald-600 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -479,7 +479,7 @@ function AppointmentAcceptanceContent() {
         )}
       </div>
 
-      {/* â”€â”€ APPOINTMENT SUMMARY CARD â”€â”€ */}
+      {/* ── APPOINTMENT SUMMARY CARD ── */}
       <div className="max-w-4xl mx-auto mb-6">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
           <div className="p-3 bg-slate-50/70 rounded-xl">
@@ -497,10 +497,10 @@ function AppointmentAcceptanceContent() {
           <div className="p-3 bg-slate-50/70 rounded-xl">
             <span className="text-[10px] uppercase font-bold text-slate-600 block">Monthly Gross CTC</span>
             <span className="text-xs sm:text-sm font-black text-emerald-700 block mt-0.5">
-              â‚¹{Number(candidate.fixed_gross || 0).toLocaleString("en-IN")} <span className="text-[10px] text-slate-500 font-normal">/mo</span>
+              ₹{Number(candidate.fixed_gross || 0).toLocaleString("en-IN")} <span className="text-[10px] text-slate-500 font-normal">/mo</span>
             </span>
             <span className="text-[10px] text-slate-500 block">
-              â‚¹{(Number(candidate.fixed_gross || 0) * 12).toLocaleString("en-IN")} /yr
+              ₹{(Number(candidate.fixed_gross || 0) * 12).toLocaleString("en-IN")} /yr
             </span>
           </div>
 
@@ -514,7 +514,7 @@ function AppointmentAcceptanceContent() {
         </div>
       </div>
 
-      {/* â”€â”€ LETTER CONTENT VIEWER â”€â”€ */}
+      {/* ── LETTER CONTENT VIEWER ── */}
       <div className="max-w-4xl mx-auto mb-6">
         <Card className="border border-slate-200 shadow-md bg-white rounded-2xl overflow-hidden">
           <CardHeader className="bg-slate-50/70 border-b border-slate-200 py-3.5 px-6 flex flex-row items-center justify-between">
@@ -588,7 +588,7 @@ function AppointmentAcceptanceContent() {
         </Card>
       </div>
 
-      {/* â”€â”€ DIGITAL SIGNATURE & ACCEPTANCE PANEL (Only when Pending) â”€â”€ */}
+      {/* ── DIGITAL SIGNATURE & ACCEPTANCE PANEL (Only when Pending) ── */}
       {!isAccepted && !isRejected && (
         <div className="max-w-4xl mx-auto mb-10">
           <Card className="border-2 border-[#124479]/30 shadow-xl bg-white rounded-2xl overflow-hidden">
@@ -662,7 +662,7 @@ function AppointmentAcceptanceContent() {
                     />
                     {!hasDrawn && (
                       <div className="absolute inset-0 pointer-events-none flex items-center justify-center text-slate-300 text-xs italic">
-                        âœï¸ Draw your signature here
+                        ✍️ Draw your signature here
                       </div>
                     )}
                   </div>
@@ -809,7 +809,7 @@ function AppointmentAcceptanceContent() {
         </div>
       )}
 
-      {/* â”€â”€ DECLINE APPOINTMENT MODAL â”€â”€ */}
+      {/* ── DECLINE APPOINTMENT MODAL ── */}
       <Dialog open={rejectModalOpen} onOpenChange={setRejectModalOpen}>
         <DialogContent className="max-w-md bg-white rounded-2xl p-6 shadow-2xl border-none">
           <DialogHeader>

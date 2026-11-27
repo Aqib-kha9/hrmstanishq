@@ -212,7 +212,7 @@ export default function PayrollPage() {
         setCurrentPage(1);
     }, [searchQuery, selectedCompany, selectedBranch, statusFilter]);
 
-    // â”€â”€ Fetch data from backend â”€â”€
+    // ── Fetch data from backend ──
     const loadLedger = async () => {
         setLoading(true);
         try {
@@ -252,9 +252,9 @@ export default function PayrollPage() {
             const data = await apiGetPaginated<any>("/payroll/history", { limit: 3 });
             const items = (data.data || []).map((item: any) => ({
                 month: item.month,
-                totalPayout: `â‚¹${(item.totalPayout || 0).toLocaleString()}`,
+                totalPayout: `₹${(item.totalPayout || 0).toLocaleString()}`,
                 employees: item.staff || 0,
-                date: item.paid_on ? new Date(item.paid_on).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'â€”',
+                date: item.paid_on ? new Date(item.paid_on).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—',
             }));
             setPastCycles(items);
         } catch (e) {
@@ -470,11 +470,11 @@ export default function PayrollPage() {
             tempImg.onerror = (e) => reject(e);
         }).catch(() => null);
 
-        // â”€â”€ Top Accent Bar â”€â”€
+        // ── Top Accent Bar ──
         doc.setFillColor(...accentColor);
         doc.rect(0, 0, 210, 4, 'F');
 
-        // â”€â”€ Header â”€â”€
+        // ── Header ──
         if (img) {
             doc.addImage(img, 'PNG', 15, 6, 28, 12);
         } else {
@@ -501,7 +501,7 @@ export default function PayrollPage() {
         doc.setTextColor(...primaryColor);
         doc.text(`PAYSLIP FOR THE MONTH OF ${cycleText.toUpperCase()}`, 105, 30, { align: "center" });
 
-        // â”€â”€ Employee Profile (Clean Grid) â”€â”€
+        // ── Employee Profile (Clean Grid) ──
         let currentY = 38;
         doc.setFontSize(8);
         doc.setTextColor(...textColor);
@@ -539,7 +539,7 @@ export default function PayrollPage() {
 
         currentY += 8;
 
-        // â”€â”€ Salary Details Table (4 Columns) â”€â”€
+        // ── Salary Details Table (4 Columns) ──
         autoTable(doc, {
             startY: currentY,
             theme: 'grid',
@@ -566,7 +566,7 @@ export default function PayrollPage() {
 
         const finalY = (doc as any).lastAutoTable.finalY + 8;
 
-        // â”€â”€ Excel Data Summary Section (Net, PF Employer, ESIC Employer, CTC) â”€â”€
+        // ── Excel Data Summary Section (Net, PF Employer, ESIC Employer, CTC) ──
         doc.setFillColor(248, 250, 252);
         doc.setDrawColor(...lineColor);
         doc.rect(15, finalY, 180, 25, 'FD');
@@ -605,7 +605,7 @@ export default function PayrollPage() {
         doc.setFontSize(14);
         doc.text(`INR ${Number(pNet.totalMonthlyCTC).toLocaleString('en-IN', {minimumFractionDigits: 2})}`, 167.5, finalY + 18, { align: "center" });
 
-        // â”€â”€ Footer â”€â”€
+        // ── Footer ──
         doc.setFontSize(7);
         doc.setFont("helvetica", "italic");
         doc.setTextColor(...mutedColor);
@@ -629,10 +629,10 @@ export default function PayrollPage() {
                             <Wallet className="h-6 w-6 text-indigo-400 stroke-[2.5]" /> Salary Payments
                         </h1>
                         <div className="flex items-center gap-3 mt-4">
-                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.4em]">Payment Records â€¢ Salary Processing</p>
+                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.4em]">Payment Records • Salary Processing</p>
                             {elapsedDays && (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[8px] font-black uppercase tracking-widest border border-amber-200">
-                                    <Clock className="h-2.5 w-2.5" /> Pro-rated Â· Day {elapsedDays}
+                                    <Clock className="h-2.5 w-2.5" /> Pro-rated · Day {elapsedDays}
                                 </span>
                             )}
                         </div>
@@ -690,7 +690,7 @@ export default function PayrollPage() {
                     )}
                 </div>
 
-                {/* â”€â”€ TOP LEVEL NAVIGATION TABS â”€â”€ */}
+                {/* ── TOP LEVEL NAVIGATION TABS ── */}
                 <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-100/90 border border-slate-200 rounded-2xl w-fit shadow-xs">
                     <button
                         type="button"
@@ -839,7 +839,7 @@ export default function PayrollPage() {
                     <div className="p-4 rounded-2xl bg-white border border-slate-100 shadow-xs flex items-center justify-between">
                         <div>
                             <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Total Gross</p>
-                            <p className="text-xl font-black text-slate-900 mt-1">â‚¹{totalFilteredGross.toLocaleString()}</p>
+                            <p className="text-xl font-black text-slate-900 mt-1">₹{totalFilteredGross.toLocaleString()}</p>
                             <p className="text-[8px] font-bold text-slate-400 mt-0.5">Prorated Base</p>
                         </div>
                         <div className="h-10 w-10 rounded-xl bg-indigo-50 flex items-center justify-center">
@@ -849,7 +849,7 @@ export default function PayrollPage() {
                     <div className="p-4 rounded-2xl bg-white border border-slate-100 shadow-xs flex items-center justify-between">
                         <div>
                             <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Total Deductions</p>
-                            <p className="text-xl font-black text-rose-600 mt-1">â‚¹{totalFilteredDeductions.toLocaleString()}</p>
+                            <p className="text-xl font-black text-rose-600 mt-1">₹{totalFilteredDeductions.toLocaleString()}</p>
                             <p className="text-[8px] font-bold text-slate-400 mt-0.5">PF, ESI, PT & Loan</p>
                         </div>
                         <div className="h-10 w-10 rounded-xl bg-rose-50 flex items-center justify-center">
@@ -859,7 +859,7 @@ export default function PayrollPage() {
                     <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-100 shadow-xs flex items-center justify-between">
                         <div>
                             <p className="text-[9px] font-black uppercase tracking-widest text-emerald-800">Net Disbursement</p>
-                            <p className="text-xl font-black text-emerald-700 mt-1">â‚¹{totalFilteredNet.toLocaleString()}</p>
+                            <p className="text-xl font-black text-emerald-700 mt-1">₹{totalFilteredNet.toLocaleString()}</p>
                             <p className="text-[8px] font-bold text-emerald-600 mt-0.5">Ready for Payout</p>
                         </div>
                         <div className="h-10 w-10 rounded-xl bg-emerald-100 flex items-center justify-center">
@@ -963,13 +963,13 @@ export default function PayrollPage() {
                                             </TableCell>
                                             <TableCell className="text-xs font-black text-slate-900">
                                                 <div className="flex flex-col">
-                                                    <span>â‚¹{pNet.totalEarnings.toLocaleString()}</span>
-                                                    <span className="text-[7px] font-bold text-slate-400 uppercase tracking-widest">Base CTC: â‚¹{row.fixedGross.toLocaleString()}</span>
+                                                    <span>₹{pNet.totalEarnings.toLocaleString()}</span>
+                                                    <span className="text-[7px] font-bold text-slate-400 uppercase tracking-widest">Base CTC: ₹{row.fixedGross.toLocaleString()}</span>
                                                 </div>
                                             </TableCell>
                                             <TableCell className="text-[10px] font-bold text-slate-600">
                                                 <div className="flex flex-col gap-0.5">
-                                                    <span className="text-rose-500 font-black">â‚¹{pNet.grossDeductions.toLocaleString()}</span>
+                                                    <span className="text-rose-500 font-black">₹{pNet.grossDeductions.toLocaleString()}</span>
                                                     <span className="text-[7px] uppercase tracking-widest text-slate-400">Total Deducted</span>
                                                 </div>
                                             </TableCell>
@@ -980,7 +980,7 @@ export default function PayrollPage() {
                                                     {!row.pfApplicable && !row.esicApplicable && <Badge className="bg-slate-50 text-slate-400 border-none font-black text-[7px] h-5 px-2 rounded-md uppercase tracking-widest">NONE</Badge>}
                                                 </div>
                                             </TableCell>
-                                            <TableCell className="text-xs font-black text-emerald-600 italic">â‚¹{pNet.net.toLocaleString()}</TableCell>
+                                            <TableCell className="text-xs font-black text-emerald-600 italic">₹{pNet.net.toLocaleString()}</TableCell>
                                             <TableCell>
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>

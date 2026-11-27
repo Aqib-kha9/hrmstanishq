@@ -20,7 +20,7 @@ import {
 } from "@/lib/api-client";
 
 // ---------------------------------------------------------------------------
-// Shared User type â€” mirrors RoleContext.User exactly.
+// Shared User type — mirrors RoleContext.User exactly.
 // Defined here (not imported) to avoid circular dependency since
 // RoleContext imports useAuth from here.
 // ---------------------------------------------------------------------------
@@ -124,7 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         setState({ user: mappedUser, isAuthenticated: true, isLoading: false });
       } catch {
-        // Token invalid/expired â€” clear and proceed as unauthenticated
+        // Token invalid/expired — clear and proceed as unauthenticated
         clearAuth();
         setState({ user: null, isAuthenticated: false, isLoading: false });
       }
@@ -134,7 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // --------------------------------------------------
-  // login â€” calls the backend, stores tokens, fetches /me
+  // login — calls the backend, stores tokens, fetches /me
   // --------------------------------------------------
   const login = useCallback(async (email: string, password: string) => {
     // Use bare fetch to avoid the interceptor (which needs auth to exist)
@@ -181,7 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // --------------------------------------------------
-  // logout â€” tells backend, clears local state
+  // logout — tells backend, clears local state
   // --------------------------------------------------
   const logout = useCallback(async () => {
     const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://hrmsbackend-z7do.onrender.com/api/v1";
@@ -204,7 +204,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // --------------------------------------------------
-  // refreshUser â€” re-fetch /me (e.g. after profile update)
+  // refreshUser — re-fetch /me (e.g. after profile update)
   // --------------------------------------------------
   const refreshUser = useCallback(async () => {
     try {

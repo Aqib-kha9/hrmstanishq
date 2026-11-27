@@ -287,7 +287,7 @@ function OfferAcceptanceContent() {
     }
 
     const fullReason = rejectRemarks.trim()
-      ? `${rejectReason} â€” Notes: ${rejectRemarks.trim()}`
+      ? `${rejectReason} — Notes: ${rejectRemarks.trim()}`
       : rejectReason;
 
     try {
@@ -385,7 +385,7 @@ function OfferAcceptanceContent() {
     <div className="min-h-screen bg-gradient-to-b from-slate-100 via-slate-50 to-slate-100 py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto space-y-6">
         
-        {/* â”€â”€ TOP EXECUTIVE BAR â”€â”€ */}
+        {/* ── TOP EXECUTIVE BAR ── */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <div className="h-12 w-12 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black text-lg shadow-md shadow-blue-500/20">
@@ -423,7 +423,7 @@ function OfferAcceptanceContent() {
           </div>
         </div>
 
-        {/* â”€â”€ STATUS BANNERS â”€â”€ */}
+        {/* ── STATUS BANNERS ── */}
         {isAccepted && (
           <div className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-2xl p-6 shadow-lg shadow-emerald-500/15 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-start gap-4">
@@ -481,7 +481,7 @@ function OfferAcceptanceContent() {
           </div>
         )}
 
-        {/* â”€â”€ CANDIDATE & POSITION SUMMARY CARD â”€â”€ */}
+        {/* ── CANDIDATE & POSITION SUMMARY CARD ── */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5 sm:p-6 grid grid-cols-2 sm:grid-cols-4 gap-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
           <div className="pt-2 sm:pt-0 sm:pr-4">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Candidate Name</span>
@@ -498,11 +498,11 @@ function OfferAcceptanceContent() {
           <div className="pt-2 sm:pt-0 sm:px-4">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Monthly Gross CTC</span>
             <p className="text-sm font-extrabold text-emerald-700 mt-0.5">
-              â‚¹{Number(candidate.fixed_gross || 0).toLocaleString("en-IN")}
+              ₹{Number(candidate.fixed_gross || 0).toLocaleString("en-IN")}
               <span className="text-[10px] font-normal text-slate-400"> /mo</span>
             </p>
             <p className="text-[10px] text-slate-500">
-              â‚¹{(Number(candidate.fixed_gross || 0) * 12).toLocaleString("en-IN")} /yr
+              ₹{(Number(candidate.fixed_gross || 0) * 12).toLocaleString("en-IN")} /yr
             </p>
           </div>
 
@@ -515,7 +515,7 @@ function OfferAcceptanceContent() {
           </div>
         </div>
 
-        {/* â”€â”€ LETTER DOCUMENT VIEWER â”€â”€ */}
+        {/* ── LETTER DOCUMENT VIEWER ── */}
         <div className="bg-white rounded-2xl shadow-md border border-slate-200/90 overflow-hidden">
           <div className="bg-slate-900 px-6 py-4 flex items-center justify-between text-white">
             <div className="flex items-center gap-2.5">
@@ -583,7 +583,7 @@ function OfferAcceptanceContent() {
           </div>
         </div>
 
-        {/* â”€â”€ CANDIDATE ACCEPTANCE / SIGNING SECTION â”€â”€ */}
+        {/* ── CANDIDATE ACCEPTANCE / SIGNING SECTION ── */}
         {isPending && (
           <Card className="border-2 border-blue-500/50 shadow-xl bg-white rounded-2xl overflow-hidden">
             <CardHeader className="bg-gradient-to-r from-blue-50 via-indigo-50/50 to-white border-b border-blue-100 p-6">
@@ -620,7 +620,7 @@ function OfferAcceptanceContent() {
                         : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                     }`}
                   >
-                    âœï¸ Draw Signature
+                    ✍️ Draw Signature
                   </button>
                   <button
                     type="button"
@@ -631,7 +631,7 @@ function OfferAcceptanceContent() {
                         : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                     }`}
                   >
-                    âŒ¨ï¸ Type Signature
+                    ⌨️ Type Signature
                   </button>
                 </div>
 
@@ -808,7 +808,7 @@ function OfferAcceptanceContent() {
 
       </div>
 
-      {/* â”€â”€ DECLINE OFFER MODAL â”€â”€ */}
+      {/* ── DECLINE OFFER MODAL ── */}
       <Dialog open={rejectModalOpen} onOpenChange={setRejectModalOpen}>
         <DialogContent className="max-w-md bg-white rounded-2xl p-6 shadow-2xl border-none">
           <DialogHeader>

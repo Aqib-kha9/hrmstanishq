@@ -232,7 +232,7 @@ export function GlobalRulesSheet({
                             </SheetTitle>
                             {selectedEmployee ? (
                                 <SheetDescription className="text-xs text-slate-500 font-normal mt-0.5">
-                                    {selectedEmployee.employeeCode} â€¢ {selectedEmployee.designation || 'Staff'} â€¢ {selectedEmployee.department || 'Operations'} â€¢ {selectedEmployee.company || 'Company Entity'}
+                                    {selectedEmployee.employeeCode} • {selectedEmployee.designation || 'Staff'} • {selectedEmployee.department || 'Operations'} • {selectedEmployee.company || 'Company Entity'}
                                 </SheetDescription>
                             ) : (
                                 <SheetDescription className="text-xs text-slate-500 font-normal mt-0.5">
@@ -295,8 +295,8 @@ export function GlobalRulesSheet({
                             <div className="space-y-4">
                                 <div className="space-y-1.5">
                                     <div className="flex items-center justify-between">
-                                        <Label className="text-xs font-semibold text-slate-800">Monthly Fixed CTC / Gross (â‚¹)</Label>
-                                        <span className="text-[10px] text-slate-400">Annual: â‚¹{(fixedGross * 12).toLocaleString()}</span>
+                                        <Label className="text-xs font-semibold text-slate-800">Monthly Fixed CTC / Gross (₹)</Label>
+                                        <span className="text-[10px] text-slate-400">Annual: ₹{(fixedGross * 12).toLocaleString()}</span>
                                     </div>
                                     <Input
                                         type="number"
@@ -314,20 +314,20 @@ export function GlobalRulesSheet({
                                 <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
                                     <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
                                         <span>Standard Earnings Breakdown</span>
-                                        <span className="text-[11px] text-indigo-600 font-medium">Monthly CTC: â‚¹{fixedGross.toLocaleString()}</span>
+                                        <span className="text-[11px] text-indigo-600 font-medium">Monthly CTC: ₹{fixedGross.toLocaleString()}</span>
                                     </div>
                                     <div className="grid grid-cols-3 gap-3 pt-1 text-xs">
                                         <div className="p-2.5 rounded-lg bg-white border border-slate-100">
                                             <span className="text-[10px] text-slate-400 block uppercase font-medium">Basic (50%)</span>
-                                            <span className="font-bold text-slate-800 text-sm">â‚¹{calc.basicSalary.toLocaleString()}</span>
+                                            <span className="font-bold text-slate-800 text-sm">₹{calc.basicSalary.toLocaleString()}</span>
                                         </div>
                                         <div className="p-2.5 rounded-lg bg-white border border-slate-100">
                                             <span className="text-[10px] text-slate-400 block uppercase font-medium">HRA ({hraApplicable ? "40%" : "0%"})</span>
-                                            <span className="font-bold text-slate-800 text-sm">â‚¹{calc.hra.toLocaleString()}</span>
+                                            <span className="font-bold text-slate-800 text-sm">₹{calc.hra.toLocaleString()}</span>
                                         </div>
                                         <div className="p-2.5 rounded-lg bg-white border border-slate-100">
                                             <span className="text-[10px] text-slate-400 block uppercase font-medium">Other / Special</span>
-                                            <span className="font-bold text-slate-800 text-sm">â‚¹{calc.otherAllowance.toLocaleString()}</span>
+                                            <span className="font-bold text-slate-800 text-sm">₹{calc.otherAllowance.toLocaleString()}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -355,7 +355,7 @@ export function GlobalRulesSheet({
                                         <div className="flex items-center justify-between">
                                             <div>
                                                 <span className="text-xs font-semibold text-slate-800 block">Provident Fund (PF)</span>
-                                                <span className="text-[11px] text-slate-500">12% on Basic (deduction â‚¹{calc.pf.toLocaleString()})</span>
+                                                <span className="text-[11px] text-slate-500">12% on Basic (deduction ₹{calc.pf.toLocaleString()})</span>
                                             </div>
                                             <input
                                                 type="checkbox"
@@ -368,13 +368,13 @@ export function GlobalRulesSheet({
                                         {pfApplicable && (
                                             <div className="pt-2 border-t border-slate-100 grid grid-cols-2 gap-3 text-xs">
                                                 <div>
-                                                    <Label className="text-[10px] font-semibold text-slate-500 uppercase block mb-1">Cap Basic at â‚¹15,000</Label>
+                                                    <Label className="text-[10px] font-semibold text-slate-500 uppercase block mb-1">Cap Basic at ₹15,000</Label>
                                                     <select
                                                         value={pfCeiling ? "yes" : "no"}
                                                         onChange={(e) => setPfCeiling(e.target.value === "yes")}
                                                         className="w-full h-9 rounded-lg border border-slate-200 px-2.5 text-xs bg-slate-50 font-medium"
                                                     >
-                                                        <option value="yes">Yes (Statutory â‚¹15k Cap)</option>
+                                                        <option value="yes">Yes (Statutory ₹15k Cap)</option>
                                                         <option value="no">No (Uncapped 12% on Full Basic)</option>
                                                     </select>
                                                 </div>
@@ -398,7 +398,7 @@ export function GlobalRulesSheet({
                                     <label className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer transition-all">
                                         <div>
                                             <span className="text-xs font-semibold text-slate-800 block">ESIC Applicable</span>
-                                            <span className="text-[11px] text-slate-500">0.75% Employee + 3.25% Employer (deduction â‚¹{calc.esi.toLocaleString()})</span>
+                                            <span className="text-[11px] text-slate-500">0.75% Employee + 3.25% Employer (deduction ₹{calc.esi.toLocaleString()})</span>
                                         </div>
                                         <input
                                             type="checkbox"
@@ -412,7 +412,7 @@ export function GlobalRulesSheet({
                                     <label className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer transition-all">
                                         <div>
                                             <span className="text-xs font-semibold text-slate-800 block">Professional Tax (PT)</span>
-                                            <span className="text-[11px] text-slate-500">Standard state PT slab deduction (â‚¹{calc.pt})</span>
+                                            <span className="text-[11px] text-slate-500">Standard state PT slab deduction (₹{calc.pt})</span>
                                         </div>
                                         <input
                                             type="checkbox"
@@ -504,7 +504,7 @@ export function GlobalRulesSheet({
                             <div className="space-y-4">
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs font-semibold text-slate-700">Previous Arrears (â‚¹)</Label>
+                                        <Label className="text-xs font-semibold text-slate-700">Previous Arrears (₹)</Label>
                                         <Input
                                             type="number"
                                             value={previousArrears || ""}
@@ -515,7 +515,7 @@ export function GlobalRulesSheet({
                                         <p className="text-[10px] text-slate-400">One-time addition</p>
                                     </div>
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs font-semibold text-slate-700">Bonus (â‚¹)</Label>
+                                        <Label className="text-xs font-semibold text-slate-700">Bonus (₹)</Label>
                                         <Input
                                             type="number"
                                             value={bonus || ""}
@@ -528,7 +528,7 @@ export function GlobalRulesSheet({
 
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs font-semibold text-slate-700">Incentive / Performance (â‚¹)</Label>
+                                        <Label className="text-xs font-semibold text-slate-700">Incentive / Performance (₹)</Label>
                                         <Input
                                             type="number"
                                             value={incentive || ""}
@@ -538,7 +538,7 @@ export function GlobalRulesSheet({
                                         />
                                     </div>
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs font-semibold text-slate-700">Other Deductions / Fine (â‚¹)</Label>
+                                        <Label className="text-xs font-semibold text-slate-700">Other Deductions / Fine (₹)</Label>
                                         <Input
                                             type="number"
                                             value={otherDeduction || ""}
@@ -553,7 +553,7 @@ export function GlobalRulesSheet({
                                 <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
                                     <div className="flex items-center justify-between text-xs">
                                         <span className="font-semibold text-slate-700">Loan / Advance EMI:</span>
-                                        <span className="font-bold text-slate-900">â‚¹{(selectedEmployee.loanDeduction || 0).toLocaleString()}</span>
+                                        <span className="font-bold text-slate-900">₹{(selectedEmployee.loanDeduction || 0).toLocaleString()}</span>
                                     </div>
                                     <p className="text-[11px] text-slate-400">Automatically synced from active loan schedule.</p>
                                 </div>
@@ -600,11 +600,11 @@ export function GlobalRulesSheet({
                                 </div>
                                 <div className="border-r border-slate-800 px-2">
                                     <span className="text-[10px] text-slate-400 uppercase font-semibold block">Gross Payable</span>
-                                    <span className="text-sm font-bold text-white">â‚¹{calc.proratedGross.toLocaleString()}</span>
+                                    <span className="text-sm font-bold text-white">₹{calc.proratedGross.toLocaleString()}</span>
                                 </div>
                                 <div className="pl-2">
                                     <span className="text-[10px] text-emerald-400 uppercase font-semibold block">Net In-Hand</span>
-                                    <span className="text-base font-bold text-emerald-400">â‚¹{calc.net.toLocaleString()}</span>
+                                    <span className="text-base font-bold text-emerald-400">₹{calc.net.toLocaleString()}</span>
                                 </div>
                             </div>
                         </div>
@@ -673,12 +673,12 @@ export function DisbursementDialog({
                             <div className="grid grid-cols-2 gap-6 text-left relative z-10">
                                 <div>
                                     <p className="text-[8px] font-black uppercase text-slate-400 tracking-[0.2em] mb-2">Total Gross</p>
-                                    <p className="text-xl font-black italic text-slate-900 tracking-tighter">â‚¹{ledger.reduce((acc: any, curr: any) => acc + calculateProductionNet(curr).totalEarnings, 0).toLocaleString()}</p>
+                                    <p className="text-xl font-black italic text-slate-900 tracking-tighter">₹{ledger.reduce((acc: any, curr: any) => acc + calculateProductionNet(curr).totalEarnings, 0).toLocaleString()}</p>
                                 </div>
                                 <div className="text-right border-l border-slate-200 pl-6">
                                     <p className="text-[8px] font-black uppercase text-rose-400 tracking-[0.2em] mb-2">Deductions</p>
                                     <p className="text-xl font-black italic text-rose-500 tracking-tighter">
-                                        -â‚¹{ledger.reduce((acc: any, curr: any) => {
+                                        -₹{ledger.reduce((acc: any, curr: any) => {
                                             const res = calculateProductionNet(curr);
                                             return acc + res.pf + res.pt + res.esi;
                                         }, 0).toLocaleString()}
@@ -687,7 +687,7 @@ export function DisbursementDialog({
                             </div>
                             <div className="mt-8 pt-8 border-t border-slate-200">
                                 <p className="text-[9px] font-black uppercase text-emerald-600 tracking-[0.3em] mb-2">Net Funds to Disburse</p>
-                                <h4 className="text-4xl font-black italic tracking-tighter text-slate-900">â‚¹{ledger.reduce((acc: any, curr: any) => acc + calculateProductionNet(curr).net, 0).toLocaleString()}</h4>
+                                <h4 className="text-4xl font-black italic tracking-tighter text-slate-900">₹{ledger.reduce((acc: any, curr: any) => acc + calculateProductionNet(curr).net, 0).toLocaleString()}</h4>
                             </div>
                         </div>
 
@@ -1350,7 +1350,7 @@ export function EmployeeHistoryDialog({
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[1100px] w-full max-h-[94vh] h-[94vh] border-none shadow-2xl rounded-3xl p-0 overflow-hidden flex flex-col bg-slate-50">
                 
-                {/* â”€â”€ 1. Compact SaaS Header Bar (Height ~64px) â”€â”€ */}
+                {/* ── 1. Compact SaaS Header Bar (Height ~64px) ── */}
                 <div className="bg-slate-900 px-6 py-3 text-white shrink-0 flex items-center justify-between gap-4 border-b border-white/5">
                     {activeTab === "location_roster" ? (
                         <div className="flex items-center gap-3 min-w-0">
@@ -1367,7 +1367,7 @@ export function EmployeeHistoryDialog({
                                     </span>
                                 </div>
                                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest truncate">
-                                    Location Salary Ledger â€¢ Total Fixed CTC: â‚¹{locationStats.totalFixedGross.toLocaleString()} â€¢ Net Disbursed: â‚¹{locationStats.totalNet.toLocaleString()}
+                                    Location Salary Ledger • Total Fixed CTC: ₹{locationStats.totalFixedGross.toLocaleString()} • Net Disbursed: ₹{locationStats.totalNet.toLocaleString()}
                                 </p>
                             </div>
                         </div>
@@ -1395,7 +1395,7 @@ export function EmployeeHistoryDialog({
                                     </button>
                                 </div>
                                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest truncate">
-                                    {currentEmp?.company || "Company"} â€¢ {currentEmp?.designation || "Staff"} â€¢ {currentEmp?.department || "General"}
+                                    {currentEmp?.company || "Company"} • {currentEmp?.designation || "Staff"} • {currentEmp?.department || "General"}
                                 </p>
                             </div>
                         </div>
@@ -1533,13 +1533,13 @@ export function EmployeeHistoryDialog({
                                                                             </span>
                                                                         </div>
                                                                         <p className="text-[8px] text-slate-400 truncate">
-                                                                            {emp.designation || "Staff"} â€¢ {emp.location || emp.office?.name || "General"}
+                                                                            {emp.designation || "Staff"} • {emp.location || emp.office?.name || "General"}
                                                                         </p>
                                                                     </div>
                                                                 </div>
                                                                 <div className="text-right shrink-0 pl-2">
                                                                     <span className="text-[9px] font-black text-[#D9F99D] block">
-                                                                        â‚¹{Number(c.fixedGross || emp.fixedGross || emp.fixed_gross || 0).toLocaleString()}
+                                                                        ₹{Number(c.fixedGross || emp.fixedGross || emp.fixed_gross || 0).toLocaleString()}
                                                                     </span>
                                                                     {isSelected && <Check className="h-3 w-3 text-indigo-400 ml-auto mt-0.5" />}
                                                                 </div>
@@ -1564,7 +1564,7 @@ export function EmployeeHistoryDialog({
                     </div>
                 </div>
 
-                {/* â”€â”€ 2. Unified Quick Metric Strip (Height ~44px) â”€â”€ */}
+                {/* ── 2. Unified Quick Metric Strip (Height ~44px) ── */}
                 <div className="bg-slate-800 text-white px-6 py-2 shrink-0 border-b border-slate-700/60 flex items-center justify-between gap-3 text-[10px] overflow-x-auto">
                     {activeTab === "location_roster" ? (
                         <>
@@ -1576,17 +1576,17 @@ export function EmployeeHistoryDialog({
                                 <div className="h-6 w-px bg-slate-700" />
                                 <div>
                                     <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Fixed Payroll</span>
-                                    <span className="font-bold text-slate-200">â‚¹{locationStats.totalFixedGross.toLocaleString()}</span>
+                                    <span className="font-bold text-slate-200">₹{locationStats.totalFixedGross.toLocaleString()}</span>
                                 </div>
                                 <div className="h-6 w-px bg-slate-700" />
                                 <div>
                                     <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Earned Gross</span>
-                                    <span className="font-bold text-emerald-300">â‚¹{locationStats.totalEarnedGross.toLocaleString()}</span>
+                                    <span className="font-bold text-emerald-300">₹{locationStats.totalEarnedGross.toLocaleString()}</span>
                                 </div>
                                 <div className="h-6 w-px bg-slate-700" />
                                 <div>
                                     <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Total Deductions</span>
-                                    <span className="font-bold text-rose-300">â‚¹{locationStats.totalDeductions.toLocaleString()}</span>
+                                    <span className="font-bold text-rose-300">₹{locationStats.totalDeductions.toLocaleString()}</span>
                                 </div>
                             </div>
 
@@ -1594,7 +1594,7 @@ export function EmployeeHistoryDialog({
                                 <div>
                                     <span className="text-[8px] uppercase tracking-wider text-emerald-400 font-bold block">Total Net Disbursed</span>
                                     <span className="font-black italic text-emerald-300 text-sm">
-                                        â‚¹{locationStats.totalNet.toLocaleString()}
+                                        ₹{locationStats.totalNet.toLocaleString()}
                                     </span>
                                 </div>
                                 <div className="h-6 w-px bg-slate-700" />
@@ -1608,7 +1608,7 @@ export function EmployeeHistoryDialog({
                                 <div>
                                     <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Presence vs Absent</span>
                                     <span className="font-bold text-slate-200">
-                                        <span className="text-emerald-400">{locationStats.totalPresentDays}P</span> Â· <span className="text-rose-400">{locationStats.totalAbsentDays}A</span>
+                                        <span className="text-emerald-400">{locationStats.totalPresentDays}P</span> · <span className="text-rose-400">{locationStats.totalAbsentDays}A</span>
                                     </span>
                                 </div>
                             </div>
@@ -1618,22 +1618,22 @@ export function EmployeeHistoryDialog({
                             <div className="flex items-center gap-4 shrink-0">
                                 <div>
                                     <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Fixed Gross</span>
-                                    <span className="font-black italic text-white">â‚¹{fixedGross.toLocaleString()}</span>
+                                    <span className="font-black italic text-white">₹{fixedGross.toLocaleString()}</span>
                                 </div>
                                 <div className="h-6 w-px bg-slate-700" />
                                 <div>
                                     <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Daily Rate</span>
-                                    <span className="font-bold text-slate-200">â‚¹{dailyRate.toLocaleString()}<span className="text-[8px] text-slate-400 font-normal">/d</span></span>
+                                    <span className="font-bold text-slate-200">₹{dailyRate.toLocaleString()}<span className="text-[8px] text-slate-400 font-normal">/d</span></span>
                                 </div>
                                 <div className="h-6 w-px bg-slate-700" />
                                 <div>
                                     <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Hourly Rate</span>
-                                    <span className="font-bold text-indigo-300">â‚¹{hourlyRate.toLocaleString()}<span className="text-[8px] text-slate-400 font-normal">/h</span></span>
+                                    <span className="font-bold text-indigo-300">₹{hourlyRate.toLocaleString()}<span className="text-[8px] text-slate-400 font-normal">/h</span></span>
                                 </div>
                                 <div className="h-6 w-px bg-slate-700" />
                                 <div>
                                     <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Shift & Off</span>
-                                    <span className="font-bold text-amber-300">{currentEmp?.shift_preset || "09:30-18:30"} â€¢ {Array.isArray(currentEmp?.weekly_off_days) ? currentEmp.weekly_off_days.join(",") : (currentEmp?.weekly_off_days || "Sun")}</span>
+                                    <span className="font-bold text-amber-300">{currentEmp?.shift_preset || "09:30-18:30"} • {Array.isArray(currentEmp?.weekly_off_days) ? currentEmp.weekly_off_days.join(",") : (currentEmp?.weekly_off_days || "Sun")}</span>
                                 </div>
                             </div>
 
@@ -1641,7 +1641,7 @@ export function EmployeeHistoryDialog({
                                 <div>
                                     <span className="text-[8px] uppercase tracking-wider text-emerald-400 font-bold block">Period Gross Earned</span>
                                     <span className="font-black italic text-emerald-300 text-sm">
-                                        â‚¹{periodAnalysis?.periodGrossEarned?.toLocaleString() || "0"}
+                                        ₹{periodAnalysis?.periodGrossEarned?.toLocaleString() || "0"}
                                     </span>
                                 </div>
                                 <div className="h-6 w-px bg-slate-700" />
@@ -1655,7 +1655,7 @@ export function EmployeeHistoryDialog({
                                 <div>
                                     <span className="text-[8px] uppercase tracking-wider text-slate-400 font-bold block">Attendance Breakdown</span>
                                     <span className="font-bold text-slate-200">
-                                        <span className="text-emerald-400">{periodAnalysis?.presentDays || 0}P</span> Â· <span className="text-blue-300">{periodAnalysis?.weeklyOffDays || 0}Off</span> Â· <span className="text-amber-300">{periodAnalysis?.halfDays || 0}H</span> Â· <span className="text-rose-400">{periodAnalysis?.absentDays || 0}A</span>
+                                        <span className="text-emerald-400">{periodAnalysis?.presentDays || 0}P</span> · <span className="text-blue-300">{periodAnalysis?.weeklyOffDays || 0}Off</span> · <span className="text-amber-300">{periodAnalysis?.halfDays || 0}H</span> · <span className="text-rose-400">{periodAnalysis?.absentDays || 0}A</span>
                                     </span>
                                 </div>
                             </div>
@@ -1663,7 +1663,7 @@ export function EmployeeHistoryDialog({
                     )}
                 </div>
 
-                {/* â”€â”€ 3. Unified Filter Controls Bar (Monthly Wise / Rolling / Custom / Location Roster) â”€â”€ */}
+                {/* ── 3. Unified Filter Controls Bar (Monthly Wise / Rolling / Custom / Location Roster) ── */}
                 <div className="bg-white px-6 py-2.5 border-b border-slate-200/80 shrink-0 flex flex-wrap items-center justify-between gap-3 shadow-xs">
                     {activeTab === "location_roster" ? (
                         <div className="flex items-center justify-between w-full gap-3 flex-wrap">
@@ -1893,7 +1893,7 @@ export function EmployeeHistoryDialog({
                     )}
                 </div>
 
-                {/* â”€â”€ 4. View Tabs Bar (Height ~38px) â”€â”€ */}
+                {/* ── 4. View Tabs Bar (Height ~38px) ── */}
                 <div className="px-6 pt-1.5 bg-white shrink-0 border-b border-slate-200/60">
                     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                         <TabsList className="bg-slate-100 p-0.5 rounded-xl h-8 w-full justify-start gap-1 overflow-x-auto">
@@ -1936,7 +1936,7 @@ export function EmployeeHistoryDialog({
                     </Tabs>
                 </div>
 
-                {/* â”€â”€ 5. Full-Height Scrollable Content Body (Spacious & Clean) â”€â”€ */}
+                {/* ── 5. Full-Height Scrollable Content Body (Spacious & Clean) ── */}
                 <div className="flex-1 min-h-0 overflow-y-auto p-5">
                     {loading ? (
                         <div className="flex flex-col items-center justify-center py-24 text-slate-400 gap-3">
@@ -1946,7 +1946,7 @@ export function EmployeeHistoryDialog({
                             </p>
                         </div>
                     ) : activeTab === "location_roster" ? (
-                        /* â”€â”€ Tab 0: Location Staff Salary Sheet (All Employees of Location) â”€â”€ */
+                        /* ── Tab 0: Location Staff Salary Sheet (All Employees of Location) ── */
                         <div className="space-y-4">
                             {/* Location Header Banner with Branch Switcher Chips */}
                             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
@@ -1961,7 +1961,7 @@ export function EmployeeHistoryDialog({
                                         </span>
                                     </div>
                                     <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1">
-                                        Consolidated branch payroll ledger â€¢ Cycle: {selectedMonth} {selectedYear}
+                                        Consolidated branch payroll ledger • Cycle: {selectedMonth} {selectedYear}
                                     </p>
                                 </div>
 
@@ -1979,7 +1979,7 @@ export function EmployeeHistoryDialog({
                                                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                                             )}
                                         >
-                                            {loc.name.split("â€”").pop()?.trim() || loc.name} ({loc.count})
+                                            {loc.name.split("—").pop()?.trim() || loc.name} ({loc.count})
                                         </button>
                                     ))}
                                 </div>
@@ -2036,7 +2036,7 @@ export function EmployeeHistoryDialog({
                                                                         </span>
                                                                     </div>
                                                                     <p className="text-[8px] text-slate-400 font-bold uppercase truncate">
-                                                                        {emp.designation || "Staff"} â€¢ {emp.department || "General"}
+                                                                        {emp.designation || "Staff"} • {emp.department || "General"}
                                                                     </p>
                                                                 </div>
                                                             </div>
@@ -2048,7 +2048,7 @@ export function EmployeeHistoryDialog({
                                                             </span>
                                                         </td>
                                                         <td className="py-2.5 px-3 text-right font-black italic text-slate-800">
-                                                            â‚¹{Number(c.fixedGross || emp.fixedGross || 0).toLocaleString()}
+                                                            ₹{Number(c.fixedGross || emp.fixedGross || 0).toLocaleString()}
                                                         </td>
                                                         <td className="py-2.5 px-3 text-center">
                                                             <span className="bg-indigo-50 text-indigo-800 font-black px-2 py-0.5 rounded-md border border-indigo-100 text-[9px]">
@@ -2066,13 +2066,13 @@ export function EmployeeHistoryDialog({
                                                             </div>
                                                         </td>
                                                         <td className="py-2.5 px-3 text-right font-black italic text-slate-800">
-                                                            â‚¹{Number(c.totalEarnings || emp.totalEarnings || 0).toLocaleString()}
+                                                            ₹{Number(c.totalEarnings || emp.totalEarnings || 0).toLocaleString()}
                                                         </td>
                                                         <td className="py-2.5 px-3 text-right font-bold text-rose-600">
-                                                            â‚¹{Number(c.grossDeductions || emp.grossDeductions || 0).toLocaleString()}
+                                                            ₹{Number(c.grossDeductions || emp.grossDeductions || 0).toLocaleString()}
                                                         </td>
                                                         <td className="py-2.5 px-4 text-right font-black italic text-emerald-700 text-[11px]">
-                                                            â‚¹{Number(c.net || emp.net || 0).toLocaleString()}
+                                                            ₹{Number(c.net || emp.net || 0).toLocaleString()}
                                                         </td>
                                                         <td className="py-2.5 px-3 text-center">
                                                             <Badge className={cn(
@@ -2115,7 +2115,7 @@ export function EmployeeHistoryDialog({
                             )}
                         </div>
                     ) : activeTab === "monthly_summary" ? (
-                        /* â”€â”€ Tab 1: Month-Wise Summary â”€â”€ */
+                        /* ── Tab 1: Month-Wise Summary ── */
                         <div className="space-y-4">
                             <div className="flex items-center justify-between">
                                 <div>
@@ -2194,10 +2194,10 @@ export function EmployeeHistoryDialog({
                                                             </span>
                                                         </td>
                                                         <td className="py-2.5 px-4 text-right font-black italic text-slate-800">
-                                                            â‚¹{mb.grossEarned?.toLocaleString()}
+                                                            ₹{mb.grossEarned?.toLocaleString()}
                                                         </td>
                                                         <td className="py-2.5 px-4 text-right font-black italic text-emerald-700">
-                                                            {mb.netPay !== undefined ? `â‚¹${Number(mb.netPay).toLocaleString()}` : `â‚¹${mb.grossEarned?.toLocaleString()}`}
+                                                            {mb.netPay !== undefined ? `₹${Number(mb.netPay).toLocaleString()}` : `₹${mb.grossEarned?.toLocaleString()}`}
                                                         </td>
                                                         <td className="py-2.5 px-3 text-center">
                                                             <Badge className={cn(
@@ -2246,7 +2246,7 @@ export function EmployeeHistoryDialog({
                             )}
                         </div>
                     ) : activeTab === "timeline" ? (
-                        /* â”€â”€ Tab 2: Day-Wise Salary Log â”€â”€ */
+                        /* ── Tab 2: Day-Wise Salary Log ── */
                         <div className="space-y-3">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -2333,7 +2333,7 @@ export function EmployeeHistoryDialog({
                                                         </td>
                                                         <td className="py-2.5 px-4 font-mono text-[9px] text-slate-600">
                                                             {item.checkIn || item.checkOut ? (
-                                                                <span>{item.checkIn || "--"} â†’ {item.checkOut || "--"}</span>
+                                                                <span>{item.checkIn || "--"} → {item.checkOut || "--"}</span>
                                                             ) : (
                                                                 <span className="text-slate-300">--</span>
                                                             )}
@@ -2353,9 +2353,9 @@ export function EmployeeHistoryDialog({
                                                         </td>
                                                         <td className="py-2.5 px-4 text-right font-black italic">
                                                             {item.dailyEarned > 0 ? (
-                                                                <span className="text-emerald-700">â‚¹{item.dailyEarned.toLocaleString()}</span>
+                                                                <span className="text-emerald-700">₹{item.dailyEarned.toLocaleString()}</span>
                                                             ) : (
-                                                                <span className="text-rose-400">â‚¹0</span>
+                                                                <span className="text-rose-400">₹0</span>
                                                             )}
                                                         </td>
                                                     </tr>
@@ -2367,7 +2367,7 @@ export function EmployeeHistoryDialog({
                             )}
                         </div>
                     ) : activeTab === "cycles" ? (
-                        /* â”€â”€ Tab 3: Past Monthly Payroll Cycles â”€â”€ */
+                        /* ── Tab 3: Past Monthly Payroll Cycles ── */
                         <div className="space-y-3">
                             <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">
                                 Finalized Payroll Runs & Payslip Slips
@@ -2394,7 +2394,7 @@ export function EmployeeHistoryDialog({
                                                     {h.month} ({h.year})
                                                 </span>
                                                 <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
-                                                    Working Days: {h.workingDays || 0} â€¢ Payable: {h.payableDays || h.payable_days || h.workingDays || 0}d â€¢ Absents: {h.absentDays || 0}d
+                                                    Working Days: {h.workingDays || 0} • Payable: {h.payableDays || h.payable_days || h.workingDays || 0}d • Absents: {h.absentDays || 0}d
                                                 </p>
                                             </div>
                                         </div>
@@ -2403,7 +2403,7 @@ export function EmployeeHistoryDialog({
                                             <div className="text-right">
                                                 <p className="text-[7px] font-black uppercase text-slate-400">Net Take Home</p>
                                                 <span className="text-sm font-black italic text-emerald-700">
-                                                    â‚¹{Number(h.net || 0).toLocaleString()}
+                                                    ₹{Number(h.net || 0).toLocaleString()}
                                                 </span>
                                             </div>
                                             <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 font-black text-[8px] h-6 px-2.5 rounded-lg">
@@ -2423,7 +2423,7 @@ export function EmployeeHistoryDialog({
                             )}
                         </div>
                     ) : (
-                        /* â”€â”€ Tab 4: Salary & Statutory Structure â”€â”€ */
+                        /* ── Tab 4: Salary & Statutory Structure ── */
                         <div className="space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
@@ -2435,24 +2435,24 @@ export function EmployeeHistoryDialog({
                                         <div className="flex justify-between py-1 font-bold text-slate-700">
                                             <span>Basic Salary (50%)</span>
                                             <span className="font-mono font-black">
-                                                â‚¹{employeeDetails?.salaryBreakup?.basic?.toLocaleString() || Math.round(fixedGross * 0.50).toLocaleString()}
+                                                ₹{employeeDetails?.salaryBreakup?.basic?.toLocaleString() || Math.round(fixedGross * 0.50).toLocaleString()}
                                             </span>
                                         </div>
                                         <div className="flex justify-between py-1 font-bold text-slate-700">
                                             <span>House Rent Allowance (HRA 40%)</span>
                                             <span className="font-mono font-black">
-                                                â‚¹{employeeDetails?.salaryBreakup?.hra?.toLocaleString() || Math.round(fixedGross * 0.20).toLocaleString()}
+                                                ₹{employeeDetails?.salaryBreakup?.hra?.toLocaleString() || Math.round(fixedGross * 0.20).toLocaleString()}
                                             </span>
                                         </div>
                                         <div className="flex justify-between py-1 font-bold text-slate-700">
                                             <span>Special / Other Allowances</span>
                                             <span className="font-mono font-black">
-                                                â‚¹{employeeDetails?.salaryBreakup?.other?.toLocaleString() || Math.max(0, fixedGross - Math.round(fixedGross * 0.70)).toLocaleString()}
+                                                ₹{employeeDetails?.salaryBreakup?.other?.toLocaleString() || Math.max(0, fixedGross - Math.round(fixedGross * 0.70)).toLocaleString()}
                                             </span>
                                         </div>
                                         <div className="flex justify-between py-1.5 font-black text-slate-900 bg-slate-50 px-2 rounded-lg">
                                             <span>Total Fixed Monthly Base</span>
-                                            <span className="font-mono text-emerald-700">â‚¹{fixedGross.toLocaleString()}</span>
+                                            <span className="font-mono text-emerald-700">₹{fixedGross.toLocaleString()}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -2502,10 +2502,10 @@ export function EmployeeHistoryDialog({
                     )}
                 </div>
 
-                {/* â”€â”€ 6. Compact Modal Footer (Height ~40px) â”€â”€ */}
+                {/* ── 6. Compact Modal Footer (Height ~40px) ── */}
                 <div className="px-6 py-2.5 bg-white border-t border-slate-200/80 flex items-center justify-between shrink-0">
                     <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">
-                        Active Period: <span className="text-slate-700 font-mono font-black">{periodAnalysis?.from || "--"} â†’ {periodAnalysis?.to || "--"}</span> ({periodAnalysis?.daysCount || 0} days)
+                        Active Period: <span className="text-slate-700 font-mono font-black">{periodAnalysis?.from || "--"} → {periodAnalysis?.to || "--"}</span> ({periodAnalysis?.daysCount || 0} days)
                     </p>
                     <Button
                         variant="outline"
@@ -2575,12 +2575,12 @@ export function PayrollPolicyDialog({
                             <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest mb-3">Professional Tax Slabs (MP)</p>
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between text-[10px] font-bold">
-                                    <span className="text-slate-500 italic">Up to â‚¹1.5L / Yr</span>
-                                    <span className="text-slate-900">â‚¹0</span>
+                                    <span className="text-slate-500 italic">Up to ₹1.5L / Yr</span>
+                                    <span className="text-slate-900">₹0</span>
                                 </div>
                                 <div className="flex items-center justify-between text-[10px] font-bold">
-                                    <span className="text-slate-500 italic">Above â‚¹1.5L / Yr</span>
-                                    <span className="text-slate-900">â‚¹2,500 / Yr</span>
+                                    <span className="text-slate-500 italic">Above ₹1.5L / Yr</span>
+                                    <span className="text-slate-900">₹2,500 / Yr</span>
                                 </div>
                             </div>
                             <Button variant="link" className="h-auto p-0 mt-3 text-[8px] font-black uppercase tracking-widest text-indigo-500">Update Slabs</Button>
