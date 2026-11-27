@@ -105,12 +105,27 @@ export async function exportPayrollWithFormulas(options: ExportPayrollOptions): 
     "Earned Basic", "Earned HRA", "Earned Other Allowances", "Arrears", "Bonus", "Incentive", "Gross Earnings",
     "PF Applicable", "Employee PF", "ESIC Applicable", "Employee ESIC", "Professional Tax (PT)",
     "Loan EMI", "Other Deductions", "Total Deductions", "Net Salary",
-    "Employer PF", "Employer ESIC", "Gratuity", "Total Employer Cost", "Total Monthly CTC", "Annual CTC", "Status"
+    "Employer PF", "Employer ESIC", "Gratuity", "Total Employer Cost", "Total Monthly CTC", "Annual CTC", "Status",
+    "Payment Mode", "PAN Number", "UAN Number"
   ];
 
   ledgerHeaders.forEach((h, colIdx) => {
     const cellRef = XLSX.utils.encode_cell({ r: 0, c: colIdx });
     wsLedger[cellRef] = { t: "s", v: h };
+  });
+
+  // ==========================================
+  // SHEET 2: Bank_Disbursement (Corporate Payout Advice)
+  // ==========================================
+  const wsBank: XLSX.WorkSheet = {};
+  const bankHeaders = [
+    "Sr No", "Employee Code", "Beneficiary Name", "Company", "Branch / Location",
+    "Bank Name", "Account Number", "IFSC Code", "Payment Mode", "Net Salary Payable (₹)",
+    "PAN Number", "Narration / Remarks"
+  ];
+  bankHeaders.forEach((h, colIdx) => {
+    const cellRef = XLSX.utils.encode_cell({ r: 0, c: colIdx });
+    wsBank[cellRef] = { t: "s", v: h };
   });
 
   const totalEmployees = targetEmployees.length;
@@ -159,6 +174,17 @@ export async function exportPayrollWithFormulas(options: ExportPayrollOptions): 
     const monthlyCtc = grossEarnings + totalEmployerCost;
     const annualCtc = monthlyCtc * 12;
 
+    const bankName = emp.bankName && emp.bankName !== '--' ? emp.bankName : (emp.bank_name || "—");
+    const bankAccount = emp.bankAccountNumber && emp.bankAccountNumber !== '--'
+      ? emp.bankAccountNumber
+      : (emp.bank_account_number || emp.accountNumber || emp.bank_account_no || "—");
+    const ifsc = emp.ifscCode && emp.ifscCode !== '--'
+      ? emp.ifscCode
+      : (emp.ifsc_code || emp.bank_ifsc || "—");
+    const paymentMode = emp.paymentMode || emp.payment_mode || "Bank Transfer";
+    const panNumber = emp.panNumber || emp.pan_number || "—";
+    const uanNumber = emp.uan || "—";
+
     wsLedger[`A${r}`] = { t: "n", v: idx + 1 };
     wsLedger[`B${r}`] = { t: "s", v: String(emp.employeeCode || emp.emp_code || "") };
     wsLedger[`C${r}`] = { t: "s", v: String(emp.name || "") };
@@ -167,9 +193,9 @@ export async function exportPayrollWithFormulas(options: ExportPayrollOptions): 
     wsLedger[`F${r}`] = { t: "s", v: String(emp.company || "BP Marketing") };
     wsLedger[`G${r}`] = { t: "s", v: String(emp.location || "Indore") };
     wsLedger[`H${r}`] = { t: "s", v: String(emp.state || "MP") };
-    wsLedger[`I${r}`] = { t: "s", v: String(emp.bankName || emp.bank_name || "—") };
-    wsLedger[`J${r}`] = { t: "s", v: String(emp.accountNumber || emp.bank_account_no || "—") };
-    wsLedger[`K${r}`] = { t: "s", v: String(emp.ifscCode || emp.bank_ifsc || "—") };
+    wsLedger[`I${r}`] = { t: "s", v: String(bankName) };
+    wsLedger[`J${r}`] = { t: "s", v: String(bankAccount) };
+    wsLedger[`K${r}`] = { t: "s", v: String(ifsc) };
     wsLedger[`L${r}`] = { t: "n", v: daysInMonth };
     wsLedger[`M${r}`] = { t: "n", v: absentDays };
     wsLedger[`N${r}`] = { t: "n", f: `L${r}-M${r}`, v: payableDays };
@@ -200,6 +226,23 @@ export async function exportPayrollWithFormulas(options: ExportPayrollOptions): 
     wsLedger[`AM${r}`] = { t: "n", f: `Y${r}+AL${r}`, v: monthlyCtc };
     wsLedger[`AN${r}`] = { t: "n", f: `AM${r}*12`, v: annualCtc };
     wsLedger[`AO${r}`] = { t: "s", v: String(emp.status || "Verified") };
+    wsLedger[`AP${r}`] = { t: "s", v: String(paymentMode) };
+    wsLedger[`AQ${r}`] = { t: "s", v: String(panNumber) };
+    wsLedger[`AR${r}`] = { t: "s", v: String(uanNumber) };
+
+    // Populate Bank_Disbursement row
+    wsBank[`A${r}`] = { t: "n", v: idx + 1 };
+    wsBank[`B${r}`] = { t: "s", v: String(emp.employeeCode || emp.emp_code || "") };
+    wsBank[`C${r}`] = { t: "s", v: String(emp.name || "") };
+    wsBank[`D${r}`] = { t: "s", v: String(emp.company || "BP Marketing") };
+    wsBank[`E${r}`] = { t: "s", v: String(emp.location || "Indore") };
+    wsBank[`F${r}`] = { t: "s", v: String(bankName) };
+    wsBank[`G${r}`] = { t: "s", v: String(bankAccount) };
+    wsBank[`H${r}`] = { t: "s", v: String(ifsc) };
+    wsBank[`I${r}`] = { t: "s", v: String(paymentMode) };
+    wsBank[`J${r}`] = { t: "n", f: `'Monthly_Payroll_Ledger'!AH${r}`, v: net };
+    wsBank[`K${r}`] = { t: "s", v: String(panNumber) };
+    wsBank[`L${r}`] = { t: "s", v: `Salary Disbursement for ${cycleName}` };
   });
 
   // Summary Row at the bottom of the Ledger
@@ -210,7 +253,26 @@ export async function exportPayrollWithFormulas(options: ExportPayrollOptions): 
   sumCols.forEach(col => {
     wsLedger[`${col}${totRow}`] = { t: "n", f: `SUM(${col}2:${col}${lastRow})` };
   });
-  wsLedger["!ref"] = `A1:AO${totRow}`;
+  wsLedger["!ref"] = `A1:AR${totRow}`;
+
+  // Summary Row & Column Widths for Bank_Disbursement
+  wsBank[`A${totRow}`] = { t: "s", v: "TOTAL" };
+  wsBank[`J${totRow}`] = { t: "n", f: `SUM(J2:J${lastRow})` };
+  wsBank["!ref"] = `A1:L${totRow}`;
+  wsBank["!cols"] = [
+    { wch: 8 },  // Sr No
+    { wch: 15 }, // Emp Code
+    { wch: 25 }, // Beneficiary Name
+    { wch: 22 }, // Company
+    { wch: 20 }, // Location
+    { wch: 22 }, // Bank Name
+    { wch: 22 }, // Account Number
+    { wch: 15 }, // IFSC Code
+    { wch: 16 }, // Payment Mode
+    { wch: 22 }, // Net Salary Payable
+    { wch: 15 }, // PAN Number
+    { wch: 32 }, // Narration
+  ];
 
   // ==========================================
   // SHEET 2: CTC_Calculator (83-column Client Layout)
@@ -372,9 +434,10 @@ export async function exportPayrollWithFormulas(options: ExportPayrollOptions): 
   }
   solverWs["!ref"] = `A1:BH${maxCalcRow}`;
 
-  // Reorder sheets with Monthly_Payroll_Ledger first
-  wb.SheetNames = ["Monthly_Payroll_Ledger", "CTC_Calculator", "Solver", "Minimum Wages", "PT"];
+  // Reorder sheets with Monthly_Payroll_Ledger & Bank_Disbursement first
+  wb.SheetNames = ["Monthly_Payroll_Ledger", "Bank_Disbursement", "CTC_Calculator", "Solver", "Minimum Wages", "PT"];
   wb.Sheets["Monthly_Payroll_Ledger"] = wsLedger;
+  wb.Sheets["Bank_Disbursement"] = wsBank;
 
   const companyTag = selectedCompany && selectedCompany !== "All Companies"
     ? `_${selectedCompany.replace(/[^a-zA-Z0-9]/g, "_")}`
