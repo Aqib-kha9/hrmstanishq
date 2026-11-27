@@ -17,7 +17,7 @@ import {
 import { useRole } from "@/context/RoleContext";
 import { useAuth } from "@/context/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { apiGet, apiPost, apiPut } from "@/lib/api-client";
+import { apiGet, apiPost, apiPut, apiPatch } from "@/lib/api-client";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -25,6 +25,39 @@ import {
   BRANCHES, EXPENSE_CATEGORIES,
   Expense, Receipt as ReceiptType, ExpenseStatus
 } from "./data";
+
+export interface TourRecord {
+  id: number;
+  tour_code: string;
+  employee_id: number;
+  employee?: {
+    id: number;
+    emp_code: string;
+    name: string;
+    email: string;
+    department: string;
+    designation: string;
+    office_id?: number;
+    company_id?: number;
+  };
+  title: string;
+  description?: string;
+  from_location?: string;
+  to_location?: string;
+  start_date: string;
+  end_date: string;
+  status: "pending" | "approved" | "rejected" | "active" | "completed" | "cancelled";
+  advance_amount: number;
+  approved_by?: number;
+  approver?: { id: number; emp_code: string; name: string };
+  approved_at?: string;
+  rejected_by?: number;
+  rejecter?: { id: number; emp_code: string; name: string };
+  rejection_reason?: string;
+  cancelled_by?: number;
+  cancel_reason?: string;
+  created_at: string;
+}
 
 const cn = (...c: string[]) => c.filter(Boolean).join(" ");
 
@@ -46,9 +79,31 @@ export default function TourExpensesPage() {
   const [filterStatus, setFilterStatus]   = useState("All");
   const [showAdd, setShowAdd]             = useState(false);
   const [selected, setSelected]           = useState<Expense | null>(null);
-  const [activeTab, setActiveTab]         = useState<"claims"|"policy">("claims");
+  const [activeTab, setActiveTab]         = useState<"tours"|"claims"|"policy">("tours");
   const { hasPermission } = useRole();
   const canEditPolicy = hasPermission('TOUR_EXPENSES', 'UPDATE');
+
+  // Tours State
+  const [tours, setTours] = useState<TourRecord[]>([]);
+  const [tourLoading, setTourLoading] = useState(false);
+  const [tourFilterStatus, setTourFilterStatus] = useState("All");
+  const [tourSearch, setTourSearch] = useState("");
+  const [selectedTour, setSelectedTour] = useState<TourRecord | null>(null);
+  const [showTourDetails, setShowTourDetails] = useState(false);
+  const [showRejectTourDialog, setShowRejectTourDialog] = useState(false);
+  const [tourRejectReason, setTourRejectReason] = useState("");
+  const [tourActionLoading, setTourActionLoading] = useState(false);
+  const [showAssignTour, setShowAssignTour] = useState(false);
+  const [assignTourForm, setAssignTourForm] = useState({
+    employeeId: "",
+    title: "",
+    fromLocation: "",
+    toLocation: "",
+    startDate: "",
+    endDate: "",
+    advanceAmount: "",
+    description: "",
+  });
 
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState({
@@ -149,6 +204,95 @@ export default function TourExpensesPage() {
       console.error("Failed to fetch policy:", err);
     }
   }, []);
+
+  const fetchTours = useCallback(async () => {
+    setTourLoading(true);
+    try {
+      const queryParams: any = {};
+      if (tourFilterStatus && tourFilterStatus !== "All") {
+        queryParams.status = tourFilterStatus.toLowerCase();
+      }
+      if (tourSearch) {
+        queryParams.search = tourSearch;
+      }
+      const res: any = await apiGet("/attendance/admin/tours", queryParams);
+      setTours(res.data || []);
+    } catch (err) {
+      console.error("Failed to fetch tours:", err);
+    } finally {
+      setTourLoading(false);
+    }
+  }, [tourFilterStatus, tourSearch]);
+
+  const handleApproveTour = async (tour: TourRecord) => {
+    setTourActionLoading(true);
+    try {
+      await apiPatch(`/attendance/admin/tours/${tour.id}/approve`, {});
+      await fetchTours();
+    } catch (err) {
+      console.error("Failed to approve tour:", err);
+    } finally {
+      setTourActionLoading(false);
+    }
+  };
+
+  const handleRejectTour = async () => {
+    if (!selectedTour) return;
+    setTourActionLoading(true);
+    try {
+      await apiPatch(`/attendance/admin/tours/${selectedTour.id}/reject`, {
+        reason: tourRejectReason,
+      });
+      setShowRejectTourDialog(false);
+      setTourRejectReason("");
+      setSelectedTour(null);
+      await fetchTours();
+    } catch (err) {
+      console.error("Failed to reject tour:", err);
+    } finally {
+      setTourActionLoading(false);
+    }
+  };
+
+  const handleCancelTour = async (tour: TourRecord) => {
+    if (!confirm(`Are you sure you want to cancel tour ${tour.tour_code}?`)) return;
+    try {
+      await apiPatch(`/attendance/admin/tours/${tour.id}/cancel`, {
+        reason: "Cancelled by Admin",
+      });
+      await fetchTours();
+    } catch (err) {
+      console.error("Failed to cancel tour:", err);
+    }
+  };
+
+  const handleAssignTour = async () => {
+    try {
+      await apiPost("/attendance/admin/tours", {
+        employeeId: assignTourForm.employeeId,
+        title: assignTourForm.title,
+        fromLocation: assignTourForm.fromLocation,
+        toLocation: assignTourForm.toLocation,
+        startDate: assignTourForm.startDate,
+        endDate: assignTourForm.endDate,
+        description: assignTourForm.description,
+      });
+      setShowAssignTour(false);
+      setAssignTourForm({
+        employeeId: "",
+        title: "",
+        fromLocation: "",
+        toLocation: "",
+        startDate: "",
+        endDate: "",
+        advanceAmount: "",
+        description: "",
+      });
+      await fetchTours();
+    } catch (err) {
+      console.error("Failed to assign tour:", err);
+    }
+  };
 
   const handleExportPDF = () => {
     if (!selected) return;
@@ -325,6 +469,10 @@ export default function TourExpensesPage() {
     fetchPolicy();
   }, [fetchPolicy]);
 
+  useEffect(() => {
+    fetchTours();
+  }, [fetchTours]);
+
   // Set default values for onboarding form using current user info
   useEffect(() => {
     if (user) {
@@ -482,28 +630,45 @@ export default function TourExpensesPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-2">
         <div>
           <h1 className="text-xl font-black text-slate-900 flex items-center gap-3 italic uppercase tracking-tighter underline underline-offset-4 decoration-[#D9F99D] decoration-2">
-            <Plane className="h-6 w-6 text-rose-500" /> Tour Expenses
+            <Plane className="h-6 w-6 text-rose-500" /> Tour Management & Expenses
           </h1>
           <p className="text-[8px] font-black text-slate-400 mt-4 uppercase tracking-[0.4em]">
-            Manage employee travel & tour expense claims.
+            Manage employee tour rosters, attendance approvals & expense claims.
           </p>
         </div>
-        <Button
-          onClick={() => setShowAdd(true)}
-          className="bg-slate-900 text-white hover:bg-black font-black uppercase text-[9px] tracking-widest px-8 h-11 rounded-2xl shadow-xl hover:translate-y-[-2px] transition-all flex items-center gap-2"
-        >
-          <Plus className="h-4 w-4 stroke-[3]" /> New Claim
-        </Button>
+        <div className="flex items-center gap-2">
+          {activeTab === "tours" && (
+            <Button
+              onClick={() => setShowAssignTour(true)}
+              className="bg-slate-900 text-white hover:bg-black font-black uppercase text-[9px] tracking-widest px-8 h-11 rounded-2xl shadow-xl hover:translate-y-[-2px] transition-all flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4 stroke-[3]" /> Assign Tour
+            </Button>
+          )}
+          {activeTab === "claims" && (
+            <Button
+              onClick={() => setShowAdd(true)}
+              className="bg-slate-900 text-white hover:bg-black font-black uppercase text-[9px] tracking-widest px-8 h-11 rounded-2xl shadow-xl hover:translate-y-[-2px] transition-all flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4 stroke-[3]" /> New Claim
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* ── Stats ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
+        {(activeTab === "tours" ? [
+          { label: "Total Tours",       value: tours.length,                                          suffix: "Tours",   icon: Plane,        bg: "bg-white"       },
+          { label: "Active On Tour",    value: tours.filter(t => t.status === "active").length,        suffix: "Staff",   icon: CheckCircle2, bg: "bg-[#D9F99D]"  },
+          { label: "Pending Approvals", value: tours.filter(t => t.status === "pending").length,       suffix: "Requests",icon: Clock,        bg: "bg-amber-50"    },
+          { label: "Approved / Done",   value: tours.filter(t => t.status === "approved" || t.status === "completed").length, suffix: "Tours", icon: AlertCircle, bg: "bg-white" },
+        ] : [
           { label: "Total Claims",       value: totalClaims,                            suffix: "Claims",  icon: Receipt,    bg: "bg-white"       },
           { label: "Approved Amount",    value: `₹ ${totalApproved.toLocaleString()}`,  suffix: "",        icon: CheckCircle2,bg: "bg-[#D9F99D]"  },
           { label: "Pending Amount",     value: `₹ ${totalPending.toLocaleString()}`,   suffix: "",        icon: Clock,      bg: "bg-amber-50"    },
           { label: "Pending Approvals",  value: pendingCount,                            suffix: "Claims",  icon: AlertCircle,bg: "bg-white"       },
-        ].map((s, i) => (
+        ]).map((s, i) => (
           <Card key={i} className={`${s.bg} border-none rounded-2xl p-5 shadow-sm flex flex-col justify-between h-32 group hover:shadow-md transition-all`}>
             <div className="h-8 w-8 bg-white/60 rounded-xl flex items-center justify-center">
               <s.icon className="h-4 w-4 text-slate-400" />
@@ -520,7 +685,7 @@ export default function TourExpensesPage() {
 
       {/* ── Tabs ── */}
       <div className="flex gap-2">
-        {(["claims","policy"] as const).map(tab => (
+        {(["tours", "claims", "policy"] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -531,10 +696,205 @@ export default function TourExpensesPage() {
                 : "bg-white text-slate-400 hover:text-slate-900 hover:bg-slate-50 border border-slate-100"
             )}
           >
-            {tab === "claims" ? "Expense Claims" : "Policy & Limits"}
+            {tab === "tours" ? "Tour Requests & Schedule" : tab === "claims" ? "Expense Claims" : "Policy & Limits"}
           </button>
         ))}
       </div>
+
+      {/* ── TOURS TAB ── */}
+      {activeTab === "tours" && (
+        <Card className="border-none shadow-sm rounded-2xl bg-white overflow-hidden p-1">
+          <CardHeader className="p-6 pb-3">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <CardTitle className="text-lg font-black italic text-slate-900 underline underline-offset-4 decoration-[#D9F99D] decoration-2 uppercase tracking-tighter flex items-center gap-2">
+                  <Plane className="h-5 w-5 text-indigo-600" /> Tour Requests & Rosters
+                </CardTitle>
+                <CardDescription className="text-[8px] font-black text-slate-400 mt-3 uppercase tracking-[0.3em] italic">
+                  {tours.length} tours scheduled • Approved tours auto-generate paid attendance
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-3">
+                {/* Status filter */}
+                <div className="flex flex-wrap gap-1">
+                  {["All", "Pending", "Approved", "Active", "Completed", "Rejected"].map(s => (
+                    <button
+                      key={s}
+                      onClick={() => setTourFilterStatus(s)}
+                      className={cn(
+                        "px-3 h-8 rounded-lg font-black text-[8px] uppercase tracking-widest transition-all",
+                        tourFilterStatus === s
+                          ? "bg-slate-900 text-white shadow-sm"
+                          : "bg-slate-50 text-slate-400 hover:bg-slate-100"
+                      )}
+                    >{s}</button>
+                  ))}
+                </div>
+                {/* Search */}
+                <div className="relative group">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-300" />
+                  <Input
+                    placeholder="Search tour / employee..."
+                    value={tourSearch}
+                    onChange={e => setTourSearch(e.target.value)}
+                    className="h-9 w-52 pl-9 bg-slate-50 border-none rounded-xl font-bold text-[10px] focus-visible:ring-1 focus-visible:ring-[#D9F99D]"
+                  />
+                </div>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            {tourLoading ? (
+              <div className="h-64 flex flex-col items-center justify-center gap-2">
+                <Loader2 className="h-6 w-6 text-slate-400 animate-spin" />
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Loading Tours...</span>
+              </div>
+            ) : tours.length === 0 ? (
+              <div className="h-64 flex flex-col items-center justify-center gap-2">
+                <Plane className="h-8 w-8 text-slate-300" />
+                <span className="text-xs font-bold text-slate-400">No tour requests found</span>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-100 text-[8px] font-black uppercase tracking-widest text-slate-400">
+                      <th className="p-4 pl-6">Employee</th>
+                      <th className="p-4">Tour Code & Purpose</th>
+                      <th className="p-4">Route</th>
+                      <th className="p-4">Schedule & Duration</th>
+                      <th className="p-4">Advance</th>
+                      <th className="p-4">Status</th>
+                      <th className="p-4 pr-6 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 text-xs">
+                    {tours.map(t => {
+                      const emp = t.employee || { emp_code: "—", name: "Employee", department: "Operations" };
+                      const duration = Math.max(1, Math.round((new Date(t.end_date).getTime() - new Date(t.start_date).getTime()) / (1000 * 60 * 60 * 24)) + 1);
+
+                      let badgeColor = "bg-amber-50 text-amber-600 border-amber-200";
+                      if (t.status === "approved") badgeColor = "bg-emerald-50 text-emerald-600 border-emerald-200";
+                      if (t.status === "active") badgeColor = "bg-blue-50 text-blue-600 border-blue-200 animate-pulse";
+                      if (t.status === "rejected" || t.status === "cancelled") badgeColor = "bg-rose-50 text-rose-600 border-rose-200";
+                      if (t.status === "completed") badgeColor = "bg-slate-100 text-slate-600 border-slate-200";
+
+                      return (
+                        <tr key={t.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="p-4 pl-6">
+                            <div className="flex items-center gap-3">
+                              <div className="h-9 w-9 rounded-xl bg-slate-900 text-white font-black flex items-center justify-center text-xs">
+                                {(emp.name || "E").slice(0, 2).toUpperCase()}
+                              </div>
+                              <div>
+                                <p className="font-bold text-slate-900 text-xs">{emp.name || "Employee"}</p>
+                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">
+                                  {emp.emp_code} • {emp.department || "Operations"}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <div className="flex flex-col">
+                              <span className="font-mono text-[10px] font-black text-indigo-600 tracking-wider">
+                                {t.tour_code}
+                              </span>
+                              <span className="font-bold text-slate-800 text-xs mt-0.5 line-clamp-1">
+                                {t.title}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <div className="flex items-center gap-1.5 text-xs text-slate-700 font-semibold">
+                              <MapPin className="h-3.5 w-3.5 text-rose-500 shrink-0" />
+                              <span>{t.from_location || "Base"}</span>
+                              <span className="text-slate-400">➔</span>
+                              <span className="text-indigo-600 font-bold">{t.to_location || "On-site"}</span>
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <div className="flex flex-col">
+                              <div className="flex items-center gap-1 text-[11px] font-bold text-slate-700">
+                                <Calendar className="h-3 w-3 text-slate-400" />
+                                {new Date(t.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – {new Date(t.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </div>
+                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
+                                {duration} Day{duration > 1 ? 's' : ''} Paid Tour
+                              </span>
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <span className="font-bold text-xs text-slate-800">
+                              {Number(t.advance_amount) > 0 ? `₹ ${Number(t.advance_amount).toLocaleString()}` : "—"}
+                            </span>
+                          </td>
+                          <td className="p-4">
+                            <span className={cn("px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border", badgeColor)}>
+                              {t.status === "active" ? "On Tour (Active)" : t.status}
+                            </span>
+                          </td>
+                          <td className="p-4 pr-6 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {t.status === "pending" && (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleApproveTour(t)}
+                                    disabled={tourActionLoading}
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[9px] uppercase tracking-wider h-7 px-2.5 rounded-lg flex items-center gap-1 shadow-sm"
+                                    title="Accept & Mark Paid Tour Attendance"
+                                  >
+                                    <CheckCircle2 className="h-3 w-3" /> Accept
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => {
+                                      setSelectedTour(t);
+                                      setShowRejectTourDialog(true);
+                                    }}
+                                    disabled={tourActionLoading}
+                                    className="text-rose-600 hover:bg-rose-50 font-bold text-[9px] uppercase tracking-wider h-7 px-2.5 rounded-lg flex items-center gap-1"
+                                    title="Reject Tour Request"
+                                  >
+                                    <XCircle className="h-3 w-3" /> Reject
+                                  </Button>
+                                </>
+                              )}
+                              {(t.status === "approved" || t.status === "active") && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleCancelTour(t)}
+                                  className="text-slate-500 hover:text-rose-600 hover:bg-rose-50 text-[9px] font-bold uppercase tracking-wider h-7 px-2 rounded-lg"
+                                >
+                                  Cancel
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  setSelectedTour(t);
+                                  setShowTourDetails(true);
+                                }}
+                                className="h-7 w-7 p-0 rounded-lg hover:bg-slate-100"
+                                title="View Details"
+                              >
+                                <Eye className="h-3.5 w-3.5 text-slate-500" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── CLAIMS TAB ── */}
       {activeTab === "claims" && (
@@ -1124,6 +1484,226 @@ export default function TourExpensesPage() {
             <Button variant="ghost" onClick={() => setShowPolicyDialog(false)} className="rounded-xl font-bold uppercase text-[10px] tracking-widest">Cancel</Button>
             <Button onClick={handleSavePolicy} className="rounded-xl bg-[#D9F99D] hover:bg-[#c8ea8a] text-slate-900 font-bold uppercase text-[10px] tracking-widest">
               Save Rule
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Reject Tour Dialog ── */}
+      <Dialog open={showRejectTourDialog} onOpenChange={setShowRejectTourDialog}>
+        <DialogContent className="sm:max-w-[425px] rounded-2xl border-none shadow-2xl p-6">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-black text-slate-900 italic uppercase">Reject Tour Request</DialogTitle>
+            <DialogDescription className="text-xs">
+              Please enter the reason for declining this tour request ({selectedTour?.tour_code}).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <textarea 
+              value={tourRejectReason}
+              onChange={e => setTourRejectReason(e.target.value)}
+              placeholder="e.g. Clashing with quarterly audit / Needs prior management clearance..."
+              className="w-full min-h-[100px] p-3 rounded-xl bg-slate-50 border-none outline-none focus:ring-2 focus:ring-rose-500 text-sm resize-none"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowRejectTourDialog(false)} className="rounded-xl font-bold uppercase text-[10px] tracking-widest">Cancel</Button>
+            <Button onClick={handleRejectTour} disabled={!tourRejectReason.trim() || tourActionLoading} className="rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold uppercase text-[10px] tracking-widest">
+              Confirm Rejection
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Tour Details Dialog ── */}
+      <Dialog open={showTourDetails} onOpenChange={setShowTourDetails}>
+        <DialogContent className="sm:max-w-[550px] rounded-3xl border-none shadow-2xl p-0 overflow-hidden bg-white">
+          {selectedTour && (
+            <div>
+              <div className="bg-slate-900 text-white p-6">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-xs font-black px-2 py-0.5 rounded bg-white/10 text-white tracking-widest">
+                    {selectedTour.tour_code}
+                  </span>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400">
+                    {selectedTour.status.toUpperCase()}
+                  </span>
+                </div>
+                <h3 className="text-lg font-black mt-2 tracking-tight">{selectedTour.title}</h3>
+                <p className="text-xs text-slate-300 mt-1">
+                  {selectedTour.employee?.name} ({selectedTour.employee?.emp_code}) • {selectedTour.employee?.department}
+                </p>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Route</span>
+                    <p className="text-xs font-bold text-slate-900">
+                      {selectedTour.from_location || "Base Office"} ➔ {selectedTour.to_location || "On-site"}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Date Range</span>
+                    <p className="text-xs font-bold text-slate-900">
+                      {selectedTour.start_date} to {selectedTour.end_date}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Advance Requested</span>
+                    <p className="text-xs font-bold text-emerald-600">
+                      {selectedTour.advance_amount > 0 ? `₹ ${Number(selectedTour.advance_amount).toLocaleString()}` : "None"}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Attendance Status</span>
+                    <p className="text-xs font-bold text-slate-900">
+                      {selectedTour.status === "approved" || selectedTour.status === "active" ? "Paid Tour (Present)" : "Pending"}
+                    </p>
+                  </div>
+                </div>
+
+                {selectedTour.description && (
+                  <div className="space-y-1 pt-2 border-t border-slate-100">
+                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Purpose / Agenda Details</span>
+                    <p className="text-xs text-slate-700 bg-slate-50 p-3 rounded-xl">{selectedTour.description}</p>
+                  </div>
+                )}
+
+                {selectedTour.rejection_reason && (
+                  <div className="space-y-1 pt-2 border-t border-slate-100">
+                    <span className="text-[8px] font-black text-rose-500 uppercase tracking-widest">Rejection Reason</span>
+                    <p className="text-xs font-bold text-rose-600 bg-rose-50 p-3 rounded-xl">{selectedTour.rejection_reason}</p>
+                  </div>
+                )}
+
+                {selectedTour.approver && (
+                  <div className="text-[10px] text-slate-400 pt-2 border-t border-slate-100">
+                    Approved by <span className="font-bold text-slate-700">{selectedTour.approver.name}</span>
+                  </div>
+                )}
+              </div>
+              <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setShowTourDetails(false)} className="rounded-xl font-bold uppercase text-[10px] tracking-widest">
+                  Close
+                </Button>
+                {selectedTour.status === "pending" && (
+                  <>
+                    <Button
+                      onClick={() => {
+                        setShowTourDetails(false);
+                        setShowRejectTourDialog(true);
+                      }}
+                      className="rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 font-bold uppercase text-[10px] tracking-widest"
+                    >
+                      Reject
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        handleApproveTour(selectedTour);
+                        setShowTourDetails(false);
+                      }}
+                      className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold uppercase text-[10px] tracking-widest"
+                    >
+                      Accept Tour
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Assign Tour Dialog (Admin) ── */}
+      <Dialog open={showAssignTour} onOpenChange={setShowAssignTour}>
+        <DialogContent className="sm:max-w-[500px] rounded-3xl border-none shadow-2xl p-6 bg-white">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-black text-slate-900 italic uppercase">
+              Assign Company Tour
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Assign an official tour duty to an employee. Days will be automatically marked as paid tour in attendance.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-3">
+            <div className="space-y-1.5">
+              <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Employee ID or Code *</label>
+              <Input
+                placeholder="e.g. 1006 or BPM1082"
+                value={assignTourForm.employeeId}
+                onChange={e => setAssignTourForm(prev => ({ ...prev, employeeId: e.target.value }))}
+                className="h-10 bg-slate-50 border-none rounded-xl font-bold text-xs focus-visible:ring-1 focus-visible:ring-[#D9F99D]"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Tour Purpose / Title *</label>
+              <Input
+                placeholder="e.g. Satna Depot Quality Audit"
+                value={assignTourForm.title}
+                onChange={e => setAssignTourForm(prev => ({ ...prev, title: e.target.value }))}
+                className="h-10 bg-slate-50 border-none rounded-xl font-bold text-xs focus-visible:ring-1 focus-visible:ring-[#D9F99D]"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">From Location</label>
+                <Input
+                  placeholder="e.g. Indore HQ"
+                  value={assignTourForm.fromLocation}
+                  onChange={e => setAssignTourForm(prev => ({ ...prev, fromLocation: e.target.value }))}
+                  className="h-10 bg-slate-50 border-none rounded-xl font-bold text-xs focus-visible:ring-1 focus-visible:ring-[#D9F99D]"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">To Location</label>
+                <Input
+                  placeholder="e.g. Satna Depot"
+                  value={assignTourForm.toLocation}
+                  onChange={e => setAssignTourForm(prev => ({ ...prev, toLocation: e.target.value }))}
+                  className="h-10 bg-slate-50 border-none rounded-xl font-bold text-xs focus-visible:ring-1 focus-visible:ring-[#D9F99D]"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Start Date *</label>
+                <Input
+                  type="date"
+                  value={assignTourForm.startDate}
+                  onChange={e => setAssignTourForm(prev => ({ ...prev, startDate: e.target.value }))}
+                  className="h-10 bg-slate-50 border-none rounded-xl font-bold text-xs focus-visible:ring-1 focus-visible:ring-[#D9F99D]"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">End Date *</label>
+                <Input
+                  type="date"
+                  value={assignTourForm.endDate}
+                  onChange={e => setAssignTourForm(prev => ({ ...prev, endDate: e.target.value }))}
+                  className="h-10 bg-slate-50 border-none rounded-xl font-bold text-xs focus-visible:ring-1 focus-visible:ring-[#D9F99D]"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Detailed Agenda / Notes</label>
+              <textarea
+                placeholder="Details of client meeting, travel itinerary or special notes..."
+                value={assignTourForm.description}
+                onChange={e => setAssignTourForm(prev => ({ ...prev, description: e.target.value }))}
+                className="w-full min-h-[80px] p-3 rounded-xl bg-slate-50 border-none outline-none focus:ring-1 focus:ring-[#D9F99D] text-xs resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowAssignTour(false)} className="rounded-xl font-bold uppercase text-[10px] tracking-widest">
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAssignTour}
+              disabled={!assignTourForm.employeeId || !assignTourForm.title || !assignTourForm.startDate || !assignTourForm.endDate}
+              className="rounded-xl bg-slate-900 text-white hover:bg-black font-bold uppercase text-[10px] tracking-widest"
+            >
+              Assign & Confirm Tour
             </Button>
           </DialogFooter>
         </DialogContent>

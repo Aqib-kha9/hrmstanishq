@@ -53,14 +53,6 @@ export async function exportPayrollWithFormulas(options: ExportPayrollOptions): 
   wb.Workbook = wb.Workbook || {};
   wb.Workbook.Names = [
     {
-      Name: "CategoryList",
-      Ref: "OFFSET('Minimum Wages'!$I$2,0,0,MAX(1,COUNTIF('Minimum Wages'!$I$2:$I$300,\"*\")),1)",
-    },
-    {
-      Name: "StateList",
-      Ref: "OFFSET('Minimum Wages'!$G$2,0,0,MAX(1,COUNTIF('Minimum Wages'!$G$2:$G$300,\"*\")),1)",
-    },
-    {
       Name: "PT_State_List",
       Ref: "PT!$T$3:$T$34",
     },
